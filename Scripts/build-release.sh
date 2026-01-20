@@ -3,12 +3,19 @@ set -e
 
 # Build Release Script for Motive
 # Creates separate DMGs for arm64 (Apple Silicon) and x86_64 (Intel)
+#
+# Usage:
+#   ./build-release.sh          # Build with current version
+#   ./build-release.sh patch    # Bump patch version (0.1.0 → 0.1.1)
+#   ./build-release.sh minor    # Bump minor version (0.1.0 → 0.2.0)
+#   ./build-release.sh major    # Bump major version (0.1.0 → 1.0.0)
 
 APP_NAME="Motive"
 SCHEME="Motive"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$PROJECT_DIR/build"
 RELEASE_DIR="$PROJECT_DIR/release"
+PBXPROJ="$PROJECT_DIR/$APP_NAME.xcodeproj/project.pbxproj"
 
 # OpenCode release URLs
 OPENCODE_ARM64_URL="https://github.com/opencode-ai/opencode/releases/latest/download/opencode-mac-arm64.tar.gz"
@@ -18,11 +25,13 @@ OPENCODE_X64_URL="https://github.com/opencode-ai/opencode/releases/latest/downlo
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
 log() { echo -e "${GREEN}[BUILD]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 
 # Clean previous builds
 clean() {
@@ -143,25 +152,80 @@ create_dmg() {
     log "DMG created: $dmg_path"
 }
 
-# Get version from Xcode project
+# Get current version from project.pbxproj
 get_version() {
-    local version=$(xcodebuild -project "$PROJECT_DIR/$APP_NAME.xcodeproj" \
-        -scheme "$SCHEME" \
-        -showBuildSettings 2>/dev/null \
-        | grep MARKETING_VERSION \
-        | head -1 \
-        | awk '{print $3}')
+    local version=$(grep "MARKETING_VERSION" "$PBXPROJ" | head -1 | sed 's/.*= *\([^;]*\);/\1/' | tr -d ' ')
     echo "${version:-0.1.0}"
+}
+
+# Bump version based on type (patch/minor/major)
+bump_version() {
+    local current=$1
+    local bump_type=$2
+    
+    # Parse version components
+    local major=$(echo "$current" | cut -d. -f1)
+    local minor=$(echo "$current" | cut -d. -f2)
+    local patch=$(echo "$current" | cut -d. -f3)
+    
+    # Default to 0 if not present
+    major=${major:-0}
+    minor=${minor:-0}
+    patch=${patch:-0}
+    
+    case $bump_type in
+        patch)
+            patch=$((patch + 1))
+            ;;
+        minor)
+            minor=$((minor + 1))
+            patch=0
+            ;;
+        major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+        *)
+            error "Invalid bump type: $bump_type (use: patch, minor, major)"
+            ;;
+    esac
+    
+    echo "$major.$minor.$patch"
+}
+
+# Update version in project.pbxproj
+set_version() {
+    local new_version=$1
+    
+    log "Updating version to $new_version in project.pbxproj..."
+    
+    # Replace all MARKETING_VERSION occurrences
+    sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $new_version;/g" "$PBXPROJ"
+    
+    log "Version updated to $new_version"
 }
 
 # Main build process
 main() {
+    local bump_type=$1
+    
     log "Starting release build for $APP_NAME"
     log "Project directory: $PROJECT_DIR"
     
-    # Get version
-    VERSION=$(get_version)
-    log "Version: $VERSION"
+    # Get current version
+    CURRENT_VERSION=$(get_version)
+    info "Current version: $CURRENT_VERSION"
+    
+    # Bump version if requested
+    if [ -n "$bump_type" ]; then
+        VERSION=$(bump_version "$CURRENT_VERSION" "$bump_type")
+        set_version "$VERSION"
+        log "Version bumped: $CURRENT_VERSION → $VERSION ($bump_type)"
+    else
+        VERSION="$CURRENT_VERSION"
+        info "Building with current version: $VERSION"
+    fi
     
     # Clean
     clean

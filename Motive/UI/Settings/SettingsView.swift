@@ -57,7 +57,7 @@ struct SettingsView: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Motive")
+                    Text(L10n.appName)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(Color.Velvet.textPrimary)
                     
@@ -97,7 +97,7 @@ struct SettingsView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "star")
                             .font(.system(size: 12))
-                        Text("Star on GitHub")
+                        Text(L10n.Settings.starOnGitHub)
                             .font(.system(size: 12, weight: .medium))
                     }
                     .foregroundColor(Color.Velvet.textSecondary)
@@ -162,19 +162,19 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
-        case .general: return "General"
-        case .model: return "AI Provider"
-        case .permissions: return "Permissions"
-        case .advanced: return "Advanced"
+        case .general: return L10n.Settings.general
+        case .model: return L10n.Settings.aiProvider
+        case .permissions: return L10n.Settings.permissions
+        case .advanced: return L10n.Settings.advanced
         }
     }
     
     var subtitle: String {
         switch self {
-        case .general: return "Startup, appearance, and keyboard shortcuts"
-        case .model: return "Configure your AI provider and API credentials"
-        case .permissions: return "File operation policies and safety rules"
-        case .advanced: return "Binary paths and debug options"
+        case .general: return L10n.Settings.generalSubtitle
+        case .model: return L10n.Settings.aiProviderSubtitle
+        case .permissions: return L10n.Settings.permissionsSubtitle
+        case .advanced: return L10n.Settings.advancedSubtitle
         }
     }
     

@@ -188,11 +188,11 @@ final class StatusBarController {
     }
 
     private func configureMenu() {
-        let commandItem = NSMenuItem(title: "Command Bar", action: #selector(openCommandBar), keyEquivalent: "")
+        let commandItem = NSMenuItem(title: L10n.CommandBar.submit, action: #selector(openCommandBar), keyEquivalent: "")
         commandItem.target = self
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: L10n.StatusBar.settings, action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: L10n.StatusBar.quit, action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
 
         menu.addItem(commandItem)

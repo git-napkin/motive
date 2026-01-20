@@ -12,13 +12,15 @@ struct GeneralSettingsView: View {
     @EnvironmentObject private var configManager: ConfigManager
     @Environment(\.colorScheme) private var colorScheme
     
+    @State private var showRestartAlert = false
+    
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             // Startup
-            SettingsCard(title: "Startup", icon: "power") {
-                SettingsRow(label: "Launch at Login", description: "Start Motive when you log in", showDivider: false) {
+            SettingsCard(title: L10n.Settings.startup, icon: "power") {
+                SettingsRow(label: L10n.Settings.launchAtLogin, description: L10n.Settings.launchAtLoginDesc, showDivider: false) {
                     Toggle("", isOn: $configManager.launchAtLogin)
                         .toggleStyle(.switch)
                         .tint(Color.Velvet.primary)
@@ -26,28 +28,82 @@ struct GeneralSettingsView: View {
             }
             
             // Keyboard
-            SettingsCard(title: "Keyboard", icon: "keyboard") {
-                SettingsRow(label: "Global Hotkey", description: "Summon the Command Bar", showDivider: false) {
+            SettingsCard(title: L10n.Settings.keyboard, icon: "keyboard") {
+                SettingsRow(label: L10n.Settings.globalHotkey, description: L10n.Settings.globalHotkeyDesc, showDivider: false) {
                     HotkeyRecorderView(hotkey: $configManager.hotkey)
                         .frame(width: 120, height: 28)
                 }
             }
 
             // Appearance
-            SettingsCard(title: "Appearance", icon: "circle.lefthalf.filled") {
-                SettingsRow(label: "Theme", description: "Choose light, dark, or follow system", showDivider: false) {
-                    Picker("", selection: Binding(
-                        get: { configManager.appearanceMode },
-                        set: { configManager.appearanceMode = $0 }
-                    )) {
-                        ForEach(ConfigManager.AppearanceMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
+            SettingsCard(title: L10n.Settings.appearance, icon: "circle.lefthalf.filled") {
+                VStack(spacing: 0) {
+                    SettingsRow(label: L10n.Settings.theme, description: L10n.Settings.themeDesc, showDivider: true) {
+                        Picker("", selection: Binding(
+                            get: { configManager.appearanceMode },
+                            set: { configManager.appearanceMode = $0 }
+                        )) {
+                            ForEach(ConfigManager.AppearanceMode.allCases) { mode in
+                                Text(mode.localizedName).tag(mode)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .frame(width: 120)
                     }
-                    .pickerStyle(.menu)
-                    .frame(width: 120)
+                    
+                    SettingsRow(label: L10n.Settings.language, description: L10n.Settings.languageDesc, showDivider: false) {
+                        Picker("", selection: Binding(
+                            get: { configManager.language },
+                            set: { newValue in
+                                let oldValue = configManager.language
+                                configManager.language = newValue
+                                if oldValue != newValue {
+                                    showRestartAlert = true
+                                }
+                            }
+                        )) {
+                            ForEach(ConfigManager.Language.allCases) { lang in
+                                Text(lang.displayName).tag(lang)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 120)
+                    }
                 }
             }
+        }
+        .alert(L10n.Settings.language, isPresented: $showRestartAlert) {
+            Button(L10n.cancel) { }
+            Button(L10n.Settings.restartNow) {
+                restartApp()
+            }
+        } message: {
+            Text(L10n.Settings.languageRestartRequired)
+        }
+    }
+    
+    private func restartApp() {
+        guard let bundlePath = Bundle.main.bundlePath as String? else { return }
+        
+        // Use shell script to wait and relaunch
+        let script = """
+        sleep 0.5
+        open "\(bundlePath)"
+        """
+        
+        let task = Process()
+        task.launchPath = "/bin/sh"
+        task.arguments = ["-c", script]
+        
+        do {
+            try task.run()
+        } catch {
+            Log.error("Failed to restart: \(error)")
+        }
+        
+        // Force quit the app
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApplication.shared.terminate(nil)
         }
     }
 }
@@ -101,9 +157,9 @@ final class HotkeyRecorderButton: NSButton {
     
     private func updateTitle() {
         if isRecording {
-            title = "Press keys..."
+            title = L10n.Settings.pressKeys
         } else if currentHotkey.isEmpty {
-            title = "Click to record"
+            title = L10n.Settings.clickToRecord
         } else {
             title = currentHotkey
         }

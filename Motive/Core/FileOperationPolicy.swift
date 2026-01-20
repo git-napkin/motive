@@ -34,6 +34,32 @@ enum FileOperation: String, CaseIterable, Codable, Hashable {
         }
     }
     
+    var localizedName: String {
+        switch self {
+        case .create:     return L10n.Settings.opCreate
+        case .delete:     return L10n.Settings.opDelete
+        case .modify:     return L10n.Settings.opModify
+        case .overwrite:  return L10n.Settings.opOverwrite
+        case .rename:     return L10n.Settings.opRename
+        case .move:       return L10n.Settings.opMove
+        case .readBinary: return L10n.Settings.opReadBinary
+        case .execute:    return L10n.Settings.opExecute
+        }
+    }
+    
+    var localizedDescription: String {
+        switch self {
+        case .create:     return L10n.Settings.opCreateDesc
+        case .delete:     return L10n.Settings.opDeleteDesc
+        case .modify:     return L10n.Settings.opModifyDesc
+        case .overwrite:  return L10n.Settings.opOverwriteDesc
+        case .rename:     return L10n.Settings.opRenameDesc
+        case .move:       return L10n.Settings.opMoveDesc
+        case .readBinary: return L10n.Settings.opReadBinaryDesc
+        case .execute:    return L10n.Settings.opExecuteDesc
+        }
+    }
+    
     var riskLevel: RiskLevel {
         switch self {
         case .create, .modify:
@@ -106,6 +132,15 @@ enum PermissionPolicy: String, Codable {
         case .alwaysAsk:   return "Always Ask"
         case .askOnce:     return "Ask Once"
         case .alwaysDeny:  return "Always Deny"
+        }
+    }
+    
+    var localizedName: String {
+        switch self {
+        case .alwaysAllow: return L10n.Settings.policyAlwaysAllow
+        case .alwaysAsk:   return L10n.Settings.policyAlwaysAsk
+        case .askOnce:     return L10n.Settings.policyAskOnce
+        case .alwaysDeny:  return L10n.Settings.policyAlwaysDeny
         }
     }
 }

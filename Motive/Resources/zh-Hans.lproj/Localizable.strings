@@ -1,0 +1,181 @@
+/* 
+  Localizable.strings (简体中文)
+  Motive
+*/
+
+// MARK: - Common
+"app.name" = "Motive";
+"common.cancel" = "取消";
+"common.submit" = "提交";
+"common.save" = "保存";
+"common.delete" = "删除";
+"common.done" = "完成";
+"common.allow" = "允许";
+"common.deny" = "拒绝";
+"common.error" = "错误";
+"common.warning" = "警告";
+"common.ok" = "好";
+
+// MARK: - Command Bar
+"commandbar.placeholder" = "你想让我做什么？";
+"commandbar.submit" = "提交";
+"commandbar.settings" = "设置";
+"commandbar.run" = "执行";
+"commandbar.close" = "关闭";
+
+// MARK: - Settings
+"settings.title" = "设置";
+"settings.star_on_github" = "在 GitHub 上点赞";
+
+// Settings Tabs
+"settings.tab.general" = "通用";
+"settings.tab.general.subtitle" = "启动、外观和快捷键";
+"settings.tab.ai_provider" = "AI 服务商";
+"settings.tab.ai_provider.subtitle" = "配置 AI 服务商和 API 凭据";
+"settings.tab.permissions" = "权限";
+"settings.tab.permissions.subtitle" = "文件操作策略和安全规则";
+"settings.tab.advanced" = "高级";
+"settings.tab.advanced.subtitle" = "二进制路径和调试选项";
+
+// General Settings
+"settings.general.startup" = "启动";
+"settings.general.launch_at_login" = "登录时启动";
+"settings.general.launch_at_login.desc" = "登录时自动启动 Motive";
+"settings.general.keyboard" = "键盘";
+"settings.general.global_hotkey" = "全局快捷键";
+"settings.general.global_hotkey.desc" = "唤起命令栏";
+"settings.general.appearance" = "外观";
+"settings.general.theme" = "主题";
+"settings.general.theme.desc" = "选择浅色、深色或跟随系统";
+"settings.general.theme.system" = "跟随系统";
+"settings.general.theme.light" = "浅色";
+"settings.general.theme.dark" = "深色";
+
+// Language Settings
+"settings.general.language" = "语言";
+"settings.general.language.desc" = "选择你偏好的语言";
+"settings.general.language.system" = "跟随系统";
+"settings.general.language.english" = "English";
+"settings.general.language.chinese" = "简体中文";
+"settings.general.language.japanese" = "日本語";
+"settings.general.language.restart_required" = "需要重启生效";
+"settings.general.restart_now" = "立即重启";
+
+// AI Provider Settings
+"settings.provider.select" = "选择服务商";
+"settings.provider.api_key" = "API 密钥";
+"settings.provider.api_key.placeholder" = "输入你的 API 密钥";
+"settings.provider.api_key.configured" = "已配置";
+"settings.provider.base_url" = "API 地址";
+"settings.provider.base_url.placeholder" = "可选：自定义 API 端点";
+"settings.provider.model_name" = "模型名称";
+"settings.provider.model_name.placeholder" = "可选：覆盖默认模型";
+
+// Permission Settings
+"settings.permissions.file_operations" = "文件操作";
+"settings.permissions.risk_levels" = "风险级别";
+"settings.permissions.reset_to_defaults" = "恢复默认";
+"settings.permissions.policy.always_allow" = "始终允许";
+"settings.permissions.policy.always_ask" = "始终询问";
+"settings.permissions.policy.ask_once" = "询问一次";
+"settings.permissions.policy.always_deny" = "始终拒绝";
+
+// File Operations
+"settings.permissions.op.create" = "创建文件";
+"settings.permissions.op.create.desc" = "创建新文件";
+"settings.permissions.op.delete" = "删除文件";
+"settings.permissions.op.delete.desc" = "永久删除文件";
+"settings.permissions.op.modify" = "修改内容";
+"settings.permissions.op.modify.desc" = "编辑文件内容";
+"settings.permissions.op.overwrite" = "覆盖文件";
+"settings.permissions.op.overwrite.desc" = "替换整个文件";
+"settings.permissions.op.rename" = "重命名";
+"settings.permissions.op.rename.desc" = "更改文件名";
+"settings.permissions.op.move" = "移动文件";
+"settings.permissions.op.move.desc" = "移动到其他位置";
+"settings.permissions.op.read_binary" = "读取二进制";
+"settings.permissions.op.read_binary.desc" = "读取二进制文件";
+"settings.permissions.op.execute" = "执行脚本";
+"settings.permissions.op.execute.desc" = "运行脚本或程序";
+
+// Risk Levels
+"settings.permissions.risk.low" = "低";
+"settings.permissions.risk.low.desc" = "安全操作，如创建文件";
+"settings.permissions.risk.medium" = "中";
+"settings.permissions.risk.medium.desc" = "重组操作，如重命名或移动";
+"settings.permissions.risk.high" = "高";
+"settings.permissions.risk.high.desc" = "潜在破坏性操作，如覆盖";
+"settings.permissions.risk.critical" = "严重";
+"settings.permissions.risk.critical.desc" = "不可逆操作，如删除";
+
+// Advanced Settings
+"settings.advanced.opencode_binary" = "OpenCode 程序";
+"settings.advanced.binary_status" = "程序状态";
+"settings.advanced.binary.bundled" = "使用内置程序";
+"settings.advanced.binary.custom" = "使用自定义程序";
+"settings.advanced.binary.not_found" = "未找到程序";
+"settings.advanced.import_binary" = "导入程序";
+"settings.advanced.importing" = "导入中...";
+"settings.advanced.select_binary" = "选择程序";
+"settings.advanced.auto_detect" = "自动检测";
+"settings.advanced.source_path" = "来源路径";
+"settings.advanced.diagnostics" = "诊断";
+"settings.advanced.debug_mode" = "调试模式";
+"settings.advanced.debug_mode.desc" = "启用详细日志";
+"settings.advanced.about" = "关于";
+"settings.advanced.version" = "版本";
+"settings.advanced.build" = "构建";
+"settings.advanced.not_configured" = "未配置";
+
+// Provider Config
+"settings.provider.provider" = "服务商";
+"settings.provider.configuration" = "配置";
+"settings.provider.ollama_host" = "Ollama 地址";
+"settings.provider.default_endpoint" = "留空使用默认端点";
+"settings.provider.model" = "模型";
+"settings.provider.save_restart" = "保存并重启";
+"settings.provider.agent_restarted" = "代理已重启";
+
+// Hotkey Recorder
+"settings.hotkey.press_keys" = "请按键...";
+"settings.hotkey.click_to_record" = "点击录制";
+
+// MARK: - Drawer
+"drawer.new_session" = "新会话";
+"drawer.new_chat" = "新对话";
+"drawer.conversation" = "对话";
+"drawer.thinking" = "思考中...";
+"drawer.processing" = "处理中...";
+"drawer.completed" = "已完成";
+"drawer.failed" = "失败";
+"drawer.interrupted" = "已中断";
+"drawer.running" = "运行中";
+"drawer.stop" = "停止";
+"drawer.close" = "关闭";
+"drawer.input.placeholder" = "发送后续消息...";
+"drawer.message.placeholder" = "输入消息...";
+"drawer.start_conversation" = "开始对话";
+"drawer.start_hint" = "在下方输入或按 ⌥Space\n打开命令栏";
+"drawer.history" = "历史记录";
+"drawer.no_history" = "暂无历史";
+"drawer.assistant" = "助手";
+"drawer.tool" = "工具";
+
+// MARK: - Permission Request
+"permission.file" = "文件权限";
+"permission.question" = "询问";
+"permission.allow_once" = "允许";
+"permission.deny_once" = "拒绝";
+
+// MARK: - Status Bar
+"statusbar.idle" = "Motive";
+"statusbar.reasoning" = "思考中...";
+"statusbar.executing" = "执行中...";
+"statusbar.settings" = "设置...";
+"statusbar.quit" = "退出 Motive";
+
+// MARK: - Errors
+"error.no_api_key" = "未配置 API 密钥";
+"error.invalid_config" = "配置无效";
+"error.binary_not_found" = "未找到 OpenCode 程序";
+"error.connection_failed" = "连接失败";

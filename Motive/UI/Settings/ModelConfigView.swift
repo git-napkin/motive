@@ -24,19 +24,19 @@ struct ModelConfigView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             // Provider Selection
-            SettingsCard(title: "Provider", icon: "cpu") {
+            SettingsCard(title: L10n.Settings.provider, icon: "cpu") {
                 providerPicker
                     .padding(16)
             }
             
             // Configuration
-            SettingsCard(title: "Configuration", icon: "slider.horizontal.3") {
+            SettingsCard(title: L10n.Settings.configuration, icon: "slider.horizontal.3") {
                 VStack(spacing: 0) {
                     // API Key (not for Ollama)
                     if configManager.provider != .ollama {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text("API Key")
+                                Text(L10n.Settings.apiKey)
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(Color.Velvet.textPrimary)
                                 
@@ -47,7 +47,7 @@ struct ModelConfigView: View {
                                         Image(systemName: "checkmark.circle.fill")
                                             .font(.system(size: 10))
                                             .foregroundColor(Color.Velvet.success)
-                                        Text("Configured")
+                                        Text(L10n.Settings.apiKeyConfigured)
                                             .font(.system(size: 10, weight: .medium))
                                             .foregroundColor(Color.Velvet.success)
                                     }
@@ -70,7 +70,7 @@ struct ModelConfigView: View {
                     
                     // Base URL
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(configManager.provider == .ollama ? "Ollama Host" : "Base URL")
+                        Text(configManager.provider == .ollama ? L10n.Settings.ollamaHost : L10n.Settings.baseURL)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(Color.Velvet.textPrimary)
                         
@@ -78,7 +78,7 @@ struct ModelConfigView: View {
                             .textFieldStyle(ModernTextFieldStyle())
                             .focused($focusedField, equals: .baseURL)
                         
-                        Text("Leave empty to use default endpoint")
+                        Text(L10n.Settings.defaultEndpoint)
                             .font(.system(size: 11))
                             .foregroundColor(Color.Velvet.textMuted)
                     }
@@ -90,7 +90,7 @@ struct ModelConfigView: View {
                     
                     // Model Name
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Model")
+                        Text(L10n.Settings.model)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(Color.Velvet.textPrimary)
                         
@@ -134,7 +134,7 @@ struct ModelConfigView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(Color.Velvet.success)
-                        Text("Agent restarted")
+                        Text(L10n.Settings.agentRestarted)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(Color.Velvet.textSecondary)
                     }
@@ -145,7 +145,7 @@ struct ModelConfigView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 11, weight: .semibold))
-                        Text("Save & Restart")
+                        Text(L10n.Settings.saveRestart)
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundColor(.white)

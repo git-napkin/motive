@@ -44,12 +44,47 @@ final class ConfigManager: ObservableObject {
             case .dark: return "Dark"
             }
         }
+        
+        var localizedName: String {
+            switch self {
+            case .system: return L10n.Settings.themeSystem
+            case .light: return L10n.Settings.themeLight
+            case .dark: return L10n.Settings.themeDark
+            }
+        }
 
         var colorScheme: ColorScheme? {
             switch self {
             case .system: return nil
             case .light: return .light
             case .dark: return .dark
+            }
+        }
+    }
+    
+    enum Language: String, CaseIterable, Identifiable {
+        case system = "system"
+        case english = "en"
+        case chinese = "zh-Hans"
+        case japanese = "ja"
+        
+        var id: String { rawValue }
+        
+        var displayName: String {
+            switch self {
+            case .system: return "System"
+            case .english: return "English"
+            case .chinese: return "简体中文"
+            case .japanese: return "日本語"
+            }
+        }
+        
+        var localizedName: String {
+            switch self {
+            case .system: return L10n.Settings.languageSystem
+            case .english: return L10n.Settings.languageEnglish
+            case .chinese: return L10n.Settings.languageChinese
+            case .japanese: return L10n.Settings.languageJapanese
             }
         }
     }
@@ -69,6 +104,29 @@ final class ConfigManager: ObservableObject {
     @AppStorage("openCodeBinarySourcePath") var openCodeBinarySourcePath: String = ""
     @AppStorage("debugMode") var debugMode: Bool = false
     @AppStorage("launchAtLoginStorage") private var launchAtLoginStorage: Bool = false
+    @AppStorage("languageRawValue") private var languageRawValue: String = Language.system.rawValue
+    
+    var language: Language {
+        get { Language(rawValue: languageRawValue) ?? .system }
+        set {
+            languageRawValue = newValue.rawValue
+            applyLanguage(newValue)
+        }
+    }
+    
+    private func applyLanguage(_ language: Language) {
+        if language == .system {
+            // Remove override, use system language
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        } else {
+            // Set specific language
+            UserDefaults.standard.set([language.rawValue], forKey: "AppleLanguages")
+        }
+        UserDefaults.standard.synchronize()
+        
+        // Notify user that restart is needed
+        NotificationCenter.default.post(name: .languageDidChange, object: nil)
+    }
     @AppStorage("hotkey") var hotkey: String = "⌥Space"
     @AppStorage("appearanceMode") var appearanceModeRawValue: String = AppearanceMode.system.rawValue
     
@@ -1249,4 +1307,10 @@ process.stdin.on('data', chunk => {
             }
         }
     }
+}
+
+// MARK: - Notification Names
+
+extension Notification.Name {
+    static let languageDidChange = Notification.Name("languageDidChange")
 }

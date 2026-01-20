@@ -22,12 +22,12 @@ struct AdvancedSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             // Binary Section
-            SettingsCard(title: "OpenCode Binary", icon: "terminal") {
+            SettingsCard(title: L10n.Settings.openCodeBinary, icon: "terminal") {
                 VStack(spacing: 0) {
                     // Status Row
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Status")
+                            Text(L10n.Settings.binaryStatus)
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(Color.Velvet.textPrimary)
                             
@@ -48,7 +48,7 @@ struct AdvancedSettingsView: View {
                     if !configManager.openCodeBinarySourcePath.isEmpty {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Source Path")
+                                Text(L10n.Settings.sourcePath)
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(Color.Velvet.textPrimary)
                                 
@@ -81,7 +81,7 @@ struct AdvancedSettingsView: View {
                                     Image(systemName: "folder")
                                         .font(.system(size: 11))
                                 }
-                                Text(isImporting ? "Importing..." : "Select Binary")
+                                Text(isImporting ? L10n.Settings.importing : L10n.Settings.selectBinary)
                                     .font(.system(size: 12, weight: .medium))
                             }
                             .foregroundColor(Color.Velvet.textPrimary)
@@ -105,7 +105,7 @@ struct AdvancedSettingsView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "magnifyingglass")
                                     .font(.system(size: 11))
-                                Text("Auto-Detect")
+                                Text(L10n.Settings.autoDetect)
                                     .font(.system(size: 12, weight: .medium))
                             }
                             .foregroundColor(Color.Velvet.textSecondary)
@@ -159,8 +159,8 @@ struct AdvancedSettingsView: View {
             }
             
             // Debug Section
-            SettingsCard(title: "Diagnostics", icon: "ant") {
-                SettingsRow(label: "Debug Mode", description: "Enable verbose logging", showDivider: false) {
+            SettingsCard(title: L10n.Settings.diagnostics, icon: "ant") {
+                SettingsRow(label: L10n.Settings.debugMode, description: L10n.Settings.debugModeDesc, showDivider: false) {
                     Toggle("", isOn: $configManager.debugMode)
                         .toggleStyle(.switch)
                         .tint(Color.Velvet.primary)
@@ -168,10 +168,10 @@ struct AdvancedSettingsView: View {
             }
             
             // About Section
-            SettingsCard(title: "About", icon: "info.circle") {
+            SettingsCard(title: L10n.Settings.about, icon: "info.circle") {
                 VStack(spacing: 0) {
-                    aboutRow("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0")
-                    aboutRow("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1", showDivider: false)
+                    aboutRow(L10n.Settings.version, value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0")
+                    aboutRow(L10n.Settings.build, value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1", showDivider: false)
                 }
             }
         }
@@ -195,7 +195,7 @@ struct AdvancedSettingsView: View {
         Group {
             switch configManager.binaryStatus {
             case .notConfigured:
-                Text("Not configured")
+                Text(L10n.Settings.notConfigured)
                     .font(.system(size: 11))
                     .foregroundColor(Color.Velvet.warning)
             case .ready(let path):

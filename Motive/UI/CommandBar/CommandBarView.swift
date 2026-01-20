@@ -90,7 +90,7 @@ struct CommandBarView: View {
             .frame(width: 28)
             
             // Input field
-            TextField("", text: $inputText, prompt: Text("What should I do?")
+            TextField("", text: $inputText, prompt: Text(L10n.CommandBar.placeholder)
                 .foregroundColor(isDark ? Color.white.opacity(0.3) : Color.black.opacity(0.35)))
                 .textFieldStyle(.plain)
                 .font(.system(size: 18, weight: .regular))
@@ -131,7 +131,7 @@ struct CommandBarView: View {
         } else if !inputText.isEmpty {
             ActionPill(
                 icon: "arrow.right",
-                label: "Run",
+                label: L10n.CommandBar.run,
                 style: .primary,
                 isDark: isDark
             ) {
@@ -163,9 +163,9 @@ struct CommandBarView: View {
             
             // Keyboard shortcuts
             HStack(spacing: 16) {
-                ShortcutBadge(keys: ["↵"], label: "Run", isDark: isDark)
-                ShortcutBadge(keys: ["esc"], label: "Close", isDark: isDark)
-                ShortcutBadge(keys: ["⌘", ","], label: "Settings", isDark: isDark)
+                ShortcutBadge(keys: ["↵"], label: L10n.CommandBar.run, isDark: isDark)
+                ShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close, isDark: isDark)
+                ShortcutBadge(keys: ["⌘", ","], label: L10n.CommandBar.settings, isDark: isDark)
             }
         }
         .frame(height: 40)

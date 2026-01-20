@@ -150,20 +150,20 @@ struct DrawerView: View {
                     )
             }
             .buttonStyle(.plain)
-            .help("Close")
+            .help(L10n.Drawer.close)
         }
     }
     
     private var currentSessionTitle: String {
         if appState.messages.isEmpty {
-            return "New Chat"
+            return L10n.Drawer.newChat
         }
         // Use first user message as title
         if let firstUser = appState.messages.first(where: { $0.type == .user }) {
             let text = firstUser.content
             return String(text.prefix(24)) + (text.count > 24 ? "…" : "")
         }
-        return "Conversation"
+        return L10n.Drawer.conversation
     }
     
     // MARK: - Error Banner
@@ -175,7 +175,7 @@ struct DrawerView: View {
                 .foregroundColor(Color.Velvet.error)
             
             VStack(alignment: .leading, spacing: 2) {
-                Text("Error")
+                Text(L10n.error)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color.Velvet.error)
                 
@@ -235,11 +235,11 @@ struct DrawerView: View {
             }
             
             VStack(spacing: 6) {
-                Text("Start a Conversation")
+                Text(L10n.Drawer.startConversation)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(Color.Velvet.textPrimary)
                 
-                Text("Type below or press ⌥Space\nto open the command bar")
+                Text(L10n.Drawer.startHint)
                     .font(.system(size: 12))
                     .foregroundColor(Color.Velvet.textMuted)
                     .multilineTextAlignment(.center)
@@ -318,7 +318,7 @@ struct DrawerView: View {
                             .scaleEffect(0.7)
                             .tint(Color.Velvet.textMuted)
                         
-                        Text("Processing...")
+                        Text(L10n.Drawer.processing)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(Color.Velvet.textSecondary)
                     }
@@ -329,7 +329,7 @@ struct DrawerView: View {
                         HStack(spacing: 5) {
                             Image(systemName: "stop.fill")
                                 .font(.system(size: 8))
-                            Text("Stop")
+                            Text(L10n.Drawer.stop)
                                 .font(.system(size: 11, weight: .semibold))
                         }
                         .foregroundColor(Color.Velvet.error)
@@ -342,7 +342,7 @@ struct DrawerView: View {
                 } else {
                     // Input field with styled background
                     HStack(spacing: 8) {
-                        TextField("Message...", text: $inputText)
+                        TextField(L10n.Drawer.messagePlaceholder, text: $inputText)
                             .textFieldStyle(.plain)
                             .font(.system(size: 13))
                             .foregroundColor(Color.Velvet.textPrimary)
@@ -408,7 +408,7 @@ struct DrawerView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text("History")
+                    Text(L10n.Drawer.history)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(Color.Velvet.textPrimary)
                     
@@ -438,7 +438,7 @@ struct DrawerView: View {
                         Image(systemName: "clock")
                             .font(.system(size: 20, weight: .light))
                             .foregroundColor(Color.Velvet.textMuted)
-                        Text("No history yet")
+                        Text(L10n.Drawer.noHistory)
                             .font(.system(size: 12))
                             .foregroundColor(Color.Velvet.textMuted)
                     }
@@ -630,7 +630,7 @@ struct MessageBubble: View {
                     .font(.system(size: 9, weight: .bold))
                     .foregroundColor(Color.Velvet.primary)
                 
-                Text("Assistant")
+                Text(L10n.Drawer.assistant)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color.Velvet.textSecondary)
             }
@@ -658,7 +658,7 @@ struct MessageBubble: View {
                 .foregroundColor(Color.Velvet.success)
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(message.toolName ?? "Tool")
+                Text(message.toolName ?? L10n.Drawer.tool)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(Color.Velvet.textSecondary)
                 
@@ -733,7 +733,7 @@ struct ThinkingIndicator: View {
                 }
             }
             
-            Text(toolName ?? "Thinking…")
+            Text(toolName ?? L10n.Drawer.thinking)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Color.Velvet.textSecondary)
         }
@@ -797,15 +797,15 @@ struct SessionStatusBadge: View {
     private var statusText: String {
         switch status {
         case .idle:
-            return "Idle"
+            return L10n.StatusBar.idle
         case .running:
-            return currentTool ?? "Running"
+            return currentTool ?? L10n.Drawer.running
         case .completed:
-            return "Done"
+            return L10n.Drawer.completed
         case .failed:
-            return "Failed"
+            return L10n.Drawer.failed
         case .interrupted:
-            return "Stopped"
+            return L10n.Drawer.interrupted
         }
     }
     
