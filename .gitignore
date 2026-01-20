@@ -1,0 +1,84 @@
+# Xcode
+build/
+release/
+DerivedData/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+*.xcscmblueprint
+*.xcworkspace
+!*.xcodeproj/*.xcworkspace
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# CocoaPods (if used)
+Pods/
+
+# Carthage (if used)
+Carthage/Build/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Thumbnails
+Thumbs.db
+ehthumbs.db
+
+# IDE
+.idea/
+.cursorrules
+*.swp
+*.swo
+*~
+
+# VS Code (optional - remove if you want to keep settings)
+# .vscode/
+
+# OpenCode binary (user must provide)
+Motive/Resources/opencode
+
+# Sensitive files
+*.p12
+*.cer
+*.mobileprovision
+AuthKey_*.p8
+
+# Debug
+*.dSYM.zip
+*.dSYM
+
+# Archives
+*.ipa
+*.app.dSYM.zip
+*.xcarchive
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Fastlane (if used)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Environment files
+.env
+.env.local
+.vscode/
