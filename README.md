@@ -125,27 +125,43 @@ Anything you'd ask an AI coding assistant: refactor code, generate files, run sc
 
 ## Roadmap
 
-- [ ] Custom hotkey configuration
-- [ ] Multiple concurrent sessions
-- [ ] Plugin system for custom tools
+- [ ] **Multi-task concurrency** — Run multiple tasks in parallel with independent progress tracking
+- [ ] **Browser automation** — Full support for web scraping, form filling, and browser-based workflows
+- [ ] **Task templates** — Save and reuse common task patterns with customizable parameters
+- [ ] **Multi-language UI** — Localized interface for global users
 - [ ] Homebrew Cask distribution
 
 ## Acknowledgments
 
 Powered by [OpenCode](https://github.com/opencode-ai/opencode) — the open-source AI agent that makes autonomous task execution possible.
 
-## License
-
-[MIT](LICENSE)
-
 ---
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" alt="MIT License"></a>
+</p>
 
 <p align="center">
   <sub>Let AI work. Stay in your flow.</sub>
 </p>
 
+<p align="center">
+  <a href="https://github.com/geezerrrr/motive/stargazers">⭐ Star us on GitHub</a>
+</p>
+
+---
+
+<!-- SEO Keywords -->
 <!-- 
-Keywords: macos ai assistant, ai agent macos, background ai, autonomous ai, opencode gui, 
-ai coding assistant mac, spotlight ai, raycast alternative, alfred ai, macos menu bar ai,
-local llm macos, ollama gui, claude desktop alternative, ai automation macos
+AI Agent | AI Assistant | macOS AI | Background AI | Autonomous AI Agent | AI Coding Assistant |
+Claude Desktop Alternative | ChatGPT Alternative | Cursor Alternative | Copilot Alternative |
+OpenCode GUI | Local LLM | Ollama GUI | Private AI | On-device AI |
+Spotlight AI | Raycast Alternative | Alfred Alternative | macOS Menu Bar App |
+AI Automation | AI Workflow | Task Automation | No-code AI | AI for Developers |
+Claude API | OpenAI API | Gemini API | Anthropic | GPT-4 | Claude Sonnet |
+SwiftUI | Native macOS App | Apple Silicon | M1 M2 M3 M4 |
+AI Productivity | Developer Tools | Code Generation | AI Code Review |
+Natural Language Interface | Intent-based AI | Agentic AI | AI Copilot |
+Open Source AI | Free AI Assistant | Self-hosted AI | Privacy-first AI
 -->
+
