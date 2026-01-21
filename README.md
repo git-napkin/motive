@@ -44,8 +44,7 @@ Today's AI tools keep you hostage — Cursor locks you in a window, Claude Code 
 
 ### How it works
 
-https://github.com/user-attachments/assets/355e6ff9-97de-459f-b488-8a09b2693e5e
-
+https://github.com/user-attachments/assets/99a05dee-bdcc-43bd-beae-5289fb93e4e3
 ## Quick Start
 
 ### Install
