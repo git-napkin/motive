@@ -214,9 +214,11 @@ final class HotkeyRecorderButton: NSButton {
     }
     
     private func isSpecialKey(_ keyCode: UInt16) -> Bool {
-        // Function keys, arrows, etc.
-        return [49, 36, 48, 51, 53, 123, 124, 125, 126].contains(keyCode) ||
-               (keyCode >= 122 && keyCode <= 126) // F keys start around here
+        // Special keys: Space, Return, Tab, Delete, Escape, Arrows
+        let specialKeys: Set<UInt16> = [49, 36, 48, 51, 53, 123, 124, 125, 126]
+        // Function keys F1-F12 (keyCodes are scattered, not sequential)
+        let functionKeys: Set<UInt16> = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111]
+        return specialKeys.contains(keyCode) || functionKeys.contains(keyCode)
     }
 
     private func modifierSymbols(for flags: NSEvent.ModifierFlags) -> String {
@@ -230,6 +232,7 @@ final class HotkeyRecorderButton: NSButton {
     
     private func keyName(for event: NSEvent) -> String {
         switch event.keyCode {
+        // Special keys
         case 49: return "Space"
         case 36: return "Return"
         case 48: return "Tab"
@@ -239,6 +242,19 @@ final class HotkeyRecorderButton: NSButton {
         case 124: return "→"
         case 125: return "↓"
         case 126: return "↑"
+        // Function keys F1-F12
+        case 122: return "F1"
+        case 120: return "F2"
+        case 99: return "F3"
+        case 118: return "F4"
+        case 96: return "F5"
+        case 97: return "F6"
+        case 98: return "F7"
+        case 100: return "F8"
+        case 101: return "F9"
+        case 109: return "F10"
+        case 103: return "F11"
+        case 111: return "F12"
         default:
             return event.charactersIgnoringModifiers?.uppercased() ?? ""
         }
