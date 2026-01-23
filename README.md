@@ -8,7 +8,7 @@
 <p align="center">A personal AI agent for macOS. Turns intent into completed work, running from your menu bar.</p>
 
 <p align="center">
-  <a href="https://github.com/geezerrrr/motive/releases"><img src="https://img.shields.io/badge/release-v0.2.2-blue?style=flat-square" alt="Release"></a>
+  <a href="https://github.com/geezerrrr/motive/releases"><img src="https://img.shields.io/badge/release-v0.2.3-blue?style=flat-square" alt="Release"></a>
   <a href="https://github.com/geezerrrr/motive/stargazers"><img src="https://img.shields.io/github/stars/geezerrrr/motive?style=flat-square" alt="Stars"></a>
   <img src="https://img.shields.io/badge/platform-macOS%2015+-blue?style=flat-square" alt="Platform">
   <img src="https://img.shields.io/badge/swift-6.0-orange?style=flat-square" alt="Swift">
@@ -56,8 +56,8 @@ Download the latest release for your architecture:
 
 | Chip | Download |
 |------|----------|
-| Apple Silicon | [Motive-0.2.2-arm64.dmg](https://github.com/geezerrrr/motive/releases/download/v0.2.2/Motive-0.2.2-arm64.dmg) |
-| Intel | [Motive-0.2.2-x86_64.dmg](https://github.com/geezerrrr/motive/releases/download/v0.2.2/Motive-0.2.2-x86_64.dmg) |
+| Apple Silicon | [Motive-arm64.dmg](https://github.com/geezerrrr/motive/releases/latest/download/Motive-arm64.dmg) |
+| Intel | [Motive-x86_64.dmg](https://github.com/geezerrrr/motive/releases/latest/download/Motive-x86_64.dmg) |
 
 > **First launch:** If blocked, go to System Settings → Privacy & Security → Click "Open Anyway"
 
@@ -146,7 +146,7 @@ Anything an AI coding agent can do: refactor code, generate files, run scripts, 
 
 ## Acknowledgments
 
-Powered by [OpenCode](https://github.com/opencode-ai/opencode) — the open-source AI agent that makes autonomous task execution possible.
+Powered by [OpenCode](https://github.com/anomalyco/opencode) — the open-source AI coding agent that makes autonomous task execution possible.
 
 ---
 

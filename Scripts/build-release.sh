@@ -17,9 +17,9 @@ BUILD_DIR="$PROJECT_DIR/build"
 RELEASE_DIR="$PROJECT_DIR/release"
 PBXPROJ="$PROJECT_DIR/$APP_NAME.xcodeproj/project.pbxproj"
 
-# OpenCode release URLs
-OPENCODE_ARM64_URL="https://github.com/opencode-ai/opencode/releases/latest/download/opencode-mac-arm64.tar.gz"
-OPENCODE_X64_URL="https://github.com/opencode-ai/opencode/releases/latest/download/opencode-mac-x86_64.tar.gz"
+# OpenCode release URLs (from anomalyco/opencode - the correct repo)
+OPENCODE_ARM64_URL="https://github.com/anomalyco/opencode/releases/latest/download/opencode-darwin-arm64.zip"
+OPENCODE_X64_URL="https://github.com/anomalyco/opencode/releases/latest/download/opencode-darwin-x64.zip"
 
 # Colors
 RED='\033[0;31m'
@@ -46,16 +46,16 @@ clean() {
 download_opencode() {
     local arch=$1
     local url=$2
-    local tarball="$BUILD_DIR/opencode-$arch.tar.gz"
+    local zipfile="$BUILD_DIR/opencode-$arch.zip"
     local dest="$BUILD_DIR/opencode-$arch"
     
     log "Downloading OpenCode for $arch..."
-    curl -L -f "$url" -o "$tarball" || error "Failed to download OpenCode for $arch"
+    curl -L -f "$url" -o "$zipfile" || error "Failed to download OpenCode for $arch"
     
     log "Extracting OpenCode for $arch..."
-    tar -xzf "$tarball" -C "$BUILD_DIR"
+    unzip -o "$zipfile" -d "$BUILD_DIR"
     mv "$BUILD_DIR/opencode" "$dest"
-    rm "$tarball"
+    rm "$zipfile"
     
     chmod +x "$dest"
     log "Downloaded and extracted OpenCode for $arch"
@@ -248,10 +248,6 @@ main() {
     inject_opencode "x86_64"
     sign_app "x86_64"
     create_dmg "x86_64"
-    
-    # Rename with version
-    mv "$RELEASE_DIR/$APP_NAME-arm64.dmg" "$RELEASE_DIR/$APP_NAME-$VERSION-arm64.dmg"
-    mv "$RELEASE_DIR/$APP_NAME-x86_64.dmg" "$RELEASE_DIR/$APP_NAME-$VERSION-x86_64.dmg"
     
     log "=== Build Complete ==="
     log "Release files:"

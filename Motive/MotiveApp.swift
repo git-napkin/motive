@@ -22,14 +22,39 @@ struct MotiveApp: App {
         do {
             container = try ModelContainer(for: Session.self, LogEntry.self)
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        } 
+            // Schema mismatch or corrupted database - delete and retry
+            print("[Motive] ModelContainer failed: \(error). Recreating database...")
+            Self.deleteCorruptedDatabase()
+            do {
+                container = try ModelContainer(for: Session.self, LogEntry.self)
+            } catch {
+                fatalError("Could not create ModelContainer after reset: \(error)")
+            }
+        } 
         _configManager = StateObject(wrappedValue: configManager)
         _appState = StateObject(wrappedValue: appState)
         modelContainer = container
         appDelegate.appState = appState
         // Note: appState.start() is called in AppDelegate.applicationDidFinishLaunching
         // to ensure GUI connection is fully established before creating NSStatusItem
+    }
+    
+    /// Delete corrupted SwiftData database files to allow recreation
+    private static func deleteCorruptedDatabase() {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return
+        }
+        // SwiftData stores in Application Support/default.store
+        let defaultStoreURL = appSupport.appendingPathComponent("default.store")
+        let filesToDelete = [
+            defaultStoreURL,
+            defaultStoreURL.appendingPathExtension("shm"),
+            defaultStoreURL.appendingPathExtension("wal")
+        ]
+        for url in filesToDelete {
+            try? FileManager.default.removeItem(at: url)
+        }
+        print("[Motive] Deleted corrupted database files")
     }
  
     var body: some Scene {

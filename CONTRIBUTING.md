@@ -34,12 +34,12 @@ For development, download and place the OpenCode binary:
 
 ```bash
 # Apple Silicon
-curl -L https://github.com/opencode-ai/opencode/releases/latest/download/opencode-mac-arm64.tar.gz -o opencode.tar.gz
-tar -xzf opencode.tar.gz && mv opencode Motive/Resources/ && rm opencode.tar.gz
+curl -L https://github.com/anomalyco/opencode/releases/latest/download/opencode-darwin-arm64.zip -o opencode.zip
+unzip opencode.zip && mv opencode Motive/Resources/ && rm opencode.zip
 
 # Intel
-curl -L https://github.com/opencode-ai/opencode/releases/latest/download/opencode-mac-x86_64.tar.gz -o opencode.tar.gz
-tar -xzf opencode.tar.gz && mv opencode Motive/Resources/ && rm opencode.tar.gz
+curl -L https://github.com/anomalyco/opencode/releases/latest/download/opencode-darwin-x64.zip -o opencode.zip
+unzip opencode.zip && mv opencode Motive/Resources/ && rm opencode.zip
 ```
 
 ## Pull Request Guidelines

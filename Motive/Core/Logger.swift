@@ -27,28 +27,29 @@ enum Log {
     }
     
     /// Log general app messages
+    /// Note: Uses .info level because .debug is not persisted in Release builds
     static func debug(_ message: String, file: String = #file, function: String = #function) {
         guard isDebugEnabled else { return }
         let filename = (file as NSString).lastPathComponent
-        appLogger.debug("[\(filename):\(function)] \(message)")
+        appLogger.info("[\(filename):\(function)] \(message)")
     }
     
     /// Log OpenCode bridge messages
     static func bridge(_ message: String) {
         guard isDebugEnabled else { return }
-        bridgeLogger.debug("\(message)")
+        bridgeLogger.info("\(message)")
     }
     
     /// Log permission-related messages
     static func permission(_ message: String) {
         guard isDebugEnabled else { return }
-        permissionLogger.debug("\(message)")
+        permissionLogger.info("\(message)")
     }
     
     /// Log configuration messages
     static func config(_ message: String) {
         guard isDebugEnabled else { return }
-        configLogger.debug("\(message)")
+        configLogger.info("\(message)")
     }
     
     /// Log errors (always logged, even in release)
