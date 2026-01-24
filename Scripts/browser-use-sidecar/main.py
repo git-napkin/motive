@@ -9,6 +9,8 @@ Features:
 - Singleton guarantee: Only one server instance runs at a time
 - Tab management: List and switch between tabs
 - Wait command: Wait for user interaction (login, captcha, etc.)
+
+Refactored to use browser-use native APIs instead of direct CDP calls.
 """
 
 import urllib.request
@@ -40,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 IDLE_TIMEOUT_SECONDS = 300  # 5 minutes
-BROWSER_CHECK_INTERVAL = 15  # Check browser health every 15 seconds (longer to avoid interfering with operations)
+BROWSER_CHECK_INTERVAL = 15  # Check browser health every 15 seconds
 
 # File paths
 SOCKET_PATH = Path(tempfile.gettempdir()) / "browser-use-sidecar.sock"
@@ -69,14 +71,12 @@ def force_kill_chrome():
     if CHROME_PID_PATH.exists():
         try:
             chrome_pid = int(CHROME_PID_PATH.read_text().strip())
-            # Kill process group (includes child processes)
             try:
                 os.killpg(chrome_pid, signal.SIGTERM)
                 time.sleep(0.5)
                 os.killpg(chrome_pid, signal.SIGKILL)
             except (OSError, ProcessLookupError):
                 pass
-            # Also try direct kill
             try:
                 os.kill(chrome_pid, signal.SIGKILL)
             except (OSError, ProcessLookupError):
@@ -85,27 +85,28 @@ def force_kill_chrome():
         except (OSError, ValueError):
             pass
     
-    # Method 2: Kill by process name pattern (backup)
+    # Method 2: Kill Chromium processes using our profile directory
+    profile_marker = "Motive/browser/profiles"
     try:
-        # Find Chrome processes with our specific user data directory
         result = subprocess.run(
-            ['pgrep', '-f', 'browser-use-sidecar'],
+            ['pgrep', '-f', f'chromium.*{profile_marker}'],
             capture_output=True, text=True
         )
         if result.stdout.strip():
             for pid_str in result.stdout.strip().split('\n'):
                 try:
                     pid = int(pid_str)
-                    os.kill(pid, signal.SIGKILL)
+                    if pid != os.getpid():
+                        os.kill(pid, signal.SIGKILL)
                 except (OSError, ValueError):
                     pass
     except Exception:
         pass
     
-    # Method 3: Kill orphaned Chromium processes
+    # Method 3: Kill any chromium with remote debugging (last resort)
     try:
         subprocess.run(
-            ['pkill', '-9', '-f', 'chromium.*--remote-debugging'],
+            ['pkill', '-9', '-f', 'chromium.*--remote-debugging-port'],
             capture_output=True
         )
     except Exception:
@@ -121,9 +122,8 @@ def is_server_running() -> bool:
     
     try:
         pid = int(PID_PATH.read_text().strip())
-        os.kill(pid, 0)  # Check if process exists
+        os.kill(pid, 0)
         
-        # Also verify socket is connectable
         if SOCKET_PATH.exists():
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             try:
@@ -132,7 +132,6 @@ def is_server_running() -> bool:
                 sock.close()
                 return True
             except (socket.error, socket.timeout):
-                # Socket exists but not connectable, kill stale process
                 try:
                     os.kill(pid, signal.SIGTERM)
                     time.sleep(0.3)
@@ -154,16 +153,14 @@ def kill_existing_server():
     if PID_PATH.exists():
         try:
             pid = int(PID_PATH.read_text().strip())
-            # Try graceful shutdown first
             os.kill(pid, signal.SIGTERM)
-            for _ in range(20):  # 2 seconds max
+            for _ in range(20):
                 time.sleep(0.1)
                 try:
                     os.kill(pid, 0)
                 except OSError:
                     break
             else:
-                # Force kill if still running
                 try:
                     os.kill(pid, signal.SIGKILL)
                 except OSError:
@@ -172,8 +169,6 @@ def kill_existing_server():
             pass
     
     cleanup_stale_files()
-    
-    # Also force kill Chrome processes
     force_kill_chrome()
 
 
@@ -185,7 +180,6 @@ def send_to_server(request: dict, timeout: float = 60.0) -> dict:
         sock.connect(str(SOCKET_PATH))
         sock.sendall(json.dumps(request).encode() + b'\n')
         
-        # Read response
         data = b''
         while True:
             chunk = sock.recv(8192)
@@ -201,15 +195,17 @@ def send_to_server(request: dict, timeout: float = 60.0) -> dict:
 
 
 class BrowserServer:
-    """Server that maintains browser session with auto-cleanup."""
+    """Server that maintains browser session with auto-cleanup.
+    
+    Uses browser-use native APIs for all browser operations.
+    """
     
     def __init__(self, headed: bool = True):
         self.headed = headed
-        self.session = None
+        self.session = None  # BrowserSession
         self.running = True
         self.last_activity = time.time()
         self._lock_fd = None
-        self._chrome_pid = None
     
     def acquire_lock(self) -> bool:
         """Acquire exclusive lock to ensure singleton."""
@@ -246,14 +242,13 @@ class BrowserServer:
         default_subdir = profile_dir / "Default"
         default_subdir.mkdir(parents=True, exist_ok=True)
         
-        # Copy essential auth files from user's Chrome (small files, not GB of cache)
-        # This preserves login sessions without copying the entire profile
+        # Copy essential auth files from user's Chrome
         user_chrome = Path.home() / "Library" / "Application Support" / "Google" / "Chrome" / "Default"
         essential_files = [
-            "Cookies",           # Login cookies (~few MB)
-            "Login Data",        # Saved passwords
-            "Web Data",          # Form autofill
-            "Preferences",       # Settings
+            "Cookies",
+            "Login Data",
+            "Web Data",
+            "Preferences",
             "Secure Preferences",
         ]
         
@@ -263,7 +258,6 @@ class BrowserServer:
                 dst = default_subdir / filename
                 if src.exists():
                     try:
-                        # Only copy if source is newer or dest doesn't exist
                         if not dst.exists() or src.stat().st_mtime > dst.stat().st_mtime:
                             shutil.copy2(src, dst)
                             logger.info(f"Synced {filename} from user Chrome profile")
@@ -273,31 +267,64 @@ class BrowserServer:
         profile = BrowserProfile(
             headless=not self.headed,
             user_data_dir=str(profile_dir),
+            channel='chromium',  # Use independent Chromium, not system Chrome
         )
-        self.session = BrowserSession(browser_profile=profile)
-        await self.session.start()
-        return {"success": True, "message": "Browser started"}
+        
+        # Retry browser startup up to 3 times
+        max_retries = 3
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                self.session = BrowserSession(browser_profile=profile)
+                await self.session.start()
+                
+                await asyncio.sleep(1)
+                if await self.is_browser_alive():
+                    print(f"Browser started successfully (attempt {attempt + 1})", flush=True)
+                    return {"success": True, "message": "Browser started"}
+                else:
+                    raise RuntimeError("Browser started but health check failed")
+                    
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Browser start attempt {attempt + 1} failed: {e}")
+                
+                if self.session:
+                    try:
+                        await self.session.stop()
+                    except:
+                        pass
+                    self.session = None
+                
+                force_kill_chrome()
+                
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)
+        
+        raise RuntimeError(f"Failed to start browser after {max_retries} attempts: {last_error}")
     
     async def is_browser_alive(self) -> bool:
-        """Check if browser session is still alive.
-        
-        Be VERY lenient - only return False if browser is definitely dead.
-        Any error should be treated as "browser is probably still alive".
-        """
+        """Check if browser session is still alive using native API."""
         if not self.session:
             return False
         
-        # Just check if session object exists - don't try CDP operations
-        # as they can fail for many transient reasons
         try:
-            # Check if the browser object exists
-            if hasattr(self.session, '_browser') and self.session._browser:
-                return True
-            # Session exists but no browser object - might still be starting
-            return True
+            # Try to get current page - this verifies browser is responsive
+            page = await asyncio.wait_for(
+                self.session.get_current_page(),
+                timeout=5.0
+            )
+            return page is not None
+        except asyncio.TimeoutError:
+            logger.warning("Browser health check timeout")
+            return False
         except Exception as e:
-            # Any exception during check - assume alive
-            logger.warning(f"Health check exception (assuming alive): {e}")
+            err_str = str(e).lower()
+            if any(x in err_str for x in ['target closed', 'session closed', 'browser closed', 'disconnected']):
+                logger.warning(f"Browser appears dead: {e}")
+                return False
+            logger.warning(f"Health check error (assuming alive): {e}")
             return True
     
     def update_activity(self):
@@ -349,95 +376,102 @@ class BrowserServer:
             logger.exception("Command error")
             return {"error": str(e)}
     
-    async def _wait_for_page_ready(self, timeout: float = 5.0) -> bool:
-        """Wait for page to be ready (document.readyState == 'complete')."""
-        try:
-            cdp_session = await self.session.get_or_create_cdp_session(target_id=None, focus=False)
-            if not cdp_session:
-                return False
-            
-            start = asyncio.get_event_loop().time()
-            while asyncio.get_event_loop().time() - start < timeout:
-                result = await cdp_session.cdp_client.send.Runtime.evaluate(
-                    params={'expression': 'document.readyState'},
-                    session_id=cdp_session.session_id,
-                )
-                if result.get('result', {}).get('value') == 'complete':
-                    return True
-                await asyncio.sleep(0.1)  # Poll every 100ms
-            return False
-        except Exception:
-            return False
-    
     async def cmd_open(self, url: str) -> dict:
-        """Navigate to URL."""
+        """Navigate to URL using browser-use NavigateToUrlEvent."""
         if not self.session:
             return {"error": "Browser not started"}
+        
+        if not await self.is_browser_alive():
+            return {"error": "Browser is not responsive - may need to restart"}
         
         if not url.startswith(('http://', 'https://', 'file://')):
             url = 'https://' + url
         
-        from browser_use.browser.events import NavigateToUrlEvent
-        await self.session.event_bus.dispatch(NavigateToUrlEvent(url=url))
-        
-        # Smart wait: poll for page ready instead of fixed sleep
-        await self._wait_for_page_ready(timeout=10.0)
-        return {"success": True, "url": url}
+        try:
+            from browser_use.browser.events import NavigateToUrlEvent
+            
+            await asyncio.wait_for(
+                self.session.event_bus.dispatch(NavigateToUrlEvent(url=url)),
+                timeout=30.0
+            )
+            
+            # Wait for page to be ready
+            await asyncio.sleep(1.5)
+            
+            return {"success": True, "url": url}
+        except asyncio.TimeoutError:
+            return {"error": "Navigation timeout - page took too long to load"}
+        except Exception as e:
+            logger.error(f"Navigation failed: {e}")
+            return {"error": f"Navigation failed: {e}"}
     
     async def cmd_state(self) -> dict:
-        """Get page state with interactive elements."""
+        """Get page state with interactive elements using native API."""
         if not self.session:
             return {"error": "Browser not started"}
         
-        # Get current tab info first
-        tabs_info = await self._get_tabs_info()
+        if not await self.is_browser_alive():
+            return {"error": "Browser is not responsive - may need to restart"}
         
-        state_text = await self.session.get_state_as_text()
-        
-        result = {"state": state_text}
-        if tabs_info:
-            result["current_tab"] = tabs_info.get("current_index", 0)
-            result["total_tabs"] = tabs_info.get("total", 1)
-        
-        return result
-    
-    async def _get_tabs_info(self) -> dict:
-        """Get information about all tabs."""
         try:
-            cdp_session = await self.session.get_or_create_cdp_session(target_id=None, focus=False)
-            if not cdp_session:
-                return {}
+            # Get tabs info
+            tabs_info = await self._get_tabs_info()
             
-            # Get all targets (tabs)
-            result = await cdp_session.cdp_client.send.Target.getTargets(
-                params={},
-                session_id=None  # Use browser-level session
+            # Get page state using native API
+            state_text = await asyncio.wait_for(
+                self.session.get_state_as_text(),
+                timeout=10.0
             )
             
-            targets = result.get('targetInfos', [])
-            pages = [t for t in targets if t.get('type') == 'page']
+            result = {"state": state_text}
+            if tabs_info:
+                result["current_tab"] = tabs_info.get("current_index", 0)
+                result["total_tabs"] = tabs_info.get("total", 1)
             
-            # Find current target
-            current_target_id = getattr(cdp_session, 'target_id', None)
+            return result
+        except asyncio.TimeoutError:
+            return {"error": "Timeout getting page state - browser may be hung"}
+        except Exception as e:
+            logger.error(f"Failed to get state: {e}")
+            return {"error": f"Failed to get state: {e}"}
+    
+    async def _get_tabs_info(self) -> dict:
+        """Get information about all tabs using native API."""
+        try:
+            # Use browser-use's get_tabs method - returns list[TabInfo]
+            tabs = await asyncio.wait_for(
+                self.session.get_tabs(),
+                timeout=5.0
+            )
+            
+            if not tabs:
+                return {}
+            
+            # Get current focus target
+            current_target_id = self.session.agent_focus_target_id
             current_index = 0
             
-            tabs = []
-            for i, page in enumerate(pages):
+            tab_list = []
+            for i, tab in enumerate(tabs):
+                # TabInfo has: url, title, target_id, parent_target_id
                 tab_info = {
                     "index": i,
-                    "title": page.get('title', ''),
-                    "url": page.get('url', ''),
-                    "targetId": page.get('targetId', '')
+                    "title": tab.title if hasattr(tab, 'title') else '',
+                    "url": tab.url if hasattr(tab, 'url') else '',
+                    "targetId": tab.target_id if hasattr(tab, 'target_id') else ''
                 }
-                tabs.append(tab_info)
-                if page.get('targetId') == current_target_id:
+                tab_list.append(tab_info)
+                if tab_info["targetId"] == current_target_id:
                     current_index = i
             
             return {
-                "tabs": tabs,
+                "tabs": tab_list,
                 "current_index": current_index,
-                "total": len(pages)
+                "total": len(tabs)
             }
+        except asyncio.TimeoutError:
+            logger.warning("Timeout getting tabs info")
+            return {}
         except Exception as e:
             logger.warning(f"Failed to get tabs info: {e}")
             return {}
@@ -458,7 +492,7 @@ class BrowserServer:
         }
     
     async def cmd_switch(self, index: int) -> dict:
-        """Switch to tab by index using browser_use's SwitchTabEvent."""
+        """Switch to tab by index using SwitchTabEvent."""
         if not self.session:
             return {"error": "Browser not started"}
         
@@ -473,13 +507,13 @@ class BrowserServer:
             
             target_id = tabs[index]["targetId"]
             
-            # Use browser_use's official SwitchTabEvent to properly switch tabs
-            # This updates agent_focus_target_id, activates the tab visually,
-            # and clears cached DOM state
             from browser_use.browser.events import SwitchTabEvent
-            await self.session.event_bus.dispatch(SwitchTabEvent(target_id=target_id))
+            await asyncio.wait_for(
+                self.session.event_bus.dispatch(SwitchTabEvent(target_id=target_id)),
+                timeout=10.0
+            )
             
-            await asyncio.sleep(0.2)  # Brief wait for tab switch
+            await asyncio.sleep(0.2)
             
             return {
                 "success": True,
@@ -487,123 +521,205 @@ class BrowserServer:
                 "url": tabs[index]["url"],
                 "title": tabs[index]["title"]
             }
+        except asyncio.TimeoutError:
+            return {"error": "Tab switch timeout - browser may be unresponsive"}
         except Exception as e:
             logger.exception("Switch tab error")
             return {"error": f"Failed to switch tab: {e}"}
     
     async def cmd_click(self, index: int) -> dict:
-        """Click element by index."""
-        if not self.session:
-            return {"error": "Browser not started"}
-        
-        from browser_use.browser.events import ClickElementEvent
-        node = await self.session.get_element_by_index(index)
-        if node is None:
-            return {"error": f"Element index {index} not found"}
-        
-        await self.session.event_bus.dispatch(ClickElementEvent(node=node))
-        await asyncio.sleep(0.5)  # Wait for click effect
-        
-        return {"success": True, "clicked": index}
-    
-    async def cmd_input(self, index: int, text: str) -> dict:
-        """Type text into element by index."""
-        if not self.session:
-            return {"error": "Browser not started"}
-        
-        from browser_use.browser.events import ClickElementEvent, TypeTextEvent
-        node = await self.session.get_element_by_index(index)
-        if node is None:
-            return {"error": f"Element index {index} not found"}
-        
-        await self.session.event_bus.dispatch(ClickElementEvent(node=node))
-        await asyncio.sleep(0.05)  # Minimal wait for focus
-        await self.session.event_bus.dispatch(TypeTextEvent(node=node, text=text))
-        await asyncio.sleep(0.05)  # Minimal wait after type
-        return {"success": True, "index": index, "text": text}
-    
-    async def cmd_type(self, text: str) -> dict:
-        """Type text into focused element."""
-        if not self.session:
-            return {"error": "Browser not started"}
-        
-        cdp_session = await self.session.get_or_create_cdp_session(target_id=None, focus=False)
-        if not cdp_session:
-            return {"error": "No active CDP session"}
-        
-        await cdp_session.cdp_client.send.Input.insertText(
-            params={'text': text},
-            session_id=cdp_session.session_id,
-        )
-        return {"success": True, "typed": text}
-    
-    async def cmd_keys(self, key: str) -> dict:
-        """Press keyboard key."""
-        if not self.session:
-            return {"error": "Browser not started"}
-        
-        cdp_session = await self.session.get_or_create_cdp_session(target_id=None, focus=False)
-        if not cdp_session:
-            return {"error": "No active CDP session"}
-        
-        key_map = {
-            'Enter': '\r', 'Tab': '\t', 'Escape': '\x1b',
-            'Backspace': '\x08', 'Delete': '\x7f',
-        }
-        char = key_map.get(key, key)
-        
-        await cdp_session.cdp_client.send.Input.dispatchKeyEvent(
-            params={'type': 'keyDown', 'key': key, 'text': char},
-            session_id=cdp_session.session_id,
-        )
-        await cdp_session.cdp_client.send.Input.dispatchKeyEvent(
-            params={'type': 'keyUp', 'key': key},
-            session_id=cdp_session.session_id,
-        )
-        return {"success": True, "key": key}
-    
-    async def cmd_scroll(self, direction: str) -> dict:
-        """Scroll page."""
-        if not self.session:
-            return {"error": "Browser not started"}
-        
-        cdp_session = await self.session.get_or_create_cdp_session(target_id=None, focus=False)
-        if not cdp_session:
-            return {"error": "No active CDP session"}
-        
-        amount = 500 if direction == "down" else -500
-        await cdp_session.cdp_client.send.Runtime.evaluate(
-            params={'expression': f'window.scrollBy(0, {amount})'},
-            session_id=cdp_session.session_id,
-        )
-        return {"success": True, "direction": direction}
-    
-    async def cmd_back(self) -> dict:
-        """Go back in history."""
-        if not self.session:
-            return {"error": "Browser not started"}
-        
-        from browser_use.browser.events import GoBackEvent
-        await self.session.event_bus.dispatch(GoBackEvent())
-        await asyncio.sleep(0.5)
-        return {"success": True}
-    
-    async def cmd_refresh(self) -> dict:
-        """Refresh current page."""
+        """Click element by index using ClickElementEvent."""
         if not self.session:
             return {"error": "Browser not started"}
         
         try:
-            cdp_session = await self.session.get_or_create_cdp_session(target_id=None, focus=False)
-            if not cdp_session:
-                return {"error": "No active CDP session"}
+            from browser_use.browser.events import ClickElementEvent
             
-            await cdp_session.cdp_client.send.Page.reload(
-                params={'ignoreCache': True},
-                session_id=cdp_session.session_id,
+            node = await asyncio.wait_for(
+                self.session.get_element_by_index(index),
+                timeout=10.0
             )
-            await asyncio.sleep(1.5)
-            return {"success": True, "message": "Page refreshed"}
+            if node is None:
+                return {"error": f"Element index {index} not found"}
+            
+            await asyncio.wait_for(
+                self.session.event_bus.dispatch(ClickElementEvent(node=node)),
+                timeout=10.0
+            )
+            await asyncio.sleep(0.5)
+            
+            return {"success": True, "clicked": index}
+        except asyncio.TimeoutError:
+            return {"error": "Click timeout - browser may be unresponsive"}
+        except Exception as e:
+            logger.exception("Click error")
+            return {"error": f"Click failed: {e}"}
+    
+    async def cmd_input(self, index: int, text: str) -> dict:
+        """Type text into element by index using native events."""
+        if not self.session:
+            return {"error": "Browser not started"}
+        
+        try:
+            from browser_use.browser.events import ClickElementEvent, TypeTextEvent
+            
+            node = await asyncio.wait_for(
+                self.session.get_element_by_index(index),
+                timeout=10.0
+            )
+            if node is None:
+                return {"error": f"Element index {index} not found"}
+            
+            # Click to focus
+            await asyncio.wait_for(
+                self.session.event_bus.dispatch(ClickElementEvent(node=node)),
+                timeout=10.0
+            )
+            await asyncio.sleep(0.05)
+            
+            # Type text
+            await asyncio.wait_for(
+                self.session.event_bus.dispatch(TypeTextEvent(node=node, text=text)),
+                timeout=10.0
+            )
+            await asyncio.sleep(0.05)
+            
+            return {"success": True, "index": index, "text": text}
+        except asyncio.TimeoutError:
+            return {"error": "Input timeout - browser may be unresponsive"}
+        except Exception as e:
+            logger.exception("Input error")
+            return {"error": f"Input failed: {e}"}
+    
+    async def cmd_type(self, text: str) -> dict:
+        """Type text into focused element using Page.evaluate."""
+        if not self.session:
+            return {"error": "Browser not started"}
+        
+        try:
+            page = await asyncio.wait_for(
+                self.session.get_current_page(),
+                timeout=5.0
+            )
+            if not page:
+                return {"error": "No active page"}
+            
+            # Use Page.evaluate to insert text into active element
+            await asyncio.wait_for(
+                page.evaluate(f'''() => {{
+                    const el = document.activeElement;
+                    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) {{
+                        el.value = (el.value || '') + {json.dumps(text)};
+                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    }}
+                }}'''),
+                timeout=5.0
+            )
+            return {"success": True, "typed": text}
+        except asyncio.TimeoutError:
+            return {"error": "Type timeout - browser may be unresponsive"}
+        except Exception as e:
+            return {"error": f"Type failed: {e}"}
+    
+    async def cmd_keys(self, key: str) -> dict:
+        """Press keyboard key using Page.press."""
+        if not self.session:
+            return {"error": "Browser not started"}
+        
+        try:
+            page = await asyncio.wait_for(
+                self.session.get_current_page(),
+                timeout=5.0
+            )
+            if not page:
+                return {"error": "No active page"}
+            
+            # Use Page.press for keyboard input
+            await asyncio.wait_for(
+                page.press(key),
+                timeout=5.0
+            )
+            return {"success": True, "key": key}
+        except asyncio.TimeoutError:
+            return {"error": "Key press timeout - browser may be unresponsive"}
+        except Exception as e:
+            return {"error": f"Key press failed: {e}"}
+    
+    async def cmd_scroll(self, direction: str) -> dict:
+        """Scroll page using ScrollEvent."""
+        if not self.session:
+            return {"error": "Browser not started"}
+        
+        try:
+            from browser_use.browser.events import ScrollEvent
+            
+            # ScrollEvent: direction can be 'up' or 'down', amount is pixels
+            amount = 500 if direction == "down" else -500
+            
+            await asyncio.wait_for(
+                self.session.event_bus.dispatch(ScrollEvent(
+                    coordinate=None,  # Scroll current viewport
+                    direction=direction,
+                    amount=abs(amount)
+                )),
+                timeout=5.0
+            )
+            return {"success": True, "direction": direction}
+        except asyncio.TimeoutError:
+            return {"error": "Scroll timeout - browser may be unresponsive"}
+        except Exception as e:
+            # Fallback to Page.evaluate if ScrollEvent doesn't work
+            try:
+                page = await self.session.get_current_page()
+                if page:
+                    amount = 500 if direction == "down" else -500
+                    await page.evaluate(f'() => window.scrollBy(0, {amount})')
+                    return {"success": True, "direction": direction}
+            except:
+                pass
+            return {"error": f"Scroll failed: {e}"}
+    
+    async def cmd_back(self) -> dict:
+        """Go back in history using GoBackEvent."""
+        if not self.session:
+            return {"error": "Browser not started"}
+        
+        try:
+            from browser_use.browser.events import GoBackEvent
+            
+            await asyncio.wait_for(
+                self.session.event_bus.dispatch(GoBackEvent()),
+                timeout=10.0
+            )
+            await asyncio.sleep(0.5)
+            return {"success": True}
+        except asyncio.TimeoutError:
+            return {"error": "Back navigation timeout - browser may be unresponsive"}
+        except Exception as e:
+            return {"error": f"Back navigation failed: {e}"}
+    
+    async def cmd_refresh(self) -> dict:
+        """Refresh current page using Page.reload or RefreshEvent."""
+        if not self.session:
+            return {"error": "Browser not started"}
+        
+        try:
+            # Try using Page.reload first (native browser-use API)
+            page = await asyncio.wait_for(
+                self.session.get_current_page(),
+                timeout=5.0
+            )
+            if page:
+                await asyncio.wait_for(
+                    page.reload(),
+                    timeout=10.0
+                )
+                await asyncio.sleep(1.0)
+                return {"success": True, "message": "Page refreshed"}
+            
+            return {"error": "No active page to refresh"}
+        except asyncio.TimeoutError:
+            return {"error": "Refresh timeout - browser may be unresponsive"}
         except Exception as e:
             return {"error": f"Failed to refresh: {e}"}
     
@@ -615,7 +731,6 @@ class BrowserServer:
         wait_msg = message if message else "Waiting for user action"
         print(f"⏳ {wait_msg} ({seconds}s)...", flush=True)
         
-        # Keep activity alive during wait
         start_time = time.time()
         while time.time() - start_time < seconds:
             self.update_activity()
@@ -628,19 +743,37 @@ class BrowserServer:
         }
     
     async def cmd_screenshot(self, filename: str = None) -> dict:
-        """Take screenshot."""
+        """Take screenshot using native API."""
         if not self.session:
             return {"error": "Browser not started"}
         
         import base64
-        data = await self.session.take_screenshot(full_page=False)
         
-        if filename:
-            Path(filename).write_bytes(data)
-            return {"success": True, "file": filename, "size": len(data)}
-        
-        b64 = base64.b64encode(data).decode()
-        return {"success": True, "screenshot_base64_truncated": b64[:200] + "...", "size": len(data)}
+        try:
+            # Use Page.screenshot for native browser-use API
+            page = await asyncio.wait_for(
+                self.session.get_current_page(),
+                timeout=5.0
+            )
+            if page:
+                screenshot_b64 = await asyncio.wait_for(
+                    page.screenshot(format='png'),
+                    timeout=10.0
+                )
+                # Page.screenshot returns base64 string
+                data = base64.b64decode(screenshot_b64) if isinstance(screenshot_b64, str) else screenshot_b64
+            else:
+                # Fallback to session method
+                data = await self.session.take_screenshot(full_page=False)
+            
+            if filename:
+                Path(filename).write_bytes(data)
+                return {"success": True, "file": filename, "size": len(data)}
+            
+            b64 = base64.b64encode(data).decode() if isinstance(data, bytes) else data
+            return {"success": True, "screenshot_base64_truncated": b64[:200] + "...", "size": len(data)}
+        except Exception as e:
+            return {"error": f"Screenshot failed: {e}"}
     
     async def cmd_close(self) -> dict:
         """Close browser and stop server."""
@@ -651,7 +784,6 @@ class BrowserServer:
                 pass
             self.session = None
         
-        # Force kill Chrome processes
         force_kill_chrome()
         
         self.running = False
@@ -691,21 +823,19 @@ class BrowserServer:
     async def health_check_loop(self):
         """Periodically check browser health and idle timeout."""
         consecutive_failures = 0
-        max_consecutive_failures = 3  # Only shutdown after 3 consecutive failures
+        max_consecutive_failures = 3
         
         while self.running:
             await asyncio.sleep(BROWSER_CHECK_INTERVAL)
             
-            # Check idle timeout
             if self.is_idle_timeout():
                 print(f"Idle timeout reached ({IDLE_TIMEOUT_SECONDS}s), shutting down...", flush=True)
                 self.running = False
                 break
             
-            # Check browser health with tolerance for temporary issues
             if self.session:
                 if await self.is_browser_alive():
-                    consecutive_failures = 0  # Reset on success
+                    consecutive_failures = 0
                 else:
                     consecutive_failures += 1
                     print(f"Browser health check failed ({consecutive_failures}/{max_consecutive_failures})", flush=True)
@@ -717,30 +847,35 @@ class BrowserServer:
     
     async def run_server(self):
         """Run the server with health monitoring."""
-        # Acquire exclusive lock
         if not self.acquire_lock():
             print("Another server instance is running, exiting.", flush=True)
             return
         
         try:
-            # Clean up old socket
             SOCKET_PATH.unlink(missing_ok=True)
             
-            # Start browser first
-            await self.start_browser()
+            print("Starting browser...", flush=True)
+            try:
+                await self.start_browser()
+            except Exception as e:
+                print(f"FATAL: Failed to start browser: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+                return
             
-            # Create Unix socket server
+            if not await self.is_browser_alive():
+                print("FATAL: Browser started but is not responsive", flush=True)
+                return
+            
             server = await asyncio.start_unix_server(
                 self.handle_client,
                 path=str(SOCKET_PATH)
             )
             
-            # Write PID
             PID_PATH.write_text(str(os.getpid()))
             
             print(f"Server running (PID: {os.getpid()}, idle timeout: {IDLE_TIMEOUT_SECONDS}s)", flush=True)
             
-            # Handle shutdown signals
             def shutdown_handler(sig, frame):
                 print(f"Received signal {sig}, shutting down...", flush=True)
                 self.running = False
@@ -748,7 +883,6 @@ class BrowserServer:
             signal.signal(signal.SIGTERM, shutdown_handler)
             signal.signal(signal.SIGINT, shutdown_handler)
             
-            # Start health check loop
             health_task = asyncio.create_task(self.health_check_loop())
             
             try:
@@ -770,12 +904,10 @@ class BrowserServer:
                     except:
                         pass
                 
-                # Force kill Chrome on shutdown
                 force_kill_chrome()
                 
                 print("Server stopped.", flush=True)
         finally:
-            # Cleanup
             SOCKET_PATH.unlink(missing_ok=True)
             PID_PATH.unlink(missing_ok=True)
             CHROME_PID_PATH.unlink(missing_ok=True)
@@ -783,24 +915,14 @@ class BrowserServer:
 
 
 def start_server_daemon(headed: bool):
-    """Start server as background subprocess.
-    
-    Uses subprocess to start server, which works better with PyInstaller.
-    The headed parameter controls whether browser window is visible.
-    """
-    # Kill any existing server first
+    """Start server as background subprocess."""
     kill_existing_server()
     
-    # Get the path to this executable
     if getattr(sys, 'frozen', False):
-        # Running as PyInstaller bundle
         exe_path = sys.executable
     else:
-        # Running as script
         exe_path = sys.executable
-        # Will run as: python main.py --server --headed/--headless
     
-    # Build command
     if getattr(sys, 'frozen', False):
         cmd = [exe_path, '--server']
     else:
@@ -811,26 +933,30 @@ def start_server_daemon(headed: bool):
     else:
         cmd.append('--headless')
     
-    # Open log file
     log_file = open(str(LOG_PATH), 'w')
     
-    # Start subprocess
     proc = subprocess.Popen(
         cmd,
         stdout=log_file,
         stderr=log_file,
-        start_new_session=True,  # Detach from parent
+        start_new_session=not headed,
     )
     
-    # Wait for server to start
-    for _ in range(100):  # 10 seconds max
+    for _ in range(150):
         time.sleep(0.1)
         if SOCKET_PATH.exists():
+            time.sleep(0.5)
             return True
     
-    # Check if process died
     if proc.poll() is not None:
         print(f"Server process exited with code {proc.returncode}", file=sys.stderr)
+        try:
+            with open(str(LOG_PATH), 'r') as f:
+                log_content = f.read()
+                if log_content:
+                    print(f"Server log:\n{log_content}", file=sys.stderr)
+        except:
+            pass
         return False
     
     return False
@@ -856,7 +982,6 @@ def run_server_mode(headed: bool):
 
 
 def main():
-    # Check for server mode (called by start_server_daemon)
     if '--server' in sys.argv:
         headed = '--headed' in sys.argv
         run_server_mode(headed)
@@ -869,76 +994,58 @@ def main():
     
     subparsers = parser.add_subparsers(dest="command", required=True)
     
-    # open
     p_open = subparsers.add_parser("open", help="Navigate to URL (starts browser if needed)")
     p_open.add_argument("url", help="URL to open")
     
-    # state
     subparsers.add_parser("state", help="Get page state with clickable elements")
     
-    # click
     p_click = subparsers.add_parser("click", help="Click element by index")
     p_click.add_argument("index", type=int, help="Element index from state")
     
-    # input
     p_input = subparsers.add_parser("input", help="Click element and type text")
     p_input.add_argument("index", type=int, help="Element index")
     p_input.add_argument("text", help="Text to type")
     
-    # type
     p_type = subparsers.add_parser("type", help="Type into currently focused element")
     p_type.add_argument("text", help="Text to type")
     
-    # keys
     p_keys = subparsers.add_parser("keys", help="Press keyboard key")
     p_keys.add_argument("key", help="Key name (Enter, Tab, Escape, etc.)")
     
-    # scroll
     p_scroll = subparsers.add_parser("scroll", help="Scroll page")
     p_scroll.add_argument("direction", choices=["up", "down"], help="Scroll direction")
     
-    # back
     subparsers.add_parser("back", help="Go back in browser history")
     
-    # refresh
     subparsers.add_parser("refresh", help="Refresh current page")
     
-    # screenshot
     p_ss = subparsers.add_parser("screenshot", help="Take screenshot")
     p_ss.add_argument("filename", nargs="?", help="Output filename (optional)")
     
-    # close
     subparsers.add_parser("close", help="Close browser and stop server")
     
-    # tabs - list all tabs
     subparsers.add_parser("tabs", help="List all open tabs")
     
-    # switch - switch to tab
     p_switch = subparsers.add_parser("switch", help="Switch to tab by index")
     p_switch.add_argument("index", type=int, help="Tab index (from tabs command)")
     
-    # wait - wait for user
     p_wait = subparsers.add_parser("wait", help="Wait for user action (login, captcha)")
     p_wait.add_argument("seconds", type=int, nargs="?", default=30, help="Seconds to wait (default 30)")
     p_wait.add_argument("--message", "-m", help="Message to display")
     
-    # sessions (for compatibility)
     subparsers.add_parser("sessions", help="List active sessions")
     
-    # kill - force kill server
     subparsers.add_parser("kill", help="Force kill server and Chrome processes")
     
     args = parser.parse_args()
     headed = not args.headless
     
-    # Handle kill command
     if args.command == "kill":
         kill_existing_server()
         force_kill_chrome()
         print(json.dumps({"success": True, "message": "Server and Chrome killed"}))
         return
     
-    # Build request
     params = {}
     if args.command == "open":
         params["url"] = args.url
@@ -967,13 +1074,11 @@ def main():
             print(json.dumps({"sessions": []}))
         return
     
-    # Check if server is running
     if not is_server_running():
         if args.command == "close":
             print(json.dumps({"success": True, "message": "No server running"}))
             return
         
-        # Start server daemon
         if not args.json:
             print("Starting browser server...", file=sys.stderr)
         
@@ -984,7 +1089,6 @@ def main():
         if not args.json:
             print("Server started.", file=sys.stderr)
     
-    # Send command to server
     try:
         request = {"command": args.command, "params": params}
         result = send_to_server(request)
