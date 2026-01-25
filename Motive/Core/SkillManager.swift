@@ -90,8 +90,9 @@ final class SkillManager {
     func writeSkillFiles(to baseDirectory: URL) {
         let skillsDir = baseDirectory.appendingPathComponent("skills")
         
-        // Only write MCP tool skills as SKILL.md files
-        for skill in skills(ofType: .mcpTool) {
+        // Write MCP tool skills and capability skills (like browser automation) as SKILL.md files
+        let skillsToWrite = skills(ofType: .mcpTool) + skills(ofType: .capability).filter { $0.enabled }
+        for skill in skillsToWrite {
             let skillDir = skillsDir.appendingPathComponent(skill.id)
             let skillMdPath = skillDir.appendingPathComponent("SKILL.md")
             
@@ -152,6 +153,18 @@ description: \(skill.description)
                 <tool name="\(skill.name)">
                 \(skill.content)
                 </tool>
+                """)
+            }
+        }
+        
+        // Capability skills (external tools like browser automation)
+        let capabilitySkills = skills(ofType: .capability).filter { $0.enabled }
+        if !capabilitySkills.isEmpty {
+            for skill in capabilitySkills {
+                sections.append("""
+                <capability name="\(skill.name)">
+                \(skill.content)
+                </capability>
                 """)
             }
         }
@@ -437,120 +450,78 @@ description: \(skill.description)
         return Skill(
             id: "browser-automation",
             name: "Browser Automation",
-            description: "Control web browsers for searching, form filling, and data extraction via bundled browser-use-sidecar. NO API KEY NEEDED.",
+            description: "Autonomous browser agent for web tasks - shopping, searching, form filling. Auto-opens browser.",
             content: """
-            # Browser Automation
+            # Browser Automation (agent_task)
             
-            Control web browsers using Motive's bundled browser automation tool.
-            This capability is powered by browser-use (CDP-based) and runs as a sidecar process.
+            Use `browser-use-sidecar` for ALL browser tasks. The agent automatically opens browser, navigates, clicks, types, and asks user for choices when needed.
             
-            **CRITICAL: NO API KEY NEEDED!**
-            Direct control commands work WITHOUT any LLM API key (no ANTHROPIC_API_KEY, no OPENAI_API_KEY, etc.).
-            You (the AI agent) make the decisions - browser-use-sidecar is just a browser control tool.
-            
-            ## Command Format
-            
-            ```
-            browser-use-sidecar [OPTIONS] COMMAND [ARGS]
-            ```
-            
-            **Options (like --headed) go BEFORE the command!**
-            
-            ## When to Use
-            
-            - User asks to browse a website or search online
-            - User needs to fill out web forms
-            - User wants to extract data from webpages
-            - User asks to automate web interactions
-            - Any task requiring web navigation
-            
-            ## Commands
-            
-            All commands output JSON results. Use via shell/bash.
-            
-            ### Navigation
-            ```bash
-            # Open URL (browser will be \(headedMode ? "visible" : "headless"))
-            browser-use-sidecar \(headedFlag)open "https://example.com"
-            
-            # Go back
-            browser-use-sidecar back
-            ```
-            
-            ### Page State (CRITICAL: call after navigation)
-            ```bash
-            browser-use-sidecar state
-            ```
-            Output format: `[INDEX]<element tag="..." />` - use INDEX to interact.
-            
-            ### Interactions
-            ```bash
-            # Click element by index
-            browser-use-sidecar click INDEX
-            
-            # Input text into element
-            browser-use-sidecar input INDEX "text to type"
-            
-            # Type without targeting element
-            browser-use-sidecar type "text"
-            
-            # Scroll page
-            browser-use-sidecar scroll down
-            browser-use-sidecar scroll up
-            
-            # Press keys
-            browser-use-sidecar keys Enter
-            browser-use-sidecar keys Tab
-            ```
-            
-            ### Screenshots & Session
-            ```bash
-            # Take screenshot
-            browser-use-sidecar screenshot [filename.png]
-            
-            # Close browser
-            browser-use-sidecar close
-            
-            # List sessions
-            browser-use-sidecar sessions
-            ```
-            
-            ## Workflow Example
-            
-            **Task: Search "MacBook Pro" on Baidu**
+            ## Command: agent_task
             
             ```bash
-            # 1. Open website
-            browser-use-sidecar \(headedFlag)open "https://www.baidu.com"
+            browser-use-sidecar \(headedFlag)agent_task "your task description"
+            ```
             
-            # 2. Get page elements
-            browser-use-sidecar state
-            # Look for: [26]<input id="kw" name="wd" />
+            **The agent will:**
+            - Automatically open browser (no need to call `open` first)
+            - Navigate to websites
+            - Click buttons, fill forms
+            - Ask user for choices via `need_input` status
             
-            # 3. Type search query
-            browser-use-sidecar input 26 "MacBook Pro"
+            ## Examples
             
-            # 4. Get updated elements
-            browser-use-sidecar state
-            # Look for submit button
+            ```bash
+            # Shopping
+            browser-use-sidecar \(headedFlag)agent_task "去淘宝搜索卫生纸并挑选一款加入购物车"
             
-            # 5. Click search
-            browser-use-sidecar click 514
+            # Search
+            browser-use-sidecar \(headedFlag)agent_task "Search Google for iPhone 16 reviews"
             
-            # 6. Read results
-            browser-use-sidecar state
+            # Form
+            browser-use-sidecar \(headedFlag)agent_task "Fill contact form on example.com with name John"
+            ```
             
-            # 7. Close when done
+            ## Response Handling - CRITICAL POLLING LOOP
+            
+            **After calling `agent_task`, you MUST poll `agent_status` until task completes!**
+            
+            **Status types:**
+            - `"running"` - Task in progress, WAIT 3-5 seconds then call `agent_status` again
+            - `"need_input"` - Agent needs user choice, use AskUserQuestion then `agent_continue`
+            - `"completed"` - Done successfully
+            - `"error"` - Failed
+            
+            ## MANDATORY Workflow
+            
+            ```bash
+            # Step 1: Start task
+            browser-use-sidecar \(headedFlag)agent_task "去淘宝买卫生纸"
+            # Returns: {"status": "running", ...}
+            
+            # Step 2: POLL status (repeat until NOT "running")
+            sleep 5  # Wait a few seconds
+            browser-use-sidecar agent_status
+            # If still "running", repeat step 2
+            # If "need_input", go to step 3
+            # If "completed" or "error", done
+            
+            # Step 3: Handle need_input (if status is "need_input")
+            # Response example: {"status": "need_input", "question": "选择哪款?", "options": ["A", "B"]}
+            # -> Use AskUserQuestion to show options to user
+            # -> After user picks "A":
+            browser-use-sidecar agent_continue "A"
+            # -> Then go back to step 2 (poll status again)
+            
+            # Step 4: When completed
             browser-use-sidecar close
             ```
             
-            ## Important Notes
+            ## Key Commands
             
-            1. **NO API KEY NEEDED** - do NOT set ANTHROPIC_API_KEY or any other API keys
-            2. **Always call `state` after navigation** - element indices change on page load
-            3. **Options before command** - e.g., `browser-use-sidecar --headed open "url"`
-            4. **Quote URLs and text** - wrap in quotes to handle spaces/special chars
-            5. **Close browser when done** - free resources with `close` command
+            - `agent_task "description"` - Start autonomous browser task
+            - `agent_status` - Check task progress (MUST call repeatedly while running)
+            - `agent_continue "choice"` - Continue after user input
+            - `close` - Close browser when done
             """,
             type: .capability,
             enabled: enabled

@@ -114,6 +114,20 @@ final class BrowserUseBridge: ObservableObject {
     /// Last error message
     @Published private(set) var lastError: String?
     
+    /// Browser Agent API configuration (set from ConfigManager)
+    var agentAPIKeyEnvName: String?
+    var agentAPIKey: String?
+    var agentBaseUrlEnvName: String?
+    var agentBaseUrl: String?
+    
+    /// Configure agent API key and base URL (call this when settings change)
+    func configureAgentAPIKey(envName: String?, apiKey: String?, baseUrlEnvName: String? = nil, baseUrl: String? = nil) {
+        self.agentAPIKeyEnvName = envName
+        self.agentAPIKey = apiKey
+        self.agentBaseUrlEnvName = baseUrlEnvName
+        self.agentBaseUrl = baseUrl
+    }
+    
     /// Path to the bundled browser-use-sidecar binary
     /// Now looks for browser-use-sidecar/browser-use-sidecar (directory structure from PyInstaller --onedir)
     private var binaryPath: String? {
@@ -269,9 +283,24 @@ final class BrowserUseBridge: ObservableObject {
             process.standardOutput = outputPipe
             process.standardError = errorPipe
             
-            // Set up environment
+            // Set up environment with API keys for agent mode
             var env = ProcessInfo.processInfo.environment
             env["PYTHONUNBUFFERED"] = "1"
+            
+            // Add browser agent API key if configured
+            if let envName = self.agentAPIKeyEnvName,
+               let apiKey = self.agentAPIKey,
+               !apiKey.isEmpty {
+                env[envName] = apiKey
+            }
+            
+            // Add browser agent base URL if configured
+            if let baseUrlEnvName = self.agentBaseUrlEnvName,
+               let baseUrl = self.agentBaseUrl,
+               !baseUrl.isEmpty {
+                env[baseUrlEnvName] = baseUrl
+            }
+            
             process.environment = env
             
             do {

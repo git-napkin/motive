@@ -13,6 +13,96 @@ Features:
 Refactored to use browser-use native APIs instead of direct CDP calls.
 """
 
+# ============================================================================
+# CRITICAL: PyInstaller fixes MUST be at the very top, before any other imports
+# ============================================================================
+import sys
+import os
+
+def _fix_pyinstaller_importlib_resources():
+    """Fix importlib.resources.files() for PyInstaller onefile mode.
+    
+    PyInstaller extracts data files to sys._MEIPASS, but importlib.resources
+    doesn't know about this. We patch it to find prompt templates.
+    """
+    if not getattr(sys, 'frozen', False):
+        return  # Not running from PyInstaller
+    
+    meipass = getattr(sys, '_MEIPASS', None)
+    if not meipass:
+        return
+    
+    import importlib.resources
+    from pathlib import Path
+    
+    _original_files = importlib.resources.files
+    
+    class PyInstallerTraversable:
+        """Wrapper that mimics importlib.resources.Traversable for PyInstaller."""
+        def __init__(self, path):
+            self._path = Path(path) if not isinstance(path, Path) else path
+        
+        @property
+        def name(self):
+            return self._path.name
+        
+        def joinpath(self, *args):
+            return PyInstallerTraversable(self._path.joinpath(*args))
+        
+        def open(self, mode='r', encoding=None, errors=None):
+            return self._path.open(mode=mode, encoding=encoding, errors=errors)
+        
+        def read_text(self, encoding='utf-8'):
+            return self._path.read_text(encoding=encoding)
+        
+        def read_bytes(self):
+            return self._path.read_bytes()
+        
+        def is_file(self):
+            return self._path.is_file()
+        
+        def is_dir(self):
+            return self._path.is_dir()
+        
+        def iterdir(self):
+            for p in self._path.iterdir():
+                yield PyInstallerTraversable(p)
+        
+        def __truediv__(self, other):
+            return self.joinpath(other)
+        
+        def __str__(self):
+            return str(self._path)
+        
+        def __fspath__(self):
+            return str(self._path)
+    
+    def patched_files(package):
+        """Patched importlib.resources.files for PyInstaller."""
+        if isinstance(package, str):
+            package_path = package.replace('.', os.sep)
+            pyinstaller_path = Path(meipass) / package_path
+            
+            if pyinstaller_path.exists():
+                return PyInstallerTraversable(pyinstaller_path)
+        
+        # Fall back to original
+        try:
+            return _original_files(package)
+        except Exception:
+            if isinstance(package, str):
+                return PyInstallerTraversable(Path(meipass) / package.replace('.', os.sep))
+            raise
+    
+    importlib.resources.files = patched_files
+
+# Apply PyInstaller fix immediately
+_fix_pyinstaller_importlib_resources()
+
+# ============================================================================
+# Now safe to do other imports
+# ============================================================================
+
 import urllib.request
 # CRITICAL: Patch getproxies BEFORE any imports to disable macOS system proxy
 urllib.request.getproxies = lambda: {}
@@ -22,11 +112,9 @@ import asyncio
 import fcntl
 import json
 import logging
-import os
 import signal
 import socket
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -198,6 +286,7 @@ class BrowserServer:
     """Server that maintains browser session with auto-cleanup.
     
     Uses browser-use native APIs for all browser operations.
+    Supports Agent mode for autonomous task execution with human-in-the-loop.
     """
     
     def __init__(self, headed: bool = True):
@@ -206,6 +295,13 @@ class BrowserServer:
         self.running = True
         self.last_activity = time.time()
         self._lock_fd = None
+        
+        # Agent mode state
+        self._agent_task = None  # asyncio.Task for running agent
+        self._agent_instance = None  # Agent instance
+        self._pending_question = None  # Question waiting for user response
+        self._user_response_event = asyncio.Event()  # Signal when user responds
+        self._user_response_value = None  # User's response value
     
     def acquire_lock(self) -> bool:
         """Acquire exclusive lock to ensure singleton."""
@@ -268,7 +364,9 @@ class BrowserServer:
             headless=not self.headed,
             user_data_dir=str(profile_dir),
             channel='chromium',  # Use independent Chromium, not system Chrome
+            keep_alive=True,  # Keep browser open after agent task completes
         )
+        logger.info(f"Browser profile: channel=chromium, user_data_dir={profile_dir}, headless={not self.headed}")
         
         # Retry browser startup up to 3 times
         max_retries = 3
@@ -370,6 +468,18 @@ class BrowserServer:
                 return await self.cmd_wait(params.get("seconds", 30), params.get("message", ""))
             elif cmd == "refresh":
                 return await self.cmd_refresh()
+            elif cmd == "agent_task":
+                return await self.cmd_agent_task(
+                    params.get("task", ""),
+                    params.get("max_steps", 50),
+                    params.get("model", "anthropic")
+                )
+            elif cmd == "agent_continue":
+                return await self.cmd_agent_continue(params.get("choice", ""))
+            elif cmd == "agent_status":
+                return await self.cmd_agent_status()
+            elif cmd == "agent_cancel":
+                return await self.cmd_agent_cancel()
             else:
                 return {"error": f"Unknown command: {cmd}"}
         except Exception as e:
@@ -777,6 +887,14 @@ class BrowserServer:
     
     async def cmd_close(self) -> dict:
         """Close browser and stop server."""
+        # Cancel any running agent task
+        if self._agent_task and not self._agent_task.done():
+            self._agent_task.cancel()
+            try:
+                await self._agent_task
+            except asyncio.CancelledError:
+                pass
+        
         if self.session:
             try:
                 await self.session.stop()
@@ -788,6 +906,294 @@ class BrowserServer:
         
         self.running = False
         return {"success": True, "message": "Browser closed, server stopping"}
+    
+    # ===== Agent Mode Commands =====
+    
+    async def cmd_agent_task(self, task: str, max_steps: int = 50, model: str = "auto") -> dict:
+        """
+        Start autonomous agent task execution with human-in-the-loop support.
+        
+        The agent will execute the task autonomously, but can ask for user input
+        when it encounters situations requiring human decision.
+        
+        Returns:
+        - {"status": "running", "message": "..."} - Task started
+        - {"status": "need_input", "question": "...", "options": [...]} - Needs user choice
+        - {"status": "completed", "success": bool, "result": "..."} - Task finished
+        - {"status": "error", "error": "..."} - Task failed
+        """
+        if not task:
+            return {"error": "Task description is required"}
+        
+        # Auto-start browser if not already started
+        if not self.session:
+            try:
+                await self.start_browser()
+            except Exception as e:
+                return {"error": f"Failed to start browser: {e}"}
+        
+        # Check if agent is already running
+        if self._agent_task and not self._agent_task.done():
+            # Check if waiting for user input
+            if self._pending_question:
+                return {
+                    "status": "need_input",
+                    "question": self._pending_question["question"],
+                    "options": self._pending_question["options"],
+                    "context": self._pending_question.get("context", "")
+                }
+            return {"status": "running", "message": "Agent task already in progress"}
+        
+        # Reset state
+        self._pending_question = None
+        self._user_response_value = None
+        self._user_response_event.clear()
+        
+        # Start agent task
+        self._agent_task = asyncio.create_task(
+            self._run_agent(task, max_steps, model)
+        )
+        
+        # Wait briefly to see if it needs input or completes quickly
+        try:
+            await asyncio.wait_for(asyncio.shield(self._agent_task), timeout=2.0)
+            # Task completed quickly
+            return self._agent_task.result()
+        except asyncio.TimeoutError:
+            # Task still running, check if needs input
+            if self._pending_question:
+                return {
+                    "status": "need_input",
+                    "question": self._pending_question["question"],
+                    "options": self._pending_question["options"],
+                    "context": self._pending_question.get("context", "")
+                }
+            return {"status": "running", "message": "Agent task started, check status with agent_status"}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+    
+    async def _run_agent(self, task: str, max_steps: int, model: str) -> dict:
+        """Internal method to run the agent with human-in-the-loop support."""
+        try:
+            from browser_use import Agent
+            from browser_use.agent.views import ActionResult
+            
+            # Create LLM based on model choice
+            llm = self._create_llm(model)
+            if llm is None:
+                return {"status": "error", "error": f"Failed to create LLM for model: {model}"}
+            
+            # Create custom controller with ask_human action
+            from browser_use import Controller
+            controller = Controller()
+            
+            @controller.action(
+                description="Ask the user to make a choice when you encounter multiple options or need clarification. "
+                           "Use this when: selecting product variants (color, size), choosing between similar items, "
+                           "confirming important actions, or when you need user preference."
+            )
+            async def ask_human(question: str, options: list[str], context: str = "") -> ActionResult:
+                """Ask the user to choose from a list of options."""
+                if not options or len(options) < 2:
+                    return ActionResult(error="ask_human requires at least 2 options")
+                
+                # Set pending question
+                self._pending_question = {
+                    "question": question,
+                    "options": options,
+                    "context": context
+                }
+                
+                # Wait for user response
+                self._user_response_event.clear()
+                await self._user_response_event.wait()
+                
+                # Get response and clear state
+                response = self._user_response_value
+                self._pending_question = None
+                self._user_response_value = None
+                
+                return ActionResult(extracted_content=f"User selected: {response}")
+            
+            # System message extension to enforce ask_human usage
+            ask_human_instruction = """
+IMPORTANT RULE - Human-in-the-Loop:
+You have access to an 'ask_human' action. You MUST use it in these situations:
+
+1. **Product variants**: When a page has multiple options (colors, sizes, styles, configurations), 
+   you MUST call ask_human with ALL available options from the page. Do NOT make selections yourself.
+
+2. **Ambiguous choices**: When there are multiple similar items or unclear options, ask the user.
+
+3. **Confirmations**: Before finalizing purchases, submissions, or irreversible actions, confirm with user.
+
+4. **Missing information**: If the task doesn't specify a required choice, ask the user.
+
+When calling ask_human:
+- Extract ALL visible options from the page (read the DOM carefully)
+- Provide clear, descriptive option labels
+- Include context about what each option means
+
+Example: If a product page shows colors "Red, Blue, Green" and sizes "S, M, L, XL", 
+you should call ask_human twice - once for color selection, once for size selection.
+
+NEVER skip user confirmation for variant selections. The user expects to make these choices.
+"""
+            
+            # Create agent
+            agent = Agent(
+                task=task,
+                llm=llm,
+                browser=self.session,
+                controller=controller,
+                extend_system_message=ask_human_instruction,
+            )
+            self._agent_instance = agent
+            
+            # Run agent
+            history = await agent.run(max_steps=max_steps)
+            
+            self._agent_instance = None
+            
+            return {
+                "status": "completed",
+                "success": history.is_successful(),
+                "result": history.final_result() or "Task completed",
+                "steps": history.number_of_steps(),
+                "urls": list(history.urls()) if history.urls() else []
+            }
+            
+        except asyncio.CancelledError:
+            self._agent_instance = None
+            return {"status": "cancelled", "message": "Agent task was cancelled"}
+        except Exception as e:
+            self._agent_instance = None
+            logger.exception("Agent task error")
+            return {"status": "error", "error": str(e)}
+    
+    def _create_llm(self, model: str):
+        """Create LLM instance based on model choice.
+        
+        If model is "auto", automatically detect available API key.
+        Supports custom base URLs via environment variables.
+        """
+        # Auto-detect model based on available API keys
+        if model == "auto":
+            if os.environ.get("BROWSER_USE_API_KEY"):
+                model = "browser-use"
+                logger.info("Auto-detected BROWSER_USE_API_KEY, using ChatBrowserUse")
+            elif os.environ.get("ANTHROPIC_API_KEY"):
+                model = "anthropic"
+                logger.info("Auto-detected ANTHROPIC_API_KEY, using ChatAnthropic")
+            elif os.environ.get("OPENAI_API_KEY"):
+                model = "openai"
+                logger.info("Auto-detected OPENAI_API_KEY, using ChatOpenAI")
+            else:
+                logger.error("No API key found. Set BROWSER_USE_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY")
+                return None
+        
+        try:
+            if model == "browser-use" or model == "chatbrowseruse":
+                # ChatBrowserUse requires BROWSER_USE_API_KEY
+                from browser_use import ChatBrowserUse
+                return ChatBrowserUse()
+            elif model == "anthropic" or model == "claude":
+                from langchain_anthropic import ChatAnthropic
+                base_url = os.environ.get("ANTHROPIC_BASE_URL")
+                if base_url:
+                    return ChatAnthropic(model="claude-sonnet-4-20250514", base_url=base_url)
+                return ChatAnthropic(model="claude-sonnet-4-20250514")
+            elif model == "openai" or model == "gpt":
+                from langchain_openai import ChatOpenAI
+                base_url = os.environ.get("OPENAI_BASE_URL")
+                if base_url:
+                    return ChatOpenAI(model="gpt-4o", base_url=base_url)
+                return ChatOpenAI(model="gpt-4o")
+            else:
+                logger.error(f"Unknown model: {model}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to create LLM for {model}: {e}")
+            return None
+    
+    async def cmd_agent_continue(self, choice: str) -> dict:
+        """
+        Continue agent execution with user's choice.
+        
+        Call this after receiving a 'need_input' status with the user's selection.
+        """
+        if not self._agent_task or self._agent_task.done():
+            return {"error": "No agent task is waiting for input"}
+        
+        if not self._pending_question:
+            return {"error": "Agent is not waiting for user input"}
+        
+        if not choice:
+            return {"error": "Choice is required"}
+        
+        # Validate choice is one of the options (or allow custom)
+        valid_options = self._pending_question.get("options", [])
+        if choice not in valid_options:
+            # Allow it anyway - might be a custom "Other" response
+            logger.info(f"User provided custom choice: {choice}")
+        
+        # Set response and signal
+        self._user_response_value = choice
+        self._user_response_event.set()
+        
+        # Wait briefly to see if task needs more input or completes
+        try:
+            await asyncio.wait_for(asyncio.shield(self._agent_task), timeout=5.0)
+            return self._agent_task.result()
+        except asyncio.TimeoutError:
+            if self._pending_question:
+                return {
+                    "status": "need_input",
+                    "question": self._pending_question["question"],
+                    "options": self._pending_question["options"],
+                    "context": self._pending_question.get("context", "")
+                }
+            return {"status": "running", "message": "Agent continuing..."}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+    
+    async def cmd_agent_status(self) -> dict:
+        """Get current agent task status."""
+        if not self._agent_task:
+            return {"status": "idle", "message": "No agent task"}
+        
+        if self._agent_task.done():
+            try:
+                result = self._agent_task.result()
+                return result
+            except Exception as e:
+                return {"status": "error", "error": str(e)}
+        
+        if self._pending_question:
+            return {
+                "status": "need_input",
+                "question": self._pending_question["question"],
+                "options": self._pending_question["options"],
+                "context": self._pending_question.get("context", "")
+            }
+        
+        return {"status": "running", "message": "Agent task in progress"}
+    
+    async def cmd_agent_cancel(self) -> dict:
+        """Cancel the current agent task."""
+        if not self._agent_task or self._agent_task.done():
+            return {"success": True, "message": "No active agent task to cancel"}
+        
+        self._agent_task.cancel()
+        try:
+            await self._agent_task
+        except asyncio.CancelledError:
+            pass
+        
+        self._agent_instance = None
+        self._pending_question = None
+        
+        return {"success": True, "message": "Agent task cancelled"}
     
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         """Handle a client connection."""
@@ -827,6 +1233,13 @@ class BrowserServer:
         
         while self.running:
             await asyncio.sleep(BROWSER_CHECK_INTERVAL)
+            
+            # Skip health check and idle timeout if agent task is running
+            # Agent tasks can take a long time and browser may appear unresponsive during operations
+            if self._agent_task and not self._agent_task.done():
+                consecutive_failures = 0  # Reset failure count during agent execution
+                self.update_activity()  # Keep activity alive during agent task
+                continue
             
             if self.is_idle_timeout():
                 print(f"Idle timeout reached ({IDLE_TIMEOUT_SECONDS}s), shutting down...", flush=True)
@@ -1037,6 +1450,21 @@ def main():
     
     subparsers.add_parser("kill", help="Force kill server and Chrome processes")
     
+    # Agent mode commands
+    p_agent_task = subparsers.add_parser("agent_task", help="Start autonomous agent task")
+    p_agent_task.add_argument("task", help="Task description for the agent")
+    p_agent_task.add_argument("--max-steps", type=int, default=50, help="Maximum steps (default 50)")
+    p_agent_task.add_argument("--model", default="auto", 
+                              choices=["auto", "anthropic", "openai", "browser-use"],
+                              help="LLM to use (default: auto-detect from API key)")
+    
+    p_agent_continue = subparsers.add_parser("agent_continue", help="Continue agent with user choice")
+    p_agent_continue.add_argument("choice", help="User's selected option")
+    
+    subparsers.add_parser("agent_status", help="Get agent task status")
+    
+    subparsers.add_parser("agent_cancel", help="Cancel running agent task")
+    
     args = parser.parse_args()
     headed = not args.headless
     
@@ -1067,6 +1495,12 @@ def main():
     elif args.command == "wait":
         params["seconds"] = args.seconds
         params["message"] = getattr(args, 'message', None) or ""
+    elif args.command == "agent_task":
+        params["task"] = args.task
+        params["max_steps"] = getattr(args, 'max_steps', 50)
+        params["model"] = getattr(args, 'model', 'anthropic')
+    elif args.command == "agent_continue":
+        params["choice"] = args.choice
     elif args.command == "sessions":
         if is_server_running():
             print(json.dumps({"sessions": ["default"]}))

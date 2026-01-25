@@ -109,6 +109,102 @@ final class ConfigManager: ObservableObject {
     // Browser automation settings (browser-use-sidecar)
     @AppStorage("browserUseEnabled") var browserUseEnabled: Bool = false
     @AppStorage("browserUseHeadedMode") var browserUseHeadedMode: Bool = true  // Show browser window by default
+    @AppStorage("browserAgentProvider") private var browserAgentProviderRaw: String = "anthropic"
+    
+    /// Browser Agent LLM provider for autonomous tasks
+    enum BrowserAgentProvider: String, CaseIterable {
+        case anthropic = "anthropic"
+        case openai = "openai"
+        case browserUse = "browser-use"
+        
+        var displayName: String {
+            switch self {
+            case .anthropic: return "Anthropic (Claude)"
+            case .openai: return "OpenAI (GPT-4)"
+            case .browserUse: return "Browser Use (ChatBrowserUse)"
+            }
+        }
+        
+        var envKeyName: String {
+            switch self {
+            case .anthropic: return "ANTHROPIC_API_KEY"
+            case .openai: return "OPENAI_API_KEY"
+            case .browserUse: return "BROWSER_USE_API_KEY"
+            }
+        }
+        
+        var baseUrlEnvName: String? {
+            switch self {
+            case .anthropic: return "ANTHROPIC_BASE_URL"
+            case .openai: return "OPENAI_BASE_URL"
+            case .browserUse: return nil  // browser-use doesn't support custom base URL
+            }
+        }
+        
+        var supportsBaseUrl: Bool {
+            baseUrlEnvName != nil
+        }
+    }
+    
+    var browserAgentProvider: BrowserAgentProvider {
+        get { BrowserAgentProvider(rawValue: browserAgentProviderRaw) ?? .anthropic }
+        set { browserAgentProviderRaw = newValue.rawValue }
+    }
+    
+    /// Browser Agent API Key (stored in Keychain)
+    private var cachedBrowserAgentAPIKey: String?
+    
+    var browserAgentAPIKey: String {
+        get {
+            if let cached = cachedBrowserAgentAPIKey {
+                return cached
+            }
+            let account = "browser.agent.api.key.\(browserAgentProvider.rawValue)"
+            let value = KeychainStore.read(service: keychainService, account: account) ?? ""
+            cachedBrowserAgentAPIKey = value
+            return value
+        }
+        set {
+            cachedBrowserAgentAPIKey = newValue
+            let account = "browser.agent.api.key.\(browserAgentProvider.rawValue)"
+            if newValue.isEmpty {
+                KeychainStore.delete(service: keychainService, account: account)
+            } else {
+                KeychainStore.write(service: keychainService, account: account, value: newValue)
+            }
+        }
+    }
+    
+    /// Check if browser agent has API key configured
+    var hasBrowserAgentAPIKey: Bool {
+        !browserAgentAPIKey.isEmpty
+    }
+    
+    /// Browser Agent Base URL (stored per-provider, optional)
+    @AppStorage("browserAgentBaseUrl_anthropic") private var browserAgentBaseUrlAnthropic: String = ""
+    @AppStorage("browserAgentBaseUrl_openai") private var browserAgentBaseUrlOpenAI: String = ""
+    
+    var browserAgentBaseUrl: String {
+        get {
+            switch browserAgentProvider {
+            case .anthropic: return browserAgentBaseUrlAnthropic
+            case .openai: return browserAgentBaseUrlOpenAI
+            case .browserUse: return ""  // Not supported
+            }
+        }
+        set {
+            switch browserAgentProvider {
+            case .anthropic: browserAgentBaseUrlAnthropic = newValue
+            case .openai: browserAgentBaseUrlOpenAI = newValue
+            case .browserUse: break  // Not supported
+            }
+        }
+    }
+    
+    /// Clear cached browser agent API key (call when provider changes)
+    func clearBrowserAgentAPIKeyCache() {
+        cachedBrowserAgentAPIKey = nil
+    }
     
     /// Browser automation status
     enum BrowserUseStatus {
@@ -692,6 +788,19 @@ final class ConfigManager: ObservableObject {
             environment["DEBUG"] = "1"
         }
         
+        // Set Browser Agent API key for browser-use-sidecar agent_task
+        if browserUseEnabled && !browserAgentAPIKey.isEmpty {
+            let envKeyName = browserAgentProvider.envKeyName
+            environment[envKeyName] = browserAgentAPIKey
+            Log.config(" Browser Agent API key (\(envKeyName)): \(browserAgentAPIKey.prefix(10))...")
+            
+            // Set base URL if configured
+            if let baseUrlEnvName = browserAgentProvider.baseUrlEnvName, !browserAgentBaseUrl.isEmpty {
+                environment[baseUrlEnvName] = browserAgentBaseUrl
+                Log.config(" Browser Agent Base URL (\(baseUrlEnvName)): \(browserAgentBaseUrl)")
+            }
+        }
+        
         // Set OPENCODE_CONFIG if we generated a config file
         if !openCodeConfigPath.isEmpty {
             environment["OPENCODE_CONFIG"] = openCodeConfigPath
@@ -906,72 +1015,11 @@ final class ConfigManager: ObservableObject {
             Log.config(" WARNING - Node not found in PATH. MCP will use /usr/bin/env node")
         }
         
-        // System prompt - include browser-automation if enabled
-        // Headless mode uses --headless flag, headed is default
-        let headlessArg = browserUseHeadedMode ? "" : " --headless"
-        let browserAutomationPrompt = browserUseEnabled ? """
-
-<browser-automation>
-## Browser Automation - Persistent Session CLI
-
-**NO API KEY NEEDED!** Direct browser control with persistent sessions.
-
-### Basic Commands:
-```bash
-browser-use-sidecar\(headlessArg) open "https://example.com"  # Open URL
-browser-use-sidecar state          # Get page elements with indices
-browser-use-sidecar click INDEX    # Click element
-browser-use-sidecar input INDEX "text"  # Type into element
-browser-use-sidecar keys Enter     # Press key
-browser-use-sidecar scroll down    # Scroll page
-browser-use-sidecar back           # Go back
-browser-use-sidecar refresh        # Refresh page
-browser-use-sidecar close          # Close browser
-browser-use-sidecar kill           # Force kill all processes
-```
-
-### Tab Management (IMPORTANT for sites that open new tabs):
-```bash
-browser-use-sidecar tabs           # List all tabs with indices
-browser-use-sidecar switch INDEX   # Switch to tab by index
-```
-**Note**: Click auto-detects new tabs and switches to them. Use `tabs` to see all tabs.
-
-### Wait for User Action (login, captcha, payment):
-```bash
-browser-use-sidecar wait 60 -m "Please complete login"
-```
-
-### CRITICAL Rules:
-1. **MULTI-STEP TASK**: Browser automation requires MULTIPLE commands! Opening a URL is just step 1. You MUST continue with `state`, then `input`/`click`/`scroll` until the user's ACTUAL goal is achieved (e.g., search complete, item added to cart, etc.). DO NOT stop after just opening a page!
-2. **Always call `state` after navigation** - Element indices change with each page load!
-3. **Tab handling**: Some sites (Taobao, Google) open results in new tabs. After click, check output for "new_tab_opened" and use `tabs`/`switch` if needed.
-4. **Login/Captcha/Payment**: 
-   - FIRST: Use AskUserQuestion MCP tool to notify user: "需要登录，请在浏览器中完成登录操作"
-   - THEN: Call `wait 60 -m "Waiting for login"` to pause automation
-   - FINALLY: After wait, call `state` or `refresh` to check page status
-5. **Page not changed after action?** Call `refresh` then `state`
-6. **NO API keys needed** - This is direct browser control
-
-### Example: Taobao Search (with login prompt):
-```bash
-browser-use-sidecar\(headlessArg) open "https://www.taobao.com"
-browser-use-sidecar state
-# If login required, FIRST ask user via MCP, THEN:
-browser-use-sidecar wait 60 -m "Please login to Taobao"
-browser-use-sidecar refresh
-browser-use-sidecar state
-# Continue with search...
-browser-use-sidecar input INDEX "iPhone"
-browser-use-sidecar click SEARCH_BTN
-# Check if new tab opened in response
-browser-use-sidecar tabs
-browser-use-sidecar switch 1  # Switch to results tab if needed
-browser-use-sidecar state
-```
-</browser-automation>
-""" : ""
+        // System prompt - build using SkillManager for capability instructions
+        let builder = SystemPromptBuilder()
+        let fullSystemPrompt = builder.build()
         
+        // Add critical GUI communication rules at the beginning
         let systemPrompt = """
 <important name="user-communication">
 CRITICAL: The user CANNOT see your text output or CLI prompts!
@@ -1018,7 +1066,8 @@ IMPORTANT: Reading files does NOT require permission. Do not call request_file_p
 
 Never attempt to prompt via CLI or rely on terminal prompts - they will not work!
 </important>
-\(browserAutomationPrompt)
+
+\(fullSystemPrompt)
 """
         
         // Build config - always include permission: "allow"
