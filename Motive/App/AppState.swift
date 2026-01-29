@@ -310,6 +310,11 @@ final class AppState: ObservableObject {
         commandBarController?.updateHeightForMode(modeName, animated: false)
     }
     
+    func updateCommandBarHeight(to height: CGFloat) {
+        // Disable window animation to prevent height jitter
+        commandBarController?.updateHeight(to: height, animated: false)
+    }
+    
     /// Suppress or allow auto-hide when command bar loses focus
     func setCommandBarAutoHideSuppressed(_ suppressed: Bool) {
         commandBarController?.suppressAutoHide = suppressed

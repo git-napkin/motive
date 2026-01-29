@@ -122,6 +122,12 @@ struct CommandBarView: View {
     @State private var showDeleteConfirmation: Bool = false
     @FocusState private var isInputFocused: Bool
     
+    // @ file completion state
+    @StateObject private var fileCompletion = FileCompletionManager()
+    @State private var showFileCompletion: Bool = false
+    @State private var selectedFileIndex: Int = 0
+    @State private var atQueryRange: Range<String.Index>? = nil
+    
     private var isDark: Bool { colorScheme == .dark }
     
     // Filtered commands based on input
@@ -133,25 +139,32 @@ struct CommandBarView: View {
     var body: some View {
         mainContent
             .onAppear(perform: handleOnAppear)
-            .onChange(of: appState.commandBarResetTrigger) { _, _ in recenterAndFocus() }
-            .onChange(of: inputText) { _, newValue in handleInputChange(newValue) }
-            .onChange(of: mode) { oldMode, newMode in handleModeChange(from: oldMode, to: newMode) }
-            .onChange(of: appState.sessionStatus) { _, newStatus in handleSessionStatusChange(newStatus) }
-            .onKeyPress(.escape, action: { handleEscape(); return .handled })
-            .onKeyPress(.upArrow, action: { handleUpArrow(); return .handled })
-            .onKeyPress(.downArrow, action: { handleDownArrow(); return .handled })
-            .onKeyPress(.tab, action: { handleTab(); return .handled })
-            .onChange(of: showDeleteConfirmation) { _, shouldShow in
-                if shouldShow {
-                    showDeleteAlert()
-                }
+        .onChange(of: appState.commandBarResetTrigger) { _, _ in recenterAndFocus() }
+        .onChange(of: inputText) { _, newValue in handleInputChange(newValue) }
+        .onChange(of: mode) { oldMode, newMode in handleModeChange(from: oldMode, to: newMode) }
+        .onChange(of: appState.sessionStatus) { _, newStatus in handleSessionStatusChange(newStatus) }
+        .onKeyPress(.escape, action: { handleEscape(); return .handled })
+        .onKeyPress(.upArrow, action: { handleUpArrow(); return .handled })
+        .onKeyPress(.downArrow, action: { handleDownArrow(); return .handled })
+        .onKeyPress(.tab, action: { handleTab(); return .handled })
+        .onChange(of: showDeleteConfirmation) { _, shouldShow in
+            if shouldShow {
+                showDeleteAlert()
             }
+        }
             .onChange(of: appState.sessionListRefreshTrigger) { _, _ in
                 // Refresh session list after deletion
                 historySessions = appState.getAllSessions()
                 if selectedHistoryIndex >= filteredHistorySessions.count {
                     selectedHistoryIndex = max(0, filteredHistorySessions.count - 1)
                 }
+            }
+            .onChange(of: showFileCompletion) { _, isShowing in
+                // File completion doesn't change height, just shows/hides list
+                // Height is controlled by mode, not file completion state
+            }
+            .onChange(of: fileCompletion.items) { _, newItems in
+                // Items change doesn't affect height either
             }
     }
     
@@ -173,7 +186,7 @@ struct CommandBarView: View {
             }
             footerView
         }
-        .frame(width: 600, height: mode.dynamicHeight)
+        .frame(width: 600, height: currentHeight)
         .background(commandBarBackground)
         .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous))
         .overlay(borderOverlay)  // Border on top of everything
@@ -251,6 +264,14 @@ struct CommandBarView: View {
     // MARK: - Keyboard Navigation
     
     private func handleUpArrow() {
+        // File completion takes priority
+        if showFileCompletion && !fileCompletion.items.isEmpty {
+            if selectedFileIndex > 0 {
+                selectedFileIndex -= 1
+            }
+            return
+        }
+        
         if mode.isCommand {
             if selectedCommandIndex > 0 {
                 selectedCommandIndex -= 1
@@ -267,6 +288,14 @@ struct CommandBarView: View {
     }
     
     private func handleDownArrow() {
+        // File completion takes priority
+        if showFileCompletion && !fileCompletion.items.isEmpty {
+            if selectedFileIndex < fileCompletion.items.count - 1 {
+                selectedFileIndex += 1
+            }
+            return
+        }
+        
         if mode.isCommand {
             if selectedCommandIndex < filteredCommands.count - 1 {
                 selectedCommandIndex += 1
@@ -285,6 +314,14 @@ struct CommandBarView: View {
     }
     
     private func handleTab() {
+        // File completion takes priority
+        if showFileCompletion && !fileCompletion.items.isEmpty {
+            if selectedFileIndex < fileCompletion.items.count {
+                selectFileCompletion(fileCompletion.items[selectedFileIndex])
+            }
+            return
+        }
+        
         // Tab completion: complete the autocomplete hint
         if let hint = autocompleteHint {
             inputText = hint
@@ -320,7 +357,17 @@ struct CommandBarView: View {
     
     // Content BELOW input (lists)
     private var showsBelowContent: Bool {
-        mode.isCommand || mode.isHistories || mode.isProjects
+        mode.isCommand || mode.isHistories || mode.isProjects || showFileCompletion
+    }
+
+    /// Height to use when file completion is showing (matches command list)
+    private var fileCompletionHeight: CGFloat {
+        showsAboveContent ? 450 : 400
+    }
+
+    /// Current command bar height
+    private var currentHeight: CGFloat {
+        showFileCompletion ? fileCompletionHeight : mode.dynamicHeight
     }
     
     // MARK: - Above Input Content (Session Status)
@@ -353,7 +400,10 @@ struct CommandBarView: View {
     @ViewBuilder
     private var belowInputContent: some View {
         Group {
-            if mode.isCommand {
+            if showFileCompletion {
+                // File completion takes priority (show even if items empty, for loading state)
+                fileCompletionListView
+            } else if mode.isCommand {
                 commandListView
             } else if mode.isHistories {
                 historiesListView
@@ -364,6 +414,18 @@ struct CommandBarView: View {
             }
         }
         .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+    
+    // MARK: - File Completion List (below input)
+    
+    private var fileCompletionListView: some View {
+        FileCompletionView(
+            items: fileCompletion.items,
+            selectedIndex: selectedFileIndex,
+            currentPath: fileCompletion.currentPath,
+            onSelect: selectFileCompletion
+        )
+        .id("fileCompletion-\(fileCompletion.currentPath)-\(fileCompletion.items.count)")
     }
     
     // MARK: - Histories List (below input)
@@ -486,6 +548,119 @@ struct CommandBarView: View {
         mode = .idle
     }
     
+    // MARK: - @ File Completion
+    
+    /// Check if input contains @ trigger for file completion
+    private func checkForAtCompletion(_ text: String) {
+        guard let token = currentAtToken(in: text) else {
+            hideFileCompletion()
+            return
+        }
+        
+        let query = token.query
+        let newRange = token.range
+        
+        // Skip if range and query haven't changed (avoid re-loading after manual selection)
+        if showFileCompletion, let oldRange = atQueryRange, oldRange == newRange {
+            Log.config("🔍 checkForAtCompletion: skipping (range unchanged)")
+            return
+        }
+        
+        atQueryRange = newRange
+        
+        // Load file completions
+        let baseDir = fileCompletion.getBaseDirectory(for: configManager)
+        Log.config("🔍 checkForAtCompletion: loading query '\(query)'")
+        fileCompletion.loadItems(query: query, baseDir: baseDir)
+        
+        showFileCompletion = true
+        selectedFileIndex = 0
+        
+        // Update window height to accommodate file completion list
+        appState.updateCommandBarHeight(to: fileCompletionHeight)
+    }
+    
+    /// Find the current @ token (from @ to next whitespace)
+    private func currentAtToken(in text: String) -> (query: String, range: Range<String.Index>)? {
+        guard let atIndex = text.lastIndex(of: "@") else { return nil }
+        
+        // Require @ to be at start or preceded by whitespace
+        if atIndex > text.startIndex {
+            let beforeAt = text[text.index(before: atIndex)]
+            if !beforeAt.isWhitespace {
+                return nil
+            }
+        }
+        
+        let afterAt = text[atIndex...]
+        if let spaceIndex = afterAt.dropFirst().firstIndex(where: { $0.isWhitespace }) {
+            // Found space after @ - this means the @ token is complete
+            // Return nil to exit completion mode (user typed "@path " with space)
+            return nil
+        } else {
+            let range = atIndex..<text.endIndex
+            let query = String(text[range])
+            return (query, range)
+        }
+    }
+    
+    /// Hide file completion popup
+    private func hideFileCompletion() {
+        showFileCompletion = false
+        atQueryRange = nil
+        fileCompletion.clear()
+
+        // Restore window height to mode's default height
+        appState.updateCommandBarHeight(to: mode.dynamicHeight)
+    }
+    
+    /// Select a file completion item
+    private func selectFileCompletion(_ item: FileCompletionItem) {
+        guard let range = atQueryRange else { return }
+        
+        Log.config("📂 Select: '\(item.name)' isDir:\(item.isDirectory) path:'\(item.path)'")
+        
+        // Build the replacement text
+        let replacement: String
+        if item.isDirectory {
+            replacement = "@\(item.path)/"
+        } else {
+            replacement = "@\(item.path) " // Add space after file selection
+        }
+        
+        Log.config("📂 Replacement: '\(replacement)'")
+        
+        // Calculate the new @ range after replacement
+        let startIndex = range.lowerBound
+        inputText.replaceSubrange(range, with: replacement)
+        
+        Log.config("📂 New inputText: '\(inputText)'")
+        
+        // Reset selection index
+        selectedFileIndex = 0
+        
+        // If it's a directory, reload completions for the new path
+        if item.isDirectory {
+            // Update atQueryRange to point to the new @ token
+            if let newEndIndex = inputText.index(startIndex, offsetBy: replacement.count, limitedBy: inputText.endIndex) {
+                atQueryRange = startIndex..<newEndIndex
+                
+                // Directly load items for the new directory
+                let baseDir = fileCompletion.getBaseDirectory(for: configManager)
+                Log.config("📂 Reloading with query: '\(replacement)', baseDir: \(baseDir.path)")
+                fileCompletion.loadItems(query: replacement, baseDir: baseDir)
+                
+                // Keep completion visible
+                showFileCompletion = true
+            } else {
+                hideFileCompletion()
+            }
+        } else {
+            // File selected - hide completion (space already added)
+            hideFileCompletion()
+        }
+    }
+
     // MARK: - Running Status (above input)
     
     private var runningStatusView: some View {
@@ -794,11 +969,13 @@ struct CommandBarView: View {
         HStack(spacing: 0) {
             // Left side: status or hints
             leftFooterContent
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(0)
             
-            Spacer()
-            
-            // Right side: keyboard shortcuts
+            // Right side: keyboard shortcuts (keep visible)
             rightFooterContent
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
         }
         .frame(height: 40)
         .padding(.horizontal, AuroraSpacing.space5)
@@ -817,6 +994,7 @@ struct CommandBarView: View {
                 .font(.Aurora.micro)
                 .foregroundColor(Color.Aurora.textMuted)
                 .lineLimit(1)
+                .truncationMode(.middle)
         }
         .padding(.horizontal, AuroraSpacing.space2)
         .padding(.vertical, AuroraSpacing.space1)
@@ -851,13 +1029,15 @@ struct CommandBarView: View {
                 AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.back)
             } else {
                 switch mode {
-                case .idle, .input:
+                case .idle:
                     AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.run)
-                    AuroraShortcutBadge(keys: ["⌘", "N"], label: L10n.CommandBar.new)
+                    AuroraShortcutBadge(keys: ["/"], label: L10n.CommandBar.commands)
+                    AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
+                case .input:
+                    AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.run)
                     AuroraShortcutBadge(keys: ["/"], label: L10n.CommandBar.commands)
                     AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
                 case .running:
-                    AuroraShortcutBadge(keys: ["⌘", "N"], label: L10n.CommandBar.new)
                     AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
                     AuroraShortcutBadge(keys: ["⌘", "D"], label: L10n.CommandBar.drawer)
                 case .completed:
@@ -919,6 +1099,15 @@ struct CommandBarView: View {
     // MARK: - State Handlers
     
     private func handleInputChange(_ newValue: String) {
+        // Always check for @ file completion
+        checkForAtCompletion(newValue)
+
+        // If @ completion is showing, do not change mode/height here.
+        // Height is handled in checkForAtCompletion / hideFileCompletion.
+        if showFileCompletion {
+            return
+        }
+        
         // In histories mode, input is used for filtering, don't change mode
         if mode.isHistories {
             return
@@ -960,7 +1149,7 @@ struct CommandBarView: View {
     
     private func handleModeChange(from oldMode: CommandBarMode, to newMode: CommandBarMode) {
         // Update window height for new mode
-        appState.updateCommandBarHeight(for: newMode.modeName)
+        appState.updateCommandBarHeight(to: currentHeight)
         
         // Load data when entering specific modes
         if newMode.isHistories {
@@ -994,6 +1183,14 @@ struct CommandBarView: View {
     }
     
     private func handleSubmit() {
+        // File completion takes priority
+        if showFileCompletion && !fileCompletion.items.isEmpty {
+            if selectedFileIndex < fileCompletion.items.count {
+                selectFileCompletion(fileCompletion.items[selectedFileIndex])
+            }
+            return
+        }
+        
         if mode.isCommand {
             // Check if input has arguments (e.g., "/project /path/to/dir")
             let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1042,6 +1239,12 @@ struct CommandBarView: View {
     }
     
     private func handleEscape() {
+        // File completion: ESC closes it first
+        if showFileCompletion {
+            hideFileCompletion()
+            return
+        }
+        
         if mode.isCommand || mode.isHistories || mode.isProjects {
             // Return to previous mode (session or idle)
             if appState.sessionStatus == .running {
@@ -1132,7 +1335,7 @@ struct CommandBarView: View {
         }
         
         // Update window height to match current mode
-        appState.updateCommandBarHeight(for: mode.modeName)
+        appState.updateCommandBarHeight(to: currentHeight)
         
         // Refocus input
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
