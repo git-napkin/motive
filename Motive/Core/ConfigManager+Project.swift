@@ -120,6 +120,12 @@ extension ConfigManager {
         
         recentProjects = projects
     }
+
+    /// Ensure the current project is included in recent projects
+    func ensureCurrentProjectInRecents() {
+        guard !currentProjectPath.isEmpty else { return }
+        addToRecentProjects(currentProjectPath)
+    }
     
     /// Ensure the default project directory exists
     func ensureDefaultProjectDirectory() {

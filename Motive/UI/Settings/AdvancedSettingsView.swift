@@ -353,36 +353,33 @@ struct AdvancedSettingsView: View {
                 Spacer()
                 
                 HStack(spacing: 8) {
-                    if showBrowserAgentAPIKey {
-                        TextField("sk-...", text: $browserAgentAPIKeyInput)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(Color.Aurora.textPrimary)
-                            .frame(width: 180)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(isDark ? Color(red: 0x19/255.0, green: 0x19/255.0, blue: 0x19/255.0) : Color(red: 0xFA/255.0, green: 0xFA/255.0, blue: 0xFA/255.0))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .strokeBorder(Color.Aurora.border, lineWidth: 1)
-                            )
-                            .onChange(of: browserAgentAPIKeyInput) { _, newValue in
-                                configManager.browserAgentAPIKey = newValue
-                                syncBrowserAgentConfig()
-                                appState.restartAgent()
-                            }
-                    } else {
-                        Text(configManager.hasBrowserAgentAPIKey ? "••••••••" : L10n.Settings.browserNotSet)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(configManager.hasBrowserAgentAPIKey ? Color.Aurora.textMuted : Color.Aurora.warning)
-                            .frame(width: 180, alignment: .leading)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
+                    Group {
+                        if showBrowserAgentAPIKey {
+                            TextField("sk-...", text: $browserAgentAPIKeyInput)
+                        } else {
+                            SecureField("sk-...", text: $browserAgentAPIKeyInput)
+                        }
                     }
-                    
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(Color.Aurora.textPrimary)
+                    .frame(width: 180)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(isDark ? Color(red: 0x19/255.0, green: 0x19/255.0, blue: 0x19/255.0) : Color(red: 0xFA/255.0, green: 0xFA/255.0, blue: 0xFA/255.0))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(Color.Aurora.border, lineWidth: 1)
+                    )
+                    .onChange(of: browserAgentAPIKeyInput) { _, newValue in
+                        configManager.browserAgentAPIKey = newValue
+                        syncBrowserAgentConfig()
+                        appState.restartAgent()
+                    }
+
                     Button {
                         showBrowserAgentAPIKey.toggle()
                         if showBrowserAgentAPIKey {

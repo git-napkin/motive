@@ -1090,6 +1090,17 @@ NEVER skip user confirmation for variant selections. The user expects to make th
         except Exception as e:
             logger.warning(f"Failed to persist storage state: {e}")
     
+    def _ensure_provider(self, llm, provider: str):
+        """Ensure LLM has a provider attribute expected by browser-use."""
+        if llm is None:
+            return None
+        if not hasattr(llm, "provider"):
+            try:
+                setattr(llm, "provider", provider)
+            except Exception:
+                pass
+        return llm
+
     def _create_llm(self, model: str):
         """Create LLM instance based on model choice.
         
@@ -1115,19 +1126,25 @@ NEVER skip user confirmation for variant selections. The user expects to make th
             if model == "browser-use" or model == "chatbrowseruse":
                 # ChatBrowserUse requires BROWSER_USE_API_KEY
                 from browser_use import ChatBrowserUse
-                return ChatBrowserUse()
+                return self._ensure_provider(ChatBrowserUse(), "browser-use")
             elif model == "anthropic" or model == "claude":
                 from langchain_anthropic import ChatAnthropic
                 base_url = os.environ.get("ANTHROPIC_BASE_URL")
                 if base_url:
-                    return ChatAnthropic(model="claude-sonnet-4-20250514", base_url=base_url)
-                return ChatAnthropic(model="claude-sonnet-4-20250514")
+                    return self._ensure_provider(
+                        ChatAnthropic(model="claude-sonnet-4-20250514", base_url=base_url),
+                        "anthropic"
+                    )
+                return self._ensure_provider(ChatAnthropic(model="claude-sonnet-4-20250514"), "anthropic")
             elif model == "openai" or model == "gpt":
                 from langchain_openai import ChatOpenAI
                 base_url = os.environ.get("OPENAI_BASE_URL")
                 if base_url:
-                    return ChatOpenAI(model="gpt-4o", base_url=base_url)
-                return ChatOpenAI(model="gpt-4o")
+                    return self._ensure_provider(
+                        ChatOpenAI(model="gpt-4o", base_url=base_url),
+                        "openai"
+                    )
+                return self._ensure_provider(ChatOpenAI(model="gpt-4o"), "openai")
             else:
                 logger.error(f"Unknown model: {model}")
                 return None
