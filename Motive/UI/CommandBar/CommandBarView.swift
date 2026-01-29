@@ -126,7 +126,7 @@ struct CommandBarView: View {
             .onChange(of: inputText) { _, newValue in handleInputChange(newValue) }
             .onChange(of: mode) { oldMode, newMode in handleModeChange(from: oldMode, to: newMode) }
             .onChange(of: appState.sessionStatus) { _, newStatus in handleSessionStatusChange(newStatus) }
-            .onExitCommand { handleEscape() }
+            .onKeyPress(.escape, action: { handleEscape(); return .handled })
             .onKeyPress(.upArrow, action: { handleUpArrow(); return .handled })
             .onKeyPress(.downArrow, action: { handleDownArrow(); return .handled })
             .onKeyPress(.tab, action: { handleTab(); return .handled })
@@ -595,7 +595,8 @@ struct CommandBarView: View {
                             handleCmdDelete()
                         }
                     },
-                    onCmdN: handleCmdN
+                    onCmdN: handleCmdN,
+                    onEscape: handleEscape
                 )
                 .focused($isInputFocused)
             }
@@ -747,7 +748,7 @@ struct CommandBarView: View {
                     AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
                 case .running:
                     AuroraShortcutBadge(keys: ["⌘", "N"], label: L10n.CommandBar.new)
-                    AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.stop)
+                    AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
                     AuroraShortcutBadge(keys: ["⌘", "D"], label: L10n.CommandBar.drawer)
                 case .completed:
                     AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.send)
@@ -774,7 +775,7 @@ struct CommandBarView: View {
         switch mode {
         case .running:
             RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .strokeBorder(Color.Aurora.primary.opacity(0.8), lineWidth: 1.0)
+                .strokeBorder(Color.Aurora.border.opacity(0.8), lineWidth: 1.0)
                 .modifier(PulsingBorderModifier())
         case .completed:
             RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
@@ -909,17 +910,8 @@ struct CommandBarView: View {
             }
             inputText = ""
         } else {
-            switch mode {
-            case .running:
-                // ESC during running = interrupt and hide
-                appState.interruptSession()
-                appState.hideCommandBar()
-            case .completed, .error, .idle, .input:
-                // ESC = hide CommandBar
-                appState.hideCommandBar()
-            default:
-                appState.hideCommandBar()
-            }
+            // ESC = hide CommandBar (task continues running in background)
+            appState.hideCommandBar()
         }
     }
     
@@ -1230,6 +1222,7 @@ struct CommandBarTextField: NSViewRepresentable {
     var onSubmit: () -> Void
     var onCmdDelete: () -> Void
     var onCmdN: (() -> Void)?
+    var onEscape: (() -> Void)?
     
     func makeNSView(context: Context) -> NSTextField {
         let textField = NSTextField()
@@ -1258,6 +1251,7 @@ struct CommandBarTextField: NSViewRepresentable {
         // Update callbacks
         context.coordinator.onCmdDelete = onCmdDelete
         context.coordinator.onCmdN = onCmdN
+        context.coordinator.onEscape = onEscape
     }
     
     func makeCoordinator() -> Coordinator {
@@ -1272,19 +1266,27 @@ struct CommandBarTextField: NSViewRepresentable {
         var parent: CommandBarTextField
         var onCmdDelete: (() -> Void)?
         var onCmdN: (() -> Void)?
+        var onEscape: (() -> Void)?
         private var keyboardMonitor: Any?
         
         init(_ parent: CommandBarTextField) {
             self.parent = parent
             self.onCmdDelete = parent.onCmdDelete
             self.onCmdN = parent.onCmdN
+            self.onEscape = parent.onEscape
         }
         
         func setupKeyboardMonitor() {
             keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self = self else { return event }
                 
-                // Check for Cmd modifier
+                // ESC key (keyCode 53) - no modifier required
+                if event.keyCode == 53 {
+                    self.onEscape?()
+                    return nil  // Consume the event
+                }
+                
+                // Check for Cmd modifier for other shortcuts
                 guard event.modifierFlags.contains(.command) else { return event }
                 
                 // Cmd+Delete (backspace, keyCode 51)
@@ -1324,3 +1326,4 @@ struct CommandBarTextField: NSViewRepresentable {
         }
     }
 }
+

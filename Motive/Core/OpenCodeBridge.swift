@@ -198,11 +198,11 @@ actor OpenCodeBridge {
                 
                 // Only process JSON lines
                 guard trimmed.hasPrefix("{") else {
-                    Log.bridge("[pty] Non-JSON: \(trimmed.prefix(80))")
+                    Log.bridge("[pty] Non-JSON: \(trimmed)")
                     continue
                 }
                 
-                Log.bridge("[pty] JSON: \(trimmed.prefix(200))")
+                Log.bridge("[pty] JSON: \(trimmed)")
                 
                 let event = OpenCodeEvent(rawJson: trimmed)
                 
