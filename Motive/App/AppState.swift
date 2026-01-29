@@ -241,24 +241,8 @@ final class AppState: ObservableObject {
     }
     
     func sendFollowUp(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        guard sessionStatus == .completed || sessionStatus == .interrupted else { return }
-        
-        lastErrorMessage = nil
-        sessionStatus = .running
-        menuBarState = .executing
-        
-        // Add user message
-        let userMessage = ConversationMessage(
-            type: .user,
-            content: trimmed
-        )
-        messages.append(userMessage)
-
-        // Use the configured project directory
-        let cwd = configManager.currentProjectURL.path
-        Task { await bridge.submitIntent(text: trimmed, cwd: cwd) }
+        // Use resumeSession to continue the current session properly
+        resumeSession(with: text)
     }
 
     /// Interrupt the current running session (like Ctrl+C)
@@ -410,7 +394,8 @@ final class AppState: ObservableObject {
         // Clear OpenCodeBridge session ID for fresh start
         Task { await bridge.setSessionId(nil) }
         
-        let session = Session(intent: intent)
+        let sessionProjectPath = configManager.currentProjectURL.path
+        let session = Session(intent: intent, projectPath: sessionProjectPath)
         currentSession = session
         modelContext?.insert(session)
     }
@@ -431,6 +416,16 @@ final class AppState: ObservableObject {
         
         // Sync OpenCodeBridge session ID
         Task { await bridge.setSessionId(session.openCodeSessionId) }
+        
+        // Ensure project directory matches the session's original cwd
+        if !session.projectPath.isEmpty {
+            let defaultPath = ConfigManager.defaultProjectDirectory.path
+            if session.projectPath == defaultPath {
+                _ = configManager.setProjectDirectory(nil)
+            } else {
+                _ = configManager.setProjectDirectory(session.projectPath)
+            }
+        }
         
         // Rebuild messages from logs
         messages = []
@@ -564,8 +559,8 @@ final class AppState: ObservableObject {
         )
         messages.append(userMessage)
         
-        // Use the configured project directory
-        let cwd = configManager.currentProjectURL.path
+        // Use the project directory that this session was created with
+        let cwd = session.projectPath.isEmpty ? configManager.currentProjectURL.path : session.projectPath
         Task { await bridge.resumeSession(sessionId: openCodeSessionId, text: trimmed, cwd: cwd) }
     }
 
@@ -730,6 +725,17 @@ final class AppState: ObservableObject {
         // Check for Ollama specific errors
         if lowerText.contains("ollama") && (lowerText.contains("not running") || lowerText.contains("not found")) {
             return "Ollama is not running. Start Ollama and try again."
+        }
+        
+        // Check for encrypted content verification errors (session/project mismatch)
+        if lowerText.contains("encrypted content") && (lowerText.contains("could not be verified") || lowerText.contains("invalid_encrypted_content")) {
+            // Clear session ID and retry as new session
+            if let session = currentSession {
+                Log.debug("Encrypted content verification failed - clearing session ID (likely project mismatch)")
+                session.openCodeSessionId = nil
+            }
+            Task { await bridge.setSessionId(nil) }
+            return "Session context mismatch. Please try again - a new session will be started."
         }
         
         // Generic error detection
