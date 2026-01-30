@@ -476,7 +476,6 @@ extension CommandBarView {
                     AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
                 case .running:
                     AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
-                    AuroraShortcutBadge(keys: ["⌘", "D"], label: L10n.CommandBar.drawer)
                 case .completed:
                     AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.send)
                     AuroraShortcutBadge(keys: ["⌘", "N"], label: L10n.CommandBar.new)

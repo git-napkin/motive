@@ -53,8 +53,8 @@ final class CommandBarWindowController {
             defer: false
         )
         panel.isFloatingPanel = true
-        panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.level = .screenSaver
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true  // Use native window shadow
@@ -64,7 +64,7 @@ final class CommandBarWindowController {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
         panel.isMovableByWindowBackground = false
-        panel.hidesOnDeactivate = true
+        panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = false
         panel.worksWhenModal = true
         panel.contentView = containerView
@@ -100,7 +100,7 @@ final class CommandBarWindowController {
             queue: .main
         ) { [weak self] _ in
             guard let self = self else { return }
-            if !self.suppressAutoHide {
+            if !self.suppressAutoHide && self.window.isKeyWindow {
                 self.hide()
             }
         }
@@ -120,12 +120,17 @@ final class CommandBarWindowController {
 
     func show() {
         NSApp.activate(ignoringOtherApps: true)
-        // Always re-center with current height
-        centerWindow()
-        window.makeKeyAndOrderFront(nil)
-        
+        prepositionWindowForMouseScreen()
+        window.orderFrontRegardless()
+        window.makeKey()
+
+        // Re-center after window joins active space
         DispatchQueue.main.async { [weak self] in
+            self?.centerWindow()
             self?.focusFirstResponder()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                self?.centerWindow()
+            }
         }
     }
 
@@ -178,8 +183,9 @@ final class CommandBarWindowController {
     }
 
     private func centerWindow() {
-        guard let screen = NSScreen.main else { return }
-        let screenFrame = screen.visibleFrame
+        let screen = screenForMouse() ?? window.screen ?? NSScreen.main
+        guard let screen else { return }
+        let screenFrame = screen.frame
         
         let height = max(96, currentHeight)
         let windowSize = NSSize(width: 600, height: height)
@@ -193,6 +199,31 @@ final class CommandBarWindowController {
         let y = topEdgeY - height
         
         window.setFrame(NSRect(x: x, y: y, width: windowSize.width, height: windowSize.height), display: true)
+    }
+
+    private func prepositionWindowForMouseScreen() {
+        guard let screen = screenForMouse() ?? window.screen ?? NSScreen.main else { return }
+        let screenFrame = screen.frame
+
+        let height = max(96, currentHeight)
+        let windowSize = NSSize(width: 600, height: height)
+        let x = screenFrame.midX - windowSize.width / 2
+        let topEdgeY = screenFrame.minY + screenFrame.height * 0.55 + 100
+        let y = topEdgeY - height
+
+        window.setFrame(NSRect(x: x, y: y, width: windowSize.width, height: windowSize.height), display: false)
+    }
+
+    private func screenForMouse() -> NSScreen? {
+        let mouseLocation = NSEvent.mouseLocation
+        var displayID: CGDirectDisplayID = 0
+        var count: UInt32 = 0
+        if CGGetDisplaysWithPoint(mouseLocation, 1, &displayID, &count) == .success, count > 0 {
+            return NSScreen.screens.first(where: { screen in
+                (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == displayID
+            })
+        }
+        return NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
     }
 }
 

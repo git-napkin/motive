@@ -24,6 +24,11 @@ def _fix_pyinstaller_importlib_resources():
     
     PyInstaller extracts data files to sys._MEIPASS, but importlib.resources
     doesn't know about this. We patch it to find prompt templates.
+    
+    IMPORTANT: _MEIPASS is ephemeral and gets cleaned up when the process exits.
+    In multi-process scenarios (client spawns server), the server may inherit
+    a _MEIPASS path that gets deleted when the client exits. To handle this,
+    we copy templates to a persistent location (~/.cache/) on first access.
     """
     if not getattr(sys, 'frozen', False):
         return  # Not running from PyInstaller
@@ -33,40 +38,88 @@ def _fix_pyinstaller_importlib_resources():
         return
     
     import importlib.resources
+    import shutil
     from pathlib import Path
     
     _original_files = importlib.resources.files
     
+    # Persistent location for templates (survives _MEIPASS cleanup)
+    # Use ~/Library/Application Support/Motive/ to follow macOS conventions
+    PERSISTENT_TEMPLATES = Path.home() / 'Library' / 'Application Support' / 'Motive' / 'browser-use-templates'
+    
+    def _ensure_persistent_templates():
+        """Copy templates from _MEIPASS to persistent location if needed."""
+        src = Path(meipass) / 'browser_use' / 'agent' / 'system_prompts'
+        dst = PERSISTENT_TEMPLATES / 'browser_use' / 'agent' / 'system_prompts'
+        
+        # Only copy if not already done
+        if dst.exists() and any(dst.glob('*.md')):
+            return
+        
+        if src.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            if dst.exists():
+                shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+    
+    # Try to copy templates immediately while _MEIPASS is still valid
+    try:
+        _ensure_persistent_templates()
+    except Exception:
+        pass  # Will try again on access
+    
     class PyInstallerTraversable:
         """Wrapper that mimics importlib.resources.Traversable for PyInstaller."""
-        def __init__(self, path):
+        def __init__(self, path, persistent_path=None):
             self._path = Path(path) if not isinstance(path, Path) else path
+            self._persistent_path = persistent_path
         
         @property
         def name(self):
             return self._path.name
         
         def joinpath(self, *args):
-            return PyInstallerTraversable(self._path.joinpath(*args))
+            new_path = self._path.joinpath(*args)
+            new_persistent = self._persistent_path.joinpath(*args) if self._persistent_path else None
+            return PyInstallerTraversable(new_path, new_persistent)
         
         def open(self, mode='r', encoding=None, errors=None):
-            return self._path.open(mode=mode, encoding=encoding, errors=errors)
+            # Try _MEIPASS first
+            if self._path.exists():
+                return self._path.open(mode=mode, encoding=encoding, errors=errors)
+            # Fallback to persistent location
+            if self._persistent_path and self._persistent_path.exists():
+                return self._persistent_path.open(mode=mode, encoding=encoding, errors=errors)
+            raise FileNotFoundError(f"File not found: {self._path}")
         
         def read_text(self, encoding='utf-8'):
-            return self._path.read_text(encoding=encoding)
+            if self._path.exists():
+                return self._path.read_text(encoding=encoding)
+            if self._persistent_path and self._persistent_path.exists():
+                return self._persistent_path.read_text(encoding=encoding)
+            raise FileNotFoundError(f"File not found: {self._path}")
         
         def read_bytes(self):
-            return self._path.read_bytes()
+            if self._path.exists():
+                return self._path.read_bytes()
+            if self._persistent_path and self._persistent_path.exists():
+                return self._persistent_path.read_bytes()
+            raise FileNotFoundError(f"File not found: {self._path}")
         
         def is_file(self):
-            return self._path.is_file()
+            return self._path.is_file() or (self._persistent_path and self._persistent_path.is_file())
         
         def is_dir(self):
-            return self._path.is_dir()
+            return self._path.is_dir() or (self._persistent_path and self._persistent_path.is_dir())
         
         def iterdir(self):
-            for p in self._path.iterdir():
-                yield PyInstallerTraversable(p)
+            if self._path.exists():
+                for p in self._path.iterdir():
+                    pp = self._persistent_path / p.name if self._persistent_path else None
+                    yield PyInstallerTraversable(p, pp)
+            elif self._persistent_path and self._persistent_path.exists():
+                for p in self._persistent_path.iterdir():
+                    yield PyInstallerTraversable(self._path / p.name, p)
         
         def __truediv__(self, other):
             return self.joinpath(other)
@@ -82,16 +135,21 @@ def _fix_pyinstaller_importlib_resources():
         if isinstance(package, str):
             package_path = package.replace('.', os.sep)
             pyinstaller_path = Path(meipass) / package_path
+            persistent_path = PERSISTENT_TEMPLATES / package_path
             
-            if pyinstaller_path.exists():
-                return PyInstallerTraversable(pyinstaller_path)
+            if pyinstaller_path.exists() or persistent_path.exists():
+                return PyInstallerTraversable(pyinstaller_path, persistent_path)
         
         # Fall back to original
         try:
             return _original_files(package)
         except Exception:
             if isinstance(package, str):
-                return PyInstallerTraversable(Path(meipass) / package.replace('.', os.sep))
+                package_path = package.replace('.', os.sep)
+                return PyInstallerTraversable(
+                    Path(meipass) / package_path,
+                    PERSISTENT_TEMPLATES / package_path
+                )
             raise
     
     importlib.resources.files = patched_files
@@ -265,7 +323,7 @@ def kill_existing_server():
         try:
             pid = int(PID_PATH.read_text().strip())
             os.kill(pid, signal.SIGTERM)
-            for _ in range(20):
+            for _ in range(50):
                 time.sleep(0.1)
                 try:
                     os.kill(pid, 0)
@@ -280,6 +338,7 @@ def kill_existing_server():
             pass
     
     cleanup_stale_files()
+    time.sleep(0.5)
     force_kill_chrome()
 
 
@@ -355,13 +414,29 @@ class BrowserServer:
         from browser_use.browser.session import BrowserSession
         from browser_use.browser.profile import BrowserProfile
         # Use isolated Chrome profile for automation
-        profile_dir = Path.home() / "Library" / "Application Support" / "Motive" / "browser" / "profiles" / "chrome-profile"
+        # IMPORTANT: browser-use copies non-temp profiles to a temp dir by default,
+        # which breaks persistence. Using a path that includes "browser-use-user-data-dir-"
+        # disables that copy so cookies/localStorage persist across runs.
+        profile_dir = (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "Motive"
+            / "browser"
+            / "browser-use-user-data-dir-persistent"
+        )
         profile_dir.mkdir(parents=True, exist_ok=True)
         default_subdir = profile_dir / "Default"
         default_subdir.mkdir(parents=True, exist_ok=True)
         
         self._storage_state_path = profile_dir / "storage_state.json"
-        storage_state = str(self._storage_state_path) if self._storage_state_path.exists() else None
+        storage_state = str(self._storage_state_path)
+        logger.warning(
+            "Browser profile home=%s user_data_dir=%s storage_state=%s",
+            Path.home(),
+            profile_dir,
+            self._storage_state_path
+        )
 
         profile = BrowserProfile(
             headless=not self.headed,
@@ -374,7 +449,12 @@ class BrowserServer:
             paint_order_filtering=False,
             storage_state=storage_state,
         )
-        logger.info(f"Browser profile: channel=chromium, user_data_dir={profile_dir}, headless={not self.headed}")
+        logger.warning(
+            "Browser profile: channel=chromium, user_data_dir=%s, storage_state=%s, headless=%s",
+            profile_dir,
+            "loaded" if storage_state else "none",
+            not self.headed
+        )
         
         # Retry browser startup up to 3 times
         max_retries = 3
@@ -447,49 +527,52 @@ class BrowserServer:
         
         try:
             if cmd == "open":
-                return await self.cmd_open(params.get("url", ""))
+                result = await self.cmd_open(params.get("url", ""))
             elif cmd == "state":
-                return await self.cmd_state()
+                result = await self.cmd_state()
             elif cmd == "click":
-                return await self.cmd_click(params.get("index", 0))
+                result = await self.cmd_click(params.get("index", 0))
             elif cmd == "input":
-                return await self.cmd_input(params.get("index", 0), params.get("text", ""))
+                result = await self.cmd_input(params.get("index", 0), params.get("text", ""))
             elif cmd == "type":
-                return await self.cmd_type(params.get("text", ""))
+                result = await self.cmd_type(params.get("text", ""))
             elif cmd == "keys":
-                return await self.cmd_keys(params.get("key", ""))
+                result = await self.cmd_keys(params.get("key", ""))
             elif cmd == "scroll":
-                return await self.cmd_scroll(params.get("direction", "down"))
+                result = await self.cmd_scroll(params.get("direction", "down"))
             elif cmd == "back":
-                return await self.cmd_back()
+                result = await self.cmd_back()
             elif cmd == "screenshot":
-                return await self.cmd_screenshot(params.get("filename"))
+                result = await self.cmd_screenshot(params.get("filename"))
             elif cmd == "close":
-                return await self.cmd_close()
+                result = await self.cmd_close()
             elif cmd == "ping":
-                return {"success": True, "message": "pong"}
+                result = {"success": True, "message": "pong"}
             elif cmd == "tabs":
-                return await self.cmd_tabs()
+                result = await self.cmd_tabs()
             elif cmd == "switch":
-                return await self.cmd_switch(params.get("index", 0))
+                result = await self.cmd_switch(params.get("index", 0))
             elif cmd == "wait":
-                return await self.cmd_wait(params.get("seconds", 30), params.get("message", ""))
+                result = await self.cmd_wait(params.get("seconds", 30), params.get("message", ""))
             elif cmd == "refresh":
-                return await self.cmd_refresh()
+                result = await self.cmd_refresh()
             elif cmd == "agent_task":
-                return await self.cmd_agent_task(
+                result = await self.cmd_agent_task(
                     params.get("task", ""),
                     params.get("max_steps", 50),
                     params.get("model", "anthropic")
                 )
             elif cmd == "agent_continue":
-                return await self.cmd_agent_continue(params.get("choice", ""))
+                result = await self.cmd_agent_continue(params.get("choice", ""))
             elif cmd == "agent_status":
-                return await self.cmd_agent_status()
+                result = await self.cmd_agent_status()
             elif cmd == "agent_cancel":
-                return await self.cmd_agent_cancel()
+                result = await self.cmd_agent_cancel()
             else:
-                return {"error": f"Unknown command: {cmd}"}
+                result = {"error": f"Unknown command: {cmd}"}
+
+            await self._persist_storage_state_if_needed(cmd, result)
+            return result
         except Exception as e:
             logger.exception("Command error")
             return {"error": str(e)}
@@ -1057,9 +1140,9 @@ NEVER skip user confirmation for variant selections. The user expects to make th
             history = await agent.run(max_steps=max_steps)
 
             await self._persist_storage_state()
-            
+
             self._agent_instance = None
-            
+
             return {
                 "status": "completed",
                 "success": history.is_successful(),
@@ -1067,7 +1150,7 @@ NEVER skip user confirmation for variant selections. The user expects to make th
                 "steps": history.number_of_steps(),
                 "urls": list(history.urls()) if history.urls() else []
             }
-            
+
         except asyncio.CancelledError:
             self._agent_instance = None
             return {"status": "cancelled", "message": "Agent task was cancelled"}
@@ -1075,20 +1158,41 @@ NEVER skip user confirmation for variant selections. The user expects to make th
             self._agent_instance = None
             logger.exception("Agent task error")
             return {"status": "error", "error": str(e)}
+        finally:
+            await self._persist_storage_state()
 
     async def _persist_storage_state(self):
         """Persist browser storage state to reduce login loss across restarts."""
         if not self.session or not self._storage_state_path:
             return
         try:
+            browser_context = getattr(self.session, "browser_context", None)
+            if browser_context:
+                await browser_context.storage_state(path=str(self._storage_state_path))
+                self._last_storage_state_save = time.time()
+                logger.info(f"Storage state persisted to {self._storage_state_path}")
+                return
+
             page = await asyncio.wait_for(
                 self.session.get_current_page(),
                 timeout=5.0
             )
             if page:
                 await page.context.storage_state(path=str(self._storage_state_path))
+                self._last_storage_state_save = time.time()
+                logger.info(f"Storage state persisted to {self._storage_state_path}")
         except Exception as e:
             logger.warning(f"Failed to persist storage state: {e}")
+
+    async def _persist_storage_state_if_needed(self, cmd: str, result: dict):
+        """Persist storage state after mutating commands."""
+        if not self.session or not self._storage_state_path:
+            return
+        if "error" in result:
+            return
+        if cmd not in {"open", "click", "input", "type", "keys", "wait", "refresh", "agent_continue"}:
+            return
+        await self._persist_storage_state()
     
     def _ensure_provider(self, llm, provider: str):
         """Ensure LLM has a provider attribute expected by browser-use."""
@@ -1201,6 +1305,8 @@ NEVER skip user confirmation for variant selections. The user expects to make th
         if self._agent_task.done():
             try:
                 result = self._agent_task.result()
+                if result.get("status") in {"completed", "cancelled", "error"}:
+                    await self._persist_storage_state()
                 return result
             except Exception as e:
                 return {"status": "error", "error": str(e)}
@@ -1228,7 +1334,8 @@ NEVER skip user confirmation for variant selections. The user expects to make th
         
         self._agent_instance = None
         self._pending_question = None
-        
+        await self._persist_storage_state()
+
         return {"success": True, "message": "Agent task cancelled"}
     
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
@@ -1279,6 +1386,7 @@ NEVER skip user confirmation for variant selections. The user expects to make th
             
             if self.is_idle_timeout():
                 print(f"Idle timeout reached ({IDLE_TIMEOUT_SECONDS}s), shutting down...", flush=True)
+                await self._persist_storage_state()
                 self.running = False
                 break
             
@@ -1291,6 +1399,7 @@ NEVER skip user confirmation for variant selections. The user expects to make th
                     
                     if consecutive_failures >= max_consecutive_failures:
                         print("Browser appears to have closed or crashed, shutting down...", flush=True)
+                        await self._persist_storage_state()
                         self.running = False
                         break
     

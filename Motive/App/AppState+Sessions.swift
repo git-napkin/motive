@@ -75,6 +75,16 @@ extension AppState {
         return (try? modelContext.fetch(descriptor)) ?? []
     }
 
+    /// Seed recent projects list from stored sessions
+    func seedRecentProjectsFromSessions() {
+        let sessions = getAllSessions()
+        for session in sessions {
+            if !session.projectPath.isEmpty {
+                configManager.recordRecentProject(session.projectPath)
+            }
+        }
+    }
+
     /// Switch to a different session
     func switchToSession(_ session: Session) {
         currentSession = session

@@ -169,8 +169,8 @@ extension CommandBarView {
             return
         }
 
-        // In histories mode, input is used for filtering, don't change mode
-        if mode.isHistories {
+        // In histories/projects mode, input is used for filtering, don't change mode
+        if mode.isHistories || mode.isProjects {
             return
         }
 
@@ -342,6 +342,7 @@ extension CommandBarView {
         case "project":
             inputText = ""
             configManager.ensureCurrentProjectInRecents()
+            appState.seedRecentProjectsFromSessions()
             mode = .projects(fromSession: wasFromSession)
             selectedProjectIndex = 0
         case "histories":
