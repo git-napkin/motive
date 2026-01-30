@@ -120,6 +120,26 @@ extension ConfigManager {
         
         recentProjects = projects
     }
+
+    /// Record a recent project without changing current project
+    func recordRecentProject(_ path: String) {
+        guard !path.isEmpty else { return }
+
+        // Verify directory exists
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return
+        }
+
+        addToRecentProjects(path)
+    }
+
+    /// Ensure the current project is included in recent projects
+    func ensureCurrentProjectInRecents() {
+        guard !currentProjectPath.isEmpty else { return }
+        addToRecentProjects(currentProjectPath)
+    }
     
     /// Ensure the default project directory exists
     func ensureDefaultProjectDirectory() {

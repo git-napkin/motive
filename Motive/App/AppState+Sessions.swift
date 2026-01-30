@@ -1,0 +1,255 @@
+//
+//  AppState+Sessions.swift
+//  Motive
+//
+//  Created by geezerrrr on 2026/1/19.
+//
+
+import AppKit
+import Combine
+import SwiftData
+import SwiftUI
+
+extension AppState {
+    func submitIntent(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // Check provider configuration
+        if let configError = configManager.providerConfigurationError {
+            lastErrorMessage = configError
+            // Don't hide - let user see the error
+            return
+        }
+
+        lastErrorMessage = nil
+        // Immediately update status bar so user sees feedback
+        menuBarState = .executing
+        sessionStatus = .running
+        updateStatusBar()
+        // Don't hide CommandBar - it will switch to running mode
+        // Only ESC or focus loss should hide it
+        startNewSession(intent: trimmed)
+
+        // Add user message to conversation
+        let userMessage = ConversationMessage(
+            type: .user,
+            content: trimmed
+        )
+        messages.append(userMessage)
+
+        // Use the configured project directory (not process cwd)
+        let cwd = configManager.currentProjectURL.path
+        Task { await bridge.submitIntent(text: trimmed, cwd: cwd) }
+    }
+
+    func sendFollowUp(_ text: String) {
+        // Use resumeSession to continue the current session properly
+        resumeSession(with: text)
+    }
+
+    /// Interrupt the current running session (like Ctrl+C)
+    func interruptSession() {
+        guard sessionStatus == .running else { return }
+
+        Task {
+            await bridge.interrupt()
+        }
+
+        sessionStatus = .interrupted
+        menuBarState = .idle
+        currentToolName = nil
+
+        // Add system message
+        let systemMessage = ConversationMessage(
+            type: .system,
+            content: "Session interrupted by user"
+        )
+        messages.append(systemMessage)
+    }
+
+    /// Get all sessions sorted by date (newest first)
+    func getAllSessions() -> [Session] {
+        guard let modelContext else { return [] }
+        let descriptor = FetchDescriptor<Session>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    /// Seed recent projects list from stored sessions
+    func seedRecentProjectsFromSessions() {
+        let sessions = getAllSessions()
+        for session in sessions {
+            if !session.projectPath.isEmpty {
+                configManager.recordRecentProject(session.projectPath)
+            }
+        }
+    }
+
+    /// Switch to a different session
+    func switchToSession(_ session: Session) {
+        currentSession = session
+        sessionStatus = SessionStatus(rawValue: session.status) ?? .completed
+
+        // Sync OpenCodeBridge session ID
+        Task { await bridge.setSessionId(session.openCodeSessionId) }
+
+        // Ensure project directory matches the session's original cwd
+        if !session.projectPath.isEmpty {
+            let defaultPath = ConfigManager.defaultProjectDirectory.path
+            if session.projectPath == defaultPath {
+                _ = configManager.setProjectDirectory(nil)
+            } else {
+                _ = configManager.setProjectDirectory(session.projectPath)
+            }
+        }
+
+        // Rebuild messages from logs
+        messages = []
+
+        // Add the initial user intent
+        let userMessage = ConversationMessage(
+            type: .user,
+            content: session.intent,
+            timestamp: session.createdAt
+        )
+        messages.append(userMessage)
+
+        // Add messages from logs
+        for log in session.logs {
+            let event = OpenCodeEvent(rawJson: log.rawJson)
+            if let message = event.toMessage() {
+                messages.append(message)
+            }
+        }
+
+        objectWillChange.send()
+    }
+
+    /// Start a new empty session (for "New Chat" button)
+    func startNewEmptySession() {
+        currentSession = nil
+        messages = []
+        sessionStatus = .idle
+        menuBarState = .idle
+        currentToolName = nil
+
+        // Clear OpenCodeBridge session ID for fresh start
+        Task { await bridge.setSessionId(nil) }
+
+        objectWillChange.send()
+    }
+
+    /// Clear current session messages without deleting
+    func clearCurrentSession() {
+        messages = []
+        currentSession = nil
+        sessionStatus = .idle
+        menuBarState = .idle
+        currentToolName = nil
+
+        Task { await bridge.setSessionId(nil) }
+        objectWillChange.send()
+    }
+
+    /// Delete a session from storage
+    func deleteSession(_ session: Session) {
+        guard let modelContext else { return }
+
+        // If deleting current session, clear it first
+        if currentSession?.id == session.id {
+            clearCurrentSession()
+        }
+
+        modelContext.delete(session)
+        try? modelContext.save()
+        objectWillChange.send()
+    }
+
+    /// Switch to a different project directory
+    /// This clears the current session to avoid context confusion
+    /// - Parameter path: The directory path, or nil to use default ~/.motive
+    /// - Returns: true if the directory was set successfully
+    @discardableResult
+    func switchProjectDirectory(_ path: String?) -> Bool {
+        // Clear current session first to avoid mixing contexts
+        if sessionStatus == .running {
+            interruptSession()
+        }
+        clearCurrentSession()
+
+        // Set the new directory
+        let success = configManager.setProjectDirectory(path)
+
+        // Notify UI to update
+        objectWillChange.send()
+
+        return success
+    }
+
+    /// Open a folder picker dialog to select project directory
+    func showProjectPicker() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Select a project directory"
+        panel.prompt = "Select"
+
+        // Hide command bar during picker
+        hideCommandBar()
+
+        panel.begin { [weak self] response in
+            guard let self = self else { return }
+            if response == .OK, let url = panel.url {
+                self.switchProjectDirectory(url.path)
+            }
+            // Reshow command bar after picker closes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.showCommandBar()
+            }
+        }
+    }
+
+    /// Resume a session with a follow-up message
+    func resumeSession(with text: String) {
+        guard let session = currentSession,
+              let openCodeSessionId = session.openCodeSessionId else {
+            // No session to resume, start a new one
+            submitIntent(text)
+            return
+        }
+
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        sessionStatus = .running
+        menuBarState = .executing
+        session.status = "running"
+
+        // Add user message
+        let userMessage = ConversationMessage(
+            type: .user,
+            content: trimmed
+        )
+        messages.append(userMessage)
+
+        // Use the project directory that this session was created with
+        let cwd = session.projectPath.isEmpty ? configManager.currentProjectURL.path : session.projectPath
+        Task { await bridge.resumeSession(sessionId: openCodeSessionId, text: trimmed, cwd: cwd) }
+    }
+
+    private func startNewSession(intent: String) {
+        messages = []
+        menuBarState = .executing
+        sessionStatus = .running
+        currentToolName = nil
+
+        // Clear OpenCodeBridge session ID for fresh start
+        Task { await bridge.setSessionId(nil) }
+
+        let sessionProjectPath = configManager.currentProjectURL.path
+        let session = Session(intent: intent, projectPath: sessionProjectPath)
+        currentSession = session
+        modelContext?.insert(session)
+    }
+}
