@@ -18,14 +18,24 @@ struct MotiveApp: App {
     init() {
         let configManager = ConfigManager()
         let container: ModelContainer
+        
+        // Use local-only storage (no CloudKit sync for SwiftData)
+        // Our CloudKit usage is separate (CKRecord for remote commands)
+        let schema = Schema([Session.self, LogEntry.self])
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .none  // Explicitly disable CloudKit sync
+        )
+        
         do {
-            container = try ModelContainer(for: Session.self, LogEntry.self)
+            container = try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
             // Schema mismatch or corrupted database - delete and retry
             print("[Motive] ModelContainer failed: \(error). Recreating database...")
             Self.deleteCorruptedDatabase()
             do {
-                container = try ModelContainer(for: Session.self, LogEntry.self)
+                container = try ModelContainer(for: schema, configurations: [modelConfiguration])
             } catch {
                 fatalError("Could not create ModelContainer after reset: \(error)")
             }

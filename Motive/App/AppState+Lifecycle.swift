@@ -47,6 +47,33 @@ extension AppState {
         // Configure settings window controller
         SettingsWindowController.shared.configure(configManager: configManager, appState: self)
         updateStatusBar()
+
+        // Start CloudKit listener for remote commands from iOS
+        startCloudKitListener()
+    }
+
+    /// Start listening for remote commands from iOS via CloudKit
+    private func startCloudKitListener() {
+        cloudKitManager.onCommandReceived = { [weak self] command in
+            guard let self else { return }
+            self.handleRemoteCommand(command)
+        }
+        cloudKitManager.startListening(appState: self)
+        Log.debug("CloudKit listener started for remote commands")
+    }
+
+    /// Handle a remote command received from iOS
+    private func handleRemoteCommand(_ command: RemoteCommand) {
+        Log.debug("Received remote command: \(command.instruction)")
+
+        // Store the remote command ID for status updates
+        currentRemoteCommandId = command.id
+
+        // Use the configured project directory as working directory
+        let cwd = configManager.currentProjectURL.path
+
+        // Submit the intent just like local commands
+        submitIntent(command.instruction, workingDirectory: cwd)
     }
 
     func ensureStatusBar() {
@@ -93,9 +120,10 @@ extension AppState {
                 guard let self else { return }
 
                 if let request = request {
-                    // If drawer is visible, let it handle the request
-                    // Otherwise show quick confirm panel
-                    if self.drawerWindowController?.isVisible == true {
+                    // If this is a remote command, send question to iOS via CloudKit
+                    if let commandId = self.currentRemoteCommandId {
+                        self.sendQuestionToiOS(request: request, commandId: commandId)
+                    } else if self.drawerWindowController?.isVisible == true {
                         // Drawer will handle it via its own UI
                     } else {
                         self.showQuickConfirm(for: request)
@@ -109,6 +137,56 @@ extension AppState {
                 self.updateStatusBar()
             }
             .store(in: &cancellables)
+    }
+
+    /// Send a permission/question request to iOS via CloudKit for remote commands
+    private func sendQuestionToiOS(request: PermissionRequest, commandId: String) {
+        Log.debug("Sending question to iOS via CloudKit for remote command: \(commandId)")
+        
+        let optionLabels = request.options?.map { $0.label } ?? ["Yes", "No"]
+        let header = request.header ?? ""
+        let question = request.question ?? "Question from Mac"
+        let questionText = header.isEmpty ? question : "\(header): \(question)"
+        
+        Task {
+            let response = await cloudKitManager.sendPermissionRequest(
+                commandId: commandId,
+                question: questionText,
+                options: optionLabels
+            )
+            
+            // Build response and send to PermissionManager
+            let permResponse: PermissionResponse
+            if let response = response {
+                Log.debug("Got response from iOS: \(response)")
+                if request.type == .question {
+                    permResponse = PermissionResponse(
+                        requestId: request.id,
+                        taskId: request.taskId,
+                        decision: .allow,
+                        selectedOptions: [response],
+                        customText: response
+                    )
+                } else {
+                    let approved = response.lowercased() == "yes" || response.lowercased() == "allow" || response.lowercased() == "approved"
+                    permResponse = PermissionResponse(
+                        requestId: request.id,
+                        taskId: request.taskId,
+                        decision: approved ? .allow : .deny
+                    )
+                }
+            } else {
+                Log.debug("No response from iOS, denying request")
+                permResponse = PermissionResponse(
+                    requestId: request.id,
+                    taskId: request.taskId,
+                    decision: .deny
+                )
+            }
+            
+            PermissionManager.shared.respond(with: permResponse)
+            updateStatusBar()
+        }
     }
 
     private func showQuickConfirm(for request: PermissionRequest) {

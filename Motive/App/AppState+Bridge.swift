@@ -48,6 +48,8 @@ extension AppState {
         case .thought:
             menuBarState = .reasoning
             currentToolName = nil
+            // Update CloudKit for remote commands
+            updateRemoteCommandStatus(toolName: "Thinking...")
         case .call, .tool:
             menuBarState = .executing
             currentToolName = event.toolName ?? "Processing"
@@ -57,9 +59,12 @@ extension AppState {
                 handleAskUserQuestion(input: inputDict)
                 return  // Don't add to message list
             }
+            // Update CloudKit for remote commands
+            updateRemoteCommandStatus(toolName: event.toolName)
         case .diff:
             menuBarState = .executing
             currentToolName = "Editing file"
+            updateRemoteCommandStatus(toolName: "Editing file")
         case .finish:
             menuBarState = .idle
             sessionStatus = .completed
@@ -70,6 +75,12 @@ extension AppState {
             }
             // Show completion in status bar
             statusBarController?.showCompleted()
+            // Complete remote command in CloudKit
+            if let commandId = currentRemoteCommandId {
+                let resultMessage = messages.last(where: { $0.type == .assistant })?.content ?? "Task completed"
+                cloudKitManager.completeCommand(commandId: commandId, result: resultMessage)
+                currentRemoteCommandId = nil
+            }
         case .assistant:
             menuBarState = .reasoning
             currentToolName = nil
@@ -87,11 +98,22 @@ extension AppState {
                 }
                 // Show error in status bar
                 statusBarController?.showError()
+                // Fail remote command in CloudKit
+                if let commandId = currentRemoteCommandId {
+                    cloudKitManager.failCommand(commandId: commandId, error: error)
+                    currentRemoteCommandId = nil
+                }
             }
         }
 
         // Process event content (save session ID, add messages)
         processEventContent(event)
+    }
+
+    /// Update remote command status in CloudKit
+    private func updateRemoteCommandStatus(toolName: String?) {
+        guard let commandId = currentRemoteCommandId else { return }
+        cloudKitManager.updateProgress(commandId: commandId, toolName: toolName)
     }
 
     /// Handle AskUserQuestion tool call - show popup and send response via PTY
@@ -111,10 +133,13 @@ extension AppState {
 
         // Parse options
         var options: [PermissionRequest.QuestionOption] = []
+        var optionLabels: [String] = []
         if let rawOptions = firstQuestion["options"] as? [[String: Any]] {
             options = rawOptions.map { opt in
-                PermissionRequest.QuestionOption(
-                    label: opt["label"] as? String ?? "",
+                let label = opt["label"] as? String ?? ""
+                optionLabels.append(label)
+                return PermissionRequest.QuestionOption(
+                    label: label,
                     description: opt["description"] as? String
                 )
             }
@@ -127,8 +152,32 @@ extension AppState {
                 PermissionRequest.QuestionOption(label: "No"),
                 PermissionRequest.QuestionOption(label: "Other", description: "Custom response")
             ]
+            optionLabels = ["Yes", "No", "Other"]
         }
 
+        // If this is a remote command, send question to iOS via CloudKit
+        if let commandId = currentRemoteCommandId {
+            Log.debug("Sending question to iOS via CloudKit for remote command: \(commandId)")
+            Task {
+                let response = await cloudKitManager.sendPermissionRequest(
+                    commandId: commandId,
+                    question: "\(header): \(questionText)",
+                    options: optionLabels
+                )
+                
+                if let response = response {
+                    Log.debug("Got response from iOS: \(response)")
+                    await bridge.sendResponse(response)
+                } else {
+                    Log.debug("No response from iOS, sending empty response")
+                    await bridge.sendResponse("")
+                }
+                updateStatusBar()
+            }
+            return  // Don't show local QuickConfirm for remote commands
+        }
+
+        // For local commands, show QuickConfirm as usual
         let requestId = "askuser_\(UUID().uuidString)"
         let request = PermissionRequest(
             id: requestId,
