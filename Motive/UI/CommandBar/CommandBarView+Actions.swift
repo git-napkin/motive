@@ -91,7 +91,7 @@ extension CommandBarView {
             if selectedCommandIndex > 0 {
                 selectedCommandIndex -= 1
             }
-        } else if mode.isHistories {
+        } else if mode.isHistory {
             if selectedHistoryIndex > 0 {
                 selectedHistoryIndex -= 1
             }
@@ -115,7 +115,7 @@ extension CommandBarView {
             if selectedCommandIndex < filteredCommands.count - 1 {
                 selectedCommandIndex += 1
             }
-        } else if mode.isHistories {
+        } else if mode.isHistory {
             if selectedHistoryIndex < filteredHistorySessions.count - 1 {
                 selectedHistoryIndex += 1
             }
@@ -151,8 +151,8 @@ extension CommandBarView {
     }
 
     func handleCmdDelete() {
-        // Cmd+Delete to delete selected session in histories mode
-        if mode.isHistories && selectedHistoryIndex < filteredHistorySessions.count {
+        // Cmd+Delete to delete selected session in history mode
+        if mode.isHistory && selectedHistoryIndex < filteredHistorySessions.count {
             showDeleteConfirmation = true
         }
     }
@@ -169,8 +169,8 @@ extension CommandBarView {
             return
         }
 
-        // In histories/projects mode, input is used for filtering, don't change mode
-        if mode.isHistories || mode.isProjects {
+        // In history/projects mode, input is used for filtering, don't change mode
+        if mode.isHistory || mode.isProjects {
             return
         }
 
@@ -213,7 +213,7 @@ extension CommandBarView {
         appState.updateCommandBarHeight(to: currentHeight)
 
         // Load data when entering specific modes
-        if newMode.isHistories {
+        if newMode.isHistory {
             loadHistorySessions()
         }
 
@@ -224,8 +224,8 @@ extension CommandBarView {
     }
 
     func handleSessionStatusChange(_ status: AppState.SessionStatus) {
-        // Don't change mode if user is browsing commands/histories/projects
-        if mode.isCommand || mode.isHistories || mode.isProjects {
+        // Don't change mode if user is browsing commands/history/projects
+        if mode.isCommand || mode.isHistory || mode.isProjects {
             return
         }
 
@@ -272,7 +272,7 @@ extension CommandBarView {
                 }
             }
             executeSelectedCommand()
-        } else if mode.isHistories {
+        } else if mode.isHistory {
             // Select the highlighted session
             if selectedHistoryIndex < filteredHistorySessions.count {
                 selectHistorySession(filteredHistorySessions[selectedHistoryIndex])
@@ -306,7 +306,7 @@ extension CommandBarView {
             return
         }
 
-        if mode.isCommand || mode.isHistories || mode.isProjects {
+        if mode.isCommand || mode.isHistory || mode.isProjects {
             // Return to previous mode (session or idle)
             if appState.sessionStatus == .running {
                 mode = .running
@@ -345,9 +345,10 @@ extension CommandBarView {
             appState.seedRecentProjectsFromSessions()
             mode = .projects(fromSession: wasFromSession)
             selectedProjectIndex = 0
-        case "histories":
+        case "history":
             inputText = ""
-            mode = .histories(fromSession: wasFromSession)
+            showFileCompletion = false  // Ensure file completion doesn't intercept keyboard
+            mode = .history(fromSession: wasFromSession)
             selectedHistoryIndex = 0
         case "settings":
             inputText = ""
@@ -379,7 +380,7 @@ extension CommandBarView {
     /// Syncs mode with current session state
     func recenterAndFocus() {
         // Sync mode with current session status (unless user is mid-action)
-        if !mode.isCommand && !mode.isHistories && !mode.isProjects {
+        if !mode.isCommand && !mode.isHistory && !mode.isProjects {
             switch appState.sessionStatus {
             case .running:
                 mode = .running

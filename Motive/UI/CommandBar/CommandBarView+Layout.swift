@@ -45,8 +45,8 @@ extension CommandBarView {
         switch mode {
         case .running, .completed, .error:
             return true
-        case .command(let fromSession), .histories(let fromSession):
-            // Keep status visible when command/histories triggered from session
+        case .command(let fromSession), .history(let fromSession):
+            // Keep status visible when command/history triggered from session
             return fromSession
         default:
             return false
@@ -55,7 +55,7 @@ extension CommandBarView {
 
     // Content BELOW input (lists)
     var showsBelowContent: Bool {
-        mode.isCommand || mode.isHistories || mode.isProjects || showFileCompletion
+        mode.isCommand || mode.isHistory || mode.isProjects || showFileCompletion
     }
 
     /// Height to use when file completion is showing (matches command list)
@@ -83,8 +83,8 @@ extension CommandBarView {
             case .command(let fromSession) where fromSession:
                 // Show completed status when command triggered from session
                 completedSummaryView
-            case .histories(let fromSession) where fromSession:
-                // Show completed status when histories triggered from session
+            case .history(let fromSession) where fromSession:
+                // Show completed status when history triggered from session
                 completedSummaryView
             default:
                 EmptyView()
@@ -103,7 +103,7 @@ extension CommandBarView {
                 fileCompletionListView
             } else if mode.isCommand {
                 commandListView
-            } else if mode.isHistories {
+            } else if mode.isHistory {
                 historiesListView
             } else if mode.isProjects {
                 projectsListView
@@ -316,7 +316,7 @@ extension CommandBarView {
                     isDisabled: mode == .running,
                     onSubmit: handleSubmit,
                     onCmdDelete: {
-                        if mode.isHistories {
+                        if mode.isHistory {
                             handleCmdDelete()
                         }
                     },
@@ -354,7 +354,7 @@ extension CommandBarView {
         switch mode {
         case .command:
             return "Type a command..."
-        case .histories:
+        case .history:
             return "Search sessions..."
         case .running, .completed, .error:
             return "Follow up..."  // Status shown above, not in placeholder
@@ -455,7 +455,7 @@ extension CommandBarView {
                 AuroraShortcutBadge(keys: ["tab"], label: L10n.CommandBar.complete)
                 AuroraShortcutBadge(keys: ["↑↓"], label: L10n.CommandBar.navigate)
                 AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.back)
-            } else if mode.isHistories {
+            } else if mode.isHistory {
                 AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.open)
                 AuroraShortcutBadge(keys: ["⌘", "⌫"], label: L10n.CommandBar.delete)
                 AuroraShortcutBadge(keys: ["↑↓"], label: L10n.CommandBar.navigate)
