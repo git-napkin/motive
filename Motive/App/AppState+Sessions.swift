@@ -12,13 +12,21 @@ import SwiftUI
 
 extension AppState {
     func submitIntent(_ text: String) {
+        submitIntent(text, workingDirectory: nil)
+    }
+
+    func submitIntent(_ text: String, workingDirectory: String?) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         // Check provider configuration
         if let configError = configManager.providerConfigurationError {
             lastErrorMessage = configError
-            // Don't hide - let user see the error
+            // Update CloudKit if this is a remote command
+            if let commandId = currentRemoteCommandId {
+                cloudKitManager.failCommand(commandId: commandId, error: configError)
+                currentRemoteCommandId = nil
+            }
             return
         }
 
@@ -38,8 +46,8 @@ extension AppState {
         )
         messages.append(userMessage)
 
-        // Use the configured project directory (not process cwd)
-        let cwd = configManager.currentProjectURL.path
+        // Use provided working directory or configured project directory
+        let cwd = workingDirectory ?? configManager.currentProjectURL.path
         Task { await bridge.submitIntent(text: trimmed, cwd: cwd) }
     }
 

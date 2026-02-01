@@ -49,6 +49,10 @@ final class AppState: ObservableObject {
     var cancellables = Set<AnyCancellable>()
     var hasStarted = false
 
+    // CloudKit for remote commands from iOS
+    lazy var cloudKitManager: CloudKitManager = CloudKitManager()
+    var currentRemoteCommandId: String?
+
     var configManagerRef: ConfigManager { configManager }
     var commandBarWindowRef: NSWindow? { commandBarController?.getWindow() }
     var currentSessionRef: Session? { currentSession }

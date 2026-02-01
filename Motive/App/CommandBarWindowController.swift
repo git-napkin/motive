@@ -23,14 +23,14 @@ final class CommandBarWindowController {
     
     // Height constants matching CommandBarMode
     // Layout: [status bar ~50] + input(52) + [list] + footer(40) + padding
-    // Note: command/histories heights are for session mode (max height);
+    // Note: command/history heights are for session mode (max height);
     // non-session mode is 50px less (no status bar)
     static let heights: [String: CGFloat] = [
         "idle": 100,      // input + footer + padding
         "input": 100,
-        "command": 450,   // Same as histories for consistency
-        "histories": 450, // status(50) + input + footer + list(280) + padding (max case)
-        "projects": 450,  // Same as histories
+        "command": 450,   // Same as history for consistency
+        "history": 450,   // status(50) + input + footer + list(280) + padding (max case)
+        "projects": 450,  // Same as history
         "fileCompletion": 450, // File/directory completion list
         "running": 160,   // status + input + footer + padding
         "completed": 160,

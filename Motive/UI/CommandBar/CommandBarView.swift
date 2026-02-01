@@ -15,7 +15,7 @@ enum CommandBarMode: Equatable {
     case idle                           // Initial state, ready for input
     case input                          // User is typing intent
     case command(fromSession: Bool)     // User typed /, showing command suggestions
-    case histories(fromSession: Bool)   // Showing /histories list
+    case history(fromSession: Bool)     // Showing /history list
     case projects(fromSession: Bool)    // Showing /project list
     case running                        // Task is running
     case completed                      // Task completed, showing summary
@@ -28,8 +28,8 @@ enum CommandBarMode: Equatable {
         return false
     }
     
-    var isHistories: Bool {
-        if case .histories = self { return true }
+    var isHistory: Bool {
+        if case .history = self { return true }
         return false
     }
     
@@ -41,7 +41,7 @@ enum CommandBarMode: Equatable {
     /// Whether this mode was triggered from a session state (completed/running)
     var isFromSession: Bool {
         switch self {
-        case .command(let fromSession), .histories(let fromSession), .projects(let fromSession):
+        case .command(let fromSession), .history(let fromSession), .projects(let fromSession):
             return fromSession
         default:
             return false
@@ -54,9 +54,9 @@ enum CommandBarMode: Equatable {
         case .idle, .input: 
             return 100   // input + footer + padding
         case .command(let fromSession): 
-            // Same height as histories for consistency
+            // Same height as history for consistency
             return fromSession ? 450 : 400   // status(50) + input + footer + list(280) + padding
-        case .histories(let fromSession): 
+        case .history(let fromSession): 
             return fromSession ? 450 : 400   // status(50) + input + footer + list(280) + padding
         case .projects(let fromSession):
             return fromSession ? 450 : 400   // status(50) + input + footer + list(280) + padding
@@ -70,7 +70,7 @@ enum CommandBarMode: Equatable {
         case .idle: return "idle"
         case .input: return "input"
         case .command: return "command"
-        case .histories: return "histories"
+        case .history: return "history"
         case .projects: return "projects"
         case .running: return "running"
         case .completed: return "completed"
@@ -90,7 +90,7 @@ struct CommandDefinition: Identifiable {
     
     static let allCommands: [CommandDefinition] = [
         CommandDefinition(id: "project", name: "project", shortcut: "p", icon: "folder", description: "Switch project directory"),
-        CommandDefinition(id: "histories", name: "histories", shortcut: "h", icon: "clock.arrow.circlepath", description: "View session history"),
+        CommandDefinition(id: "history", name: "history", shortcut: "h", icon: "clock.arrow.circlepath", description: "View session history"),
         CommandDefinition(id: "settings", name: "settings", shortcut: "s", icon: "gearshape", description: "Open settings"),
         CommandDefinition(id: "new", name: "new", shortcut: "n", icon: "plus.circle", description: "Start new session"),
         CommandDefinition(id: "clear", name: "clear", shortcut: nil, icon: "trash", description: "Clear current conversation"),
