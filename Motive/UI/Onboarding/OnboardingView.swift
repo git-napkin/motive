@@ -666,7 +666,7 @@ struct AuroraBrowserStep: View {
                         Spacer()
                         Toggle("", isOn: $configManager.browserUseEnabled)
                             .toggleStyle(.switch)
-                            .tint(Color.Aurora.accent)
+                            .tint(Color.Aurora.primary)
                             .labelsHidden()
                     }
                 }
@@ -687,7 +687,7 @@ struct AuroraBrowserStep: View {
                             Spacer()
                             Toggle("", isOn: $configManager.browserUseHeadedMode)
                                 .toggleStyle(.switch)
-                                .tint(Color.Aurora.accent)
+                                .tint(Color.Aurora.primary)
                                 .labelsHidden()
                         }
                     }

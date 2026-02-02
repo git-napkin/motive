@@ -18,8 +18,10 @@ struct SkillFrontmatter: Codable, Equatable {
     var name: String = ""
     var description: String = ""
     var metadataRaw: String?
-    var disableModelInvocation: Bool = false
-    var userInvocable: Bool = true
+    // Official AgentSkills spec fields
+    var license: String?
+    var compatibility: String?
+    var allowedTools: [String]?
 }
 
 struct SkillRequirements: Codable, Equatable {
@@ -37,11 +39,36 @@ struct SkillMetadata: Codable, Equatable {
     var homepage: String?
     var requires: SkillRequirements?
     var skillKey: String?
+    var install: [SkillInstallSpec]?
 }
 
-struct SkillInvocationPolicy: Codable, Equatable {
-    var disableModelInvocation: Bool = false
-    var userInvocable: Bool = true
+// MARK: - Install Spec (OpenClaw compatible)
+
+enum InstallKind: String, Codable, Equatable {
+    case brew
+    case node
+    case go
+    case uv
+    case apt
+    case download
+}
+
+struct SkillInstallSpec: Codable, Equatable {
+    var id: String?
+    var kind: InstallKind
+    var label: String?
+    var bins: [String]?
+    var os: [String]?
+    
+    // Kind-specific fields
+    var formula: String?      // brew
+    var package: String?      // node, uv, apt
+    var module: String?       // go
+    var url: String?          // download
+    var archive: String?      // download (tar.gz, tar.bz2, zip)
+    var extract: Bool?        // download
+    var stripComponents: Int? // download
+    var targetDir: String?    // download
 }
 
 enum SkillWiring: Equatable {
@@ -76,7 +103,6 @@ struct SkillEntry: Equatable, Identifiable {
     var source: SkillSource
     var frontmatter: SkillFrontmatter
     var metadata: SkillMetadata?
-    var invocation: SkillInvocationPolicy
     var wiring: SkillWiring
     var eligibility: SkillEligibility
 }

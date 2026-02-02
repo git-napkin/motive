@@ -69,6 +69,7 @@ enum L10n {
         static let advancedSubtitle = "settings.tab.advanced.subtitle".localized
         static let skills = "settings.tab.skills".localized
         static let skillsSubtitle = "settings.tab.skills.subtitle".localized
+        static let aboutSubtitle = "settings.tab.about.subtitle".localized
         
         // General
         static let startup = "settings.general.startup".localized

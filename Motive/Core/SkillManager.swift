@@ -109,41 +109,18 @@ final class SkillManager {
         }
     }
     
-    /// Generate SKILL.md content in OpenCode's expected format
+    /// Generate SKILL.md content following official AgentSkills spec
     private func generateSkillMd(for skill: Skill) -> String {
-        let disableModelInvocation = shouldDisableModelInvocation(for: skill)
-        let userInvocable = !disableModelInvocation
         return """
 ---
 name: \(skill.id)
 description: \(skill.description)
-disable-model-invocation: \(disableModelInvocation ? "true" : "false")
-user-invocable: \(userInvocable ? "true" : "false")
 ---
 
 # \(skill.name)
 
 \(skill.content)
 """
-    }
-
-    private func shouldDisableModelInvocation(for skill: Skill) -> Bool {
-        if shouldAllowModelInvocation(skillId: skill.id) {
-            return false
-        }
-        switch skill.type {
-        case .mcpTool, .capability, .rule, .instruction:
-            return true
-        }
-    }
-
-    private func shouldAllowModelInvocation(skillId: String) -> Bool {
-        switch skillId {
-        case "ask-user-question", "file-permission":
-            return true
-        default:
-            return false
-        }
     }
     
     /// Generate combined system prompt from all skills

@@ -95,10 +95,11 @@ enum SkillGating {
     }
 
     private static func hasBinary(_ bin: String) -> Bool {
-        let pathEnv = ProcessInfo.processInfo.environment["PATH"] ?? ""
-        let parts = pathEnv.split(separator: ":").map(String.init).filter { !$0.isEmpty }
-        for part in parts {
-            let candidate = (part as NSString).appendingPathComponent(bin)
+        // Use CommandRunner's effectivePaths which includes common tool locations
+        // GUI apps don't inherit shell PATH, so we need extended paths
+        let paths = CommandRunner.effectivePaths()
+        for path in paths {
+            let candidate = (path as NSString).appendingPathComponent(bin)
             if FileManager.default.isExecutableFile(atPath: candidate) {
                 return true
             }
@@ -113,6 +114,121 @@ enum SkillGating {
         }
         let lower = value.lowercased()
         return !(lower == "false" || lower == "0" || lower == "no")
+    }
+    
+    // MARK: - Status Building
+    
+    static func buildStatus(
+        entry: SkillEntry,
+        config: SkillsConfig,
+        commandRunner: CommandRunnerProtocol,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        platform: String = SkillPlatform.current
+    ) -> SkillStatusEntry {
+        let eligibility = evaluate(entry: entry, config: config, environment: environment, platform: platform)
+        let missing = detectMissingDeps(entry: entry, commandRunner: commandRunner, config: config, environment: environment)
+        let installOptions = resolveInstallOptions(entry: entry, commandRunner: commandRunner, platform: platform)
+        let skillKey = resolveSkillKey(entry)
+        let entryConfig = config.entries[skillKey] ?? config.entries[entry.name]
+        
+        // Managed skills default to disabled (user must explicitly enable)
+        // Bundled and workspace skills default to enabled
+        let disabled: Bool
+        if let explicitEnabled = entryConfig?.enabled {
+            disabled = !explicitEnabled
+        } else {
+            // No explicit config: managed defaults off, others default on
+            disabled = (entry.source == .managed || entry.source == .extra)
+        }
+        
+        return SkillStatusEntry(
+            entry: entry,
+            eligible: eligibility.isEligible,
+            disabled: disabled,
+            missing: missing,
+            installOptions: installOptions
+        )
+    }
+    
+    static func detectMissingDeps(
+        entry: SkillEntry,
+        commandRunner: CommandRunnerProtocol,
+        config: SkillsConfig,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> SkillMissingDeps {
+        var missing = SkillMissingDeps()
+        let skillKey = resolveSkillKey(entry)
+        let skillConfig = config.entries[skillKey] ?? config.entries[entry.name]
+        
+        guard let requires = entry.metadata?.requires else {
+            return missing
+        }
+        
+        // Check bins
+        missing.bins = requires.bins.filter { !commandRunner.hasBinary($0) }
+        
+        // Check env
+        for envName in requires.env {
+            if environment[envName]?.isEmpty == false {
+                continue
+            }
+            if let configEnv = skillConfig?.env[envName], !configEnv.isEmpty {
+                continue
+            }
+            if let apiKey = skillConfig?.apiKey,
+               !apiKey.isEmpty,
+               entry.metadata?.primaryEnv == envName {
+                continue
+            }
+            missing.env.append(envName)
+        }
+        
+        // Check config
+        for configPath in requires.config {
+            if !isConfigPathTruthy(configPath, entryConfig: skillConfig) {
+                missing.config.append(configPath)
+            }
+        }
+        
+        return missing
+    }
+    
+    static func resolveInstallOptions(
+        entry: SkillEntry,
+        commandRunner: CommandRunnerProtocol,
+        platform: String = SkillPlatform.current
+    ) -> [SkillInstallOption] {
+        guard let installSpecs = entry.metadata?.install else { return [] }
+        
+        return installSpecs.enumerated().compactMap { index, spec in
+            // Check OS match
+            if let osList = spec.os, !osList.isEmpty, !osList.contains(platform) {
+                return nil
+            }
+            
+            let id = spec.id ?? "\(spec.kind.rawValue)-\(index)"
+            let label = spec.label ?? "Install via \(spec.kind.rawValue)"
+            let available = isInstallerAvailable(spec.kind, commandRunner: commandRunner)
+            
+            return SkillInstallOption(id: id, label: label, kind: spec.kind, available: available)
+        }
+    }
+    
+    private static func isInstallerAvailable(_ kind: InstallKind, commandRunner: CommandRunnerProtocol) -> Bool {
+        switch kind {
+        case .brew:
+            return commandRunner.hasBinary("brew")
+        case .node:
+            return commandRunner.hasBinary("npm") || commandRunner.hasBinary("pnpm")
+        case .go:
+            return commandRunner.hasBinary("go")
+        case .uv:
+            return commandRunner.hasBinary("uv")
+        case .apt:
+            return commandRunner.hasBinary("apt")
+        case .download:
+            return true
+        }
     }
 }
 

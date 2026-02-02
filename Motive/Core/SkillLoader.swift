@@ -67,11 +67,6 @@ enum SkillLoader {
         }
 
         let metadata = parseMetadata(from: frontmatter.metadataRaw)
-        let invocation = SkillInvocationPolicy(
-            disableModelInvocation: frontmatter.disableModelInvocation,
-            userInvocable: frontmatter.userInvocable
-        )
-
         let wiring = resolveWiring(in: directory)
         let eligibility = SkillEligibility(isEligible: true, reasons: [])
 
@@ -82,7 +77,6 @@ enum SkillLoader {
             source: source,
             frontmatter: frontmatter,
             metadata: metadata,
-            invocation: invocation,
             wiring: wiring,
             eligibility: eligibility
         )
@@ -150,9 +144,14 @@ enum SkillLoader {
             frontmatterLines.append(line)
         }
 
-        for line in frontmatterLines {
+        var lineIndex = 0
+        while lineIndex < frontmatterLines.count {
+            let line = frontmatterLines[lineIndex]
             let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
-            guard parts.count == 2 else { continue }
+            guard parts.count == 2 else {
+                lineIndex += 1
+                continue
+            }
             let key = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
             let value = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -162,19 +161,99 @@ enum SkillLoader {
             case "description":
                 frontmatter.description = value
             case "metadata":
-                frontmatter.metadataRaw = value
-            case "disable-model-invocation":
-                frontmatter.disableModelInvocation = parseBool(value)
-            case "user-invocable":
-                frontmatter.userInvocable = parseBool(value, defaultValue: true)
+                // Handle multi-line metadata (JSON/JSON5 block)
+                let (metadataValue, linesConsumed) = parseMultilineValue(
+                    startValue: value,
+                    lines: frontmatterLines,
+                    startIndex: lineIndex
+                )
+                frontmatter.metadataRaw = metadataValue
+                lineIndex += linesConsumed
+            case "license":
+                frontmatter.license = value
+            case "compatibility":
+                frontmatter.compatibility = value
+            case "allowed-tools":
+                frontmatter.allowedTools = value.split(separator: " ").map { String($0) }
             default:
                 break
             }
+            lineIndex += 1
         }
 
         let bodyLines = lines.dropFirst(bodyStartIndex)
         let body = bodyLines.joined(separator: "\n")
         return (frontmatter, body)
+    }
+    
+    /// Parse a potentially multi-line value (for metadata JSON blocks)
+    /// Returns the combined value and number of additional lines consumed
+    private static func parseMultilineValue(
+        startValue: String,
+        lines: [Substring],
+        startIndex: Int
+    ) -> (String, Int) {
+        // If value is complete on one line (has balanced braces or no braces)
+        let trimmed = startValue.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty && !trimmed.hasPrefix("{") {
+            // Single-line value without braces
+            return (startValue, 0)
+        }
+        
+        if trimmed.isEmpty || trimmed == "{" {
+            // Multi-line: collect lines until braces are balanced
+            var collected: [String] = []
+            if !trimmed.isEmpty {
+                collected.append(trimmed)
+            }
+            var braceCount = trimmed.filter { $0 == "{" }.count - trimmed.filter { $0 == "}" }.count
+            var linesConsumed = 0
+            
+            for i in (startIndex + 1)..<lines.count {
+                let nextLine = String(lines[i])
+                let nextTrimmed = nextLine.trimmingCharacters(in: .whitespaces)
+                
+                // Check if this line starts a new key (not indented, has colon)
+                if !nextLine.hasPrefix(" ") && !nextLine.hasPrefix("\t") && nextTrimmed.contains(":") && braceCount == 0 {
+                    break
+                }
+                
+                collected.append(nextLine)
+                linesConsumed += 1
+                braceCount += nextLine.filter { $0 == "{" }.count - nextLine.filter { $0 == "}" }.count
+                
+                if braceCount <= 0 {
+                    break
+                }
+            }
+            
+            return (collected.joined(separator: "\n"), linesConsumed)
+        }
+        
+        // Check if braces are already balanced
+        let openCount = trimmed.filter { $0 == "{" }.count
+        let closeCount = trimmed.filter { $0 == "}" }.count
+        if openCount == closeCount {
+            return (startValue, 0)
+        }
+        
+        // Collect more lines until balanced
+        var collected: [String] = [trimmed]
+        var braceCount = openCount - closeCount
+        var linesConsumed = 0
+        
+        for i in (startIndex + 1)..<lines.count {
+            let nextLine = String(lines[i])
+            collected.append(nextLine)
+            linesConsumed += 1
+            braceCount += nextLine.filter { $0 == "{" }.count - nextLine.filter { $0 == "}" }.count
+            
+            if braceCount <= 0 {
+                break
+            }
+        }
+        
+        return (collected.joined(separator: "\n"), linesConsumed)
     }
 
     private static func parseMetadata(from raw: String?) -> SkillMetadata? {
@@ -207,7 +286,34 @@ enum SkillLoader {
             metadata.requires = req
         }
 
+        if let installArray = metadataObject["install"] as? [[String: Any]] {
+            metadata.install = installArray.compactMap { parseInstallSpec($0) }
+        }
+
         return metadata
+    }
+
+    private static func parseInstallSpec(_ raw: [String: Any]) -> SkillInstallSpec? {
+        guard let kindRaw = raw["kind"] as? String,
+              let kind = InstallKind(rawValue: kindRaw.lowercased()) else {
+            return nil
+        }
+
+        return SkillInstallSpec(
+            id: raw["id"] as? String,
+            kind: kind,
+            label: raw["label"] as? String,
+            bins: raw["bins"] as? [String],
+            os: raw["os"] as? [String],
+            formula: raw["formula"] as? String,
+            package: raw["package"] as? String,
+            module: raw["module"] as? String,
+            url: raw["url"] as? String,
+            archive: raw["archive"] as? String,
+            extract: raw["extract"] as? Bool,
+            stripComponents: raw["stripComponents"] as? Int,
+            targetDir: raw["targetDir"] as? String
+        )
     }
 
     private static func parseStringList(_ value: Any?) -> [String] {

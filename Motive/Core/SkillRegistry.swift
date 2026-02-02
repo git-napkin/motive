@@ -75,8 +75,20 @@ final class SkillRegistry: ObservableObject {
 
     func promptEntries() -> [SkillEntry] {
         eligibleEntries().filter { entry in
-            !entry.invocation.disableModelInvocation && !isSystemToolEntry(entry)
+            !shouldExcludeFromPrompt(entry) && !isSystemToolEntry(entry)
         }
+    }
+    
+    /// Internal configuration: which skills should NOT appear in the prompt
+    /// These skills are provided via MCP tools - AI uses them via tool calls, not prompt listing
+    private func shouldExcludeFromPrompt(_ entry: SkillEntry) -> Bool {
+        let systemMcpSkills: Set<String> = [
+            "ask-user-question",    // MCP tool
+            "file-permission",      // MCP tool
+            "safe-file-deletion",   // Rule (enforced by file-permission)
+            "browser-automation",   // Capability (external binary)
+        ]
+        return systemMcpSkills.contains(entry.name)
     }
 
     func mcpEntries() -> [SkillEntry] {
@@ -146,17 +158,10 @@ final class SkillRegistry: ObservableObject {
             } else {
                 skillPath = skill.id
             }
-            let disableModelInvocation = shouldDisableModelInvocation(for: skill)
             let frontmatter = SkillFrontmatter(
                 name: skill.id,
                 description: skill.description,
-                metadataRaw: nil,
-                disableModelInvocation: disableModelInvocation,
-                userInvocable: !disableModelInvocation
-            )
-            let invocation = SkillInvocationPolicy(
-                disableModelInvocation: disableModelInvocation,
-                userInvocable: !disableModelInvocation
+                metadataRaw: nil
             )
             return SkillEntry(
                 name: skill.id,
@@ -165,32 +170,12 @@ final class SkillRegistry: ObservableObject {
                 source: .bundled,
                 frontmatter: frontmatter,
                 metadata: nil,
-                invocation: invocation,
                 wiring: .none,
                 eligibility: SkillEligibility(isEligible: true, reasons: [])
             )
         }
         entries.append(contentsOf: skillEntries)
         return entries
-    }
-
-    private func shouldDisableModelInvocation(for skill: Skill) -> Bool {
-        if shouldAllowModelInvocation(skillId: skill.id) {
-            return false
-        }
-        switch skill.type {
-        case .mcpTool, .capability, .rule, .instruction:
-            return true
-        }
-    }
-
-    private func shouldAllowModelInvocation(skillId: String) -> Bool {
-        switch skillId {
-        case "ask-user-question", "file-permission":
-            return true
-        default:
-            return false
-        }
     }
 
     private func configureWatcher() {

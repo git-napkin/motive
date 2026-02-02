@@ -1,8 +1,6 @@
 ---
 name: ask-user-question
 description: Ask the user a question via the Motive UI dialog.
-disable-model-invocation: false
-user-invocable: false
 ---
 
 # AskUserQuestion

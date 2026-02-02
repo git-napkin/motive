@@ -12,7 +12,6 @@ struct SkillLoaderTests {
                 source: source,
                 frontmatter: SkillFrontmatter(name: name, description: description),
                 metadata: nil,
-                invocation: SkillInvocationPolicy(),
                 wiring: .none,
                 eligibility: SkillEligibility(isEligible: true, reasons: [])
             )
@@ -77,6 +76,133 @@ metadata: { "openclaw": { "requires": { "env": ["SLACK_TOKEN"], }, "primaryEnv":
             } else {
                 #expect(false, "Expected mcp wiring to take precedence over tool.json")
             }
+        }
+    }
+    
+    @Test func parsesLicenseAndCompatibility() async throws {
+        try withTempDirectory { dir in
+            let skillDir = dir.appendingPathComponent("test-skill")
+            try FileManager.default.createDirectory(at: skillDir, withIntermediateDirectories: true)
+
+            let skillMd = """
+---
+name: test-skill
+description: Test skill with all fields
+license: MIT
+compatibility: Requires docker and git
+---
+
+# Test
+"""
+            try skillMd.write(to: skillDir.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+
+            let entries = SkillLoader.loadEntries(from: dir, source: .managed)
+            let entry = try #require(entries.first)
+            
+            #expect(entry.frontmatter.license == "MIT")
+            #expect(entry.frontmatter.compatibility == "Requires docker and git")
+        }
+    }
+    
+    @Test func parsesAllowedTools() async throws {
+        try withTempDirectory { dir in
+            let skillDir = dir.appendingPathComponent("test-skill")
+            try FileManager.default.createDirectory(at: skillDir, withIntermediateDirectories: true)
+
+            let skillMd = """
+---
+name: test-skill
+description: Test skill
+allowed-tools: Bash Read Write
+---
+
+# Test
+"""
+            try skillMd.write(to: skillDir.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+
+            let entries = SkillLoader.loadEntries(from: dir, source: .managed)
+            let entry = try #require(entries.first)
+            
+            #expect(entry.frontmatter.allowedTools == ["Bash", "Read", "Write"])
+        }
+    }
+    
+    @Test func parsesInstallSpecs() async throws {
+        try withTempDirectory { dir in
+            let skillDir = dir.appendingPathComponent("github")
+            try FileManager.default.createDirectory(at: skillDir, withIntermediateDirectories: true)
+
+            let skillMd = """
+---
+name: github
+description: GitHub CLI skill
+metadata: { "openclaw": { "requires": { "bins": ["gh"] }, "install": [{ "id": "brew", "kind": "brew", "formula": "gh", "label": "Install via brew" }] } }
+---
+
+# GitHub
+"""
+            try skillMd.write(to: skillDir.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+
+            let entries = SkillLoader.loadEntries(from: dir, source: .managed)
+            let entry = try #require(entries.first)
+            
+            #expect(entry.metadata?.requires?.bins == ["gh"])
+            #expect(entry.metadata?.install?.count == 1)
+            
+            let install = try #require(entry.metadata?.install?.first)
+            #expect(install.id == "brew")
+            #expect(install.kind == .brew)
+            #expect(install.formula == "gh")
+            #expect(install.label == "Install via brew")
+        }
+    }
+    
+    @Test func parsesMultilineMetadata() async throws {
+        try withTempDirectory { dir in
+            let skillDir = dir.appendingPathComponent("1password")
+            try FileManager.default.createDirectory(at: skillDir, withIntermediateDirectories: true)
+
+            // This is the exact format used by OpenClaw skills
+            let skillMd = """
+---
+name: 1password
+description: 1Password CLI skill
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "🔐",
+        "requires": { "bins": ["op"] },
+        "install":
+          [
+            {
+              "id": "brew",
+              "kind": "brew",
+              "formula": "1password-cli",
+              "bins": ["op"],
+              "label": "Install 1Password CLI (brew)",
+            },
+          ],
+      },
+  }
+---
+
+# 1Password
+"""
+            try skillMd.write(to: skillDir.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+
+            let entries = SkillLoader.loadEntries(from: dir, source: .managed)
+            let entry = try #require(entries.first)
+            
+            #expect(entry.name == "1password")
+            #expect(entry.metadata?.emoji == "🔐")
+            #expect(entry.metadata?.requires?.bins == ["op"])
+            #expect(entry.metadata?.install?.count == 1)
+            
+            let install = try #require(entry.metadata?.install?.first)
+            #expect(install.id == "brew")
+            #expect(install.kind == .brew)
+            #expect(install.formula == "1password-cli")
         }
     }
 }

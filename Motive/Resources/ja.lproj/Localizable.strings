@@ -55,6 +55,7 @@
 "settings.tab.ai_provider.subtitle" = "AIプロバイダーとAPI認証情報の設定";
 "settings.tab.skills" = "スキル";
 "settings.tab.skills.subtitle" = "スキルとツール連携の管理";
+"settings.tab.about.subtitle" = "アプリ情報とコンポーネントのステータス";
 "settings.tab.permissions" = "権限";
 "settings.tab.permissions.subtitle" = "ファイル操作ポリシーと安全ルール";
 "settings.tab.advanced" = "詳細";

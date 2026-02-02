@@ -11,7 +11,6 @@ struct SkillMcpConfigTests {
             source: .managed,
             frontmatter: SkillFrontmatter(name: "slack", description: "Slack"),
             metadata: nil,
-            invocation: SkillInvocationPolicy(),
             wiring: .mcp(SkillMcpSpec(type: "local", command: ["/bin/echo", "ok"], environment: [:], timeoutMs: 1000, enabled: true)),
             eligibility: SkillEligibility(isEligible: true, reasons: [])
         )
@@ -22,7 +21,6 @@ struct SkillMcpConfigTests {
             source: .managed,
             frontmatter: SkillFrontmatter(name: "bin-tool", description: "Bin"),
             metadata: nil,
-            invocation: SkillInvocationPolicy(),
             wiring: .bin(SkillToolSpec(command: "/bin/ls", args: [])),
             eligibility: SkillEligibility(isEligible: true, reasons: [])
         )

@@ -55,6 +55,7 @@
 "settings.tab.ai_provider.subtitle" = "Configure your AI provider and API credentials";
 "settings.tab.skills" = "Skills";
 "settings.tab.skills.subtitle" = "Manage installed skills and tool wiring";
+"settings.tab.about.subtitle" = "Application info and component status";
 "settings.tab.permissions" = "Permissions";
 "settings.tab.permissions.subtitle" = "File operation policies and safety rules";
 "settings.tab.advanced" = "Advanced";

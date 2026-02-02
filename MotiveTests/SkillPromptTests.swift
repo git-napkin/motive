@@ -12,7 +12,6 @@ struct SkillPromptTests {
                 source: .managed,
                 frontmatter: SkillFrontmatter(name: "slack", description: "Slack skill"),
                 metadata: nil,
-                invocation: SkillInvocationPolicy(),
                 wiring: .none,
                 eligibility: SkillEligibility(isEligible: true, reasons: [])
             )

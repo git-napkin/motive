@@ -88,7 +88,6 @@ private func makeEntry(name: String, source: SkillSource) -> SkillEntry {
         source: source,
         frontmatter: SkillFrontmatter(name: name, description: "\(name) desc"),
         metadata: nil,
-        invocation: SkillInvocationPolicy(),
         wiring: .none,
         eligibility: SkillEligibility(isEligible: true, reasons: [])
     )
