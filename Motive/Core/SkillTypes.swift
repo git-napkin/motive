@@ -40,6 +40,12 @@ struct SkillMetadata: Codable, Equatable {
     var requires: SkillRequirements?
     var skillKey: String?
     var install: [SkillInstallSpec]?
+    
+    /// Override default enabled state for bundled skills.
+    /// - `true`: Skill is enabled by default (system skills)
+    /// - `false`: Skill is disabled by default (optional bundled skills)
+    /// - `nil`: Use source-based defaults (bundled=enabled, managed=disabled)
+    var defaultEnabled: Bool?
 }
 
 // MARK: - Install Spec (OpenClaw compatible)

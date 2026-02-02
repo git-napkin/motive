@@ -1,6 +1,7 @@
 ---
 name: ask-user-question
 description: Ask the user a question via the Motive UI dialog.
+metadata: { "defaultEnabled": true }
 ---
 
 # AskUserQuestion

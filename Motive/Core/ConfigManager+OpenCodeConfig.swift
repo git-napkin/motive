@@ -130,26 +130,20 @@ Never attempt to prompt via CLI or rely on terminal prompts - they will not work
             let skillKey = entry.metadata?.skillKey ?? entry.name
             let entryConfig = skillsConfig.entries[skillKey] ?? skillsConfig.entries[entry.name]
             
-            // Check if skill is enabled
+            // Check if skill is enabled using priority:
+            // 1. User explicit config > 2. metadata.defaultEnabled (defaults to false)
             let isEnabled: Bool
             if let explicitEnabled = entryConfig?.enabled {
                 isEnabled = explicitEnabled
             } else {
-                // Bundled/workspace skills default to enabled
-                // Managed/extra skills default to disabled
-                isEnabled = (entry.source == .bundled || entry.source == .workspace)
+                // Use metadata.defaultEnabled, defaulting to false if not specified
+                isEnabled = entry.metadata?.defaultEnabled ?? false
             }
             
             if isEnabled {
                 skillPermissions[entry.name] = "allow"
                 Log.config(" Skill '\(entry.name)' is enabled -> allow")
             }
-        }
-        
-        // Always allow system MCP tools (bundled by Motive)
-        let systemSkills = ["ask-user-question", "file-permission", "safe-file-deletion"]
-        for skill in systemSkills {
-            skillPermissions[skill] = "allow"
         }
         
         // Build config - always include permission: "allow"

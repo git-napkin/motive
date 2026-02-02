@@ -276,6 +276,7 @@ enum SkillLoader {
         metadata.emoji = metadataObject["emoji"] as? String
         metadata.homepage = metadataObject["homepage"] as? String
         metadata.skillKey = metadataObject["skillKey"] as? String
+        metadata.defaultEnabled = metadataObject["defaultEnabled"] as? Bool
 
         if let requires = metadataObject["requires"] as? [String: Any] {
             var req = SkillRequirements()

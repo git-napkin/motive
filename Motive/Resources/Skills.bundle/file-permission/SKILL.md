@@ -1,6 +1,7 @@
 ---
 name: file-permission
 description: Request user permission before write operations.
+metadata: { "defaultEnabled": true }
 ---
 
 # request_file_permission

@@ -19,20 +19,20 @@ enum SkillGating {
         let skillConfig = config.entries[skillKey] ?? config.entries[entry.name]
 
         // Check enabled/disabled state
-        // - Managed and extra skills default to disabled (must be explicitly enabled)
-        // - Bundled and workspace skills default to enabled (can be explicitly disabled)
-        let isManagedOrExtra = (entry.source == .managed || entry.source == .extra)
-        
+        // Priority: 1. User explicit config > 2. metadata.defaultEnabled (defaults to false)
         if let explicitEnabled = skillConfig?.enabled {
             // User has explicitly set enabled state
             if !explicitEnabled {
                 reasons.append("disabled")
                 return SkillEligibility(isEligible: false, reasons: reasons)
             }
-        } else if isManagedOrExtra {
-            // Managed/extra skills with no config default to disabled
-            reasons.append("disabled_by_default")
-            return SkillEligibility(isEligible: false, reasons: reasons)
+        } else {
+            // Use metadata.defaultEnabled, defaulting to false if not specified
+            let defaultEnabled = entry.metadata?.defaultEnabled ?? false
+            if !defaultEnabled {
+                reasons.append("disabled_by_default")
+                return SkillEligibility(isEligible: false, reasons: reasons)
+            }
         }
 
         if entry.source == .bundled, !isBundledAllowed(entry: entry, config: config) {
@@ -143,14 +143,15 @@ enum SkillGating {
         let skillKey = resolveSkillKey(entry)
         let entryConfig = config.entries[skillKey] ?? config.entries[entry.name]
         
-        // Managed skills default to disabled (user must explicitly enable)
-        // Bundled and workspace skills default to enabled
+        // Determine disabled state using priority:
+        // 1. User explicit config > 2. metadata.defaultEnabled (defaults to false)
         let disabled: Bool
         if let explicitEnabled = entryConfig?.enabled {
             disabled = !explicitEnabled
         } else {
-            // No explicit config: managed defaults off, others default on
-            disabled = (entry.source == .managed || entry.source == .extra)
+            // Use metadata.defaultEnabled, defaulting to false if not specified
+            let defaultEnabled = entry.metadata?.defaultEnabled ?? false
+            disabled = !defaultEnabled
         }
         
         return SkillStatusEntry(

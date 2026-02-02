@@ -163,13 +163,17 @@ final class SkillRegistry: ObservableObject {
                 description: skill.description,
                 metadataRaw: nil
             )
+            // System skills are enabled by default
+            var metadata = SkillMetadata()
+            metadata.defaultEnabled = true
+            
             return SkillEntry(
                 name: skill.id,
                 description: skill.description,
                 filePath: skillPath,
                 source: .bundled,
                 frontmatter: frontmatter,
-                metadata: nil,
+                metadata: metadata,
                 wiring: .none,
                 eligibility: SkillEligibility(isEligible: true, reasons: [])
             )
