@@ -143,13 +143,13 @@ Anything an AI coding agent can do: refactor code, generate files, run scripts, 
 - [x] **Browser automation** — Full support for web scraping, form filling, and browser-based workflows
 - [x] **Skills System** — 50+ bundled skills (weather, GitHub, Slack, Notion, etc.) with easy enable/disable in Settings
 - [x] **Custom Skills** — User-defined skills via `~/.motive/skills/` directory, no code required
+- [x] **Personal Profile** — Store personal context (name, preferences, work style) for more relevant AI responses
 
 ### In Progress
 - [ ] **Multi-task queue** — Task queuing with parallel execution for independent tasks and sequential processing for dependent ones
 - [ ] **Task resume** — Interrupt and resume long-running tasks, preserving state across app restarts
 
 ### Planned
-- [x] **Personal Profile** — Store personal context (name, preferences, work style) for more relevant AI responses
 - [ ] **Memory & RAG** — Long-term memory with retrieval-augmented generation for context-aware assistance
 - [ ] **Task templates** — Save and reuse common task patterns with customizable parameters
 
