@@ -18,7 +18,7 @@ final class CommandBarWindowController {
     private var currentHeight: CGFloat = CommandBarWindowController.heights["idle"] ?? 100
 
     // Must match SwiftUI CommandBarView width
-    private static let panelWidth: CGFloat = 620
+    private static let panelWidth: CGFloat = 680
     
     /// Whether the window has been shown at least once (for lazy initialization)
     private var hasBeenShown = false
@@ -252,21 +252,32 @@ final class KeyablePanel: NSPanel {
     override var canBecomeMain: Bool { true }
 
     /// Apply shared floating-panel style used by CommandBar and Drawer.
+    ///
+    /// Rounded corners: the NSThemeFrame (from `.titled`) handles window-level
+    /// clipping and border — they share the same system corner radius, so no
+    /// double-outline. SwiftUI `.clipShape()` on each view provides the visual
+    /// content rounding at our custom radius.
+    ///
+    /// Shadow: system shadow via `hasShadow = true`, managed by the window
+    /// server. No custom NSShadow needed.
     func applyFloatingPanelStyle() {
         isFloatingPanel = true
         level = .floating
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
+        hidesOnDeactivate = false
+
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         standardWindowButton(.closeButton)?.isHidden = true
         standardWindowButton(.miniaturizeButton)?.isHidden = true
         standardWindowButton(.zoomButton)?.isHidden = true
-        hidesOnDeactivate = false
+
+        // Do NOT set cornerRadius / masksToBounds on contentView.
+        // That creates a second clipping shape that conflicts with the
+        // NSThemeFrame's own border, producing the visible double-outline.
         contentView?.wantsLayer = true
-        contentView?.layer?.cornerRadius = AuroraRadius.xl
-        contentView?.layer?.masksToBounds = true
     }
 
     /// Find the screen that currently contains the mouse pointer.

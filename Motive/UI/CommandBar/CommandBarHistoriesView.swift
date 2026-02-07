@@ -134,7 +134,7 @@ private struct HistoryListItem: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(Color.Aurora.textMuted)
                             .frame(width: 24, height: 24)
-                            .background(Color.Aurora.surface)
+                            .background(Color.Aurora.glassOverlay.opacity(0.1))
                             .clipShape(Circle())
                             .onTapGesture {
                                 onRequestDelete()
@@ -153,7 +153,7 @@ private struct HistoryListItem: View {
             .padding(.vertical, AuroraSpacing.space3)
             .background(
                 RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                    .fill(isSelected ? Color.Aurora.accent.opacity(0.1) : (isHovering ? Color.Aurora.surfaceElevated : Color.clear))
+                    .fill(isSelected ? Color.Aurora.accent.opacity(0.1) : (isHovering ? Color.Aurora.glassOverlay.opacity(0.06) : Color.clear))
             )
             .overlay(
                 HStack {

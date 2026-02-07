@@ -79,8 +79,7 @@ struct DrawerView: View {
             }
         }
         .frame(width: 400, height: 600)
-        // Window handles: cornerRadius, masksToBounds, native shadow
-        // No clipShape/shadow here - handled at window layer (like CommandBar)
+        .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
                 .strokeBorder(Color.Aurora.border.opacity(0.5), lineWidth: 0.5)

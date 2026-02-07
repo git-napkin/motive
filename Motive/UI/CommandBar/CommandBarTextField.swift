@@ -22,11 +22,25 @@ struct CommandBarTextField: NSViewRepresentable {
         textField.delegate = context.coordinator
         textField.isBordered = false
         textField.drawsBackground = false
-        textField.font = NSFont.systemFont(ofSize: 16, weight: .regular)
+        textField.font = NSFont.systemFont(ofSize: 17, weight: .regular)
         textField.textColor = NSColor(Color.Aurora.textPrimary)
         textField.focusRingType = .none
         textField.cell?.truncatesLastVisibleLine = true
-        textField.placeholderString = placeholder
+
+        // Custom placeholder color for readability on translucent glass
+        // System placeholderTextColor (~#C5C5C7) is nearly invisible on bright glass
+        let placeholderColor = NSColor(name: nil) { appearance in
+            appearance.isDark
+                ? NSColor(white: 1.0, alpha: 0.25)
+                : NSColor(hex: "757575")
+        }
+        textField.placeholderAttributedString = NSAttributedString(
+            string: placeholder,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 17, weight: .regular),
+                .foregroundColor: placeholderColor,
+            ]
+        )
 
         // Set up keyboard event monitor
         context.coordinator.setupKeyboardMonitor()
@@ -47,7 +61,19 @@ struct CommandBarTextField: NSViewRepresentable {
         } else if nsView.stringValue != text {
             nsView.stringValue = text
         }
-        nsView.placeholderString = placeholder
+        // Update placeholder with custom color (matches makeNSView)
+        let placeholderColor = NSColor(name: nil) { appearance in
+            appearance.isDark
+                ? NSColor(white: 1.0, alpha: 0.25)
+                : NSColor(hex: "757575")
+        }
+        nsView.placeholderAttributedString = NSAttributedString(
+            string: placeholder,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 17, weight: .regular),
+                .foregroundColor: placeholderColor,
+            ]
+        )
         nsView.isEnabled = !isDisabled
 
         // Update callbacks

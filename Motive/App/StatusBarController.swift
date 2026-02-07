@@ -278,6 +278,16 @@ final class StatusBarController {
         }
     }
     
+    /// Resolve the correct text color for the menu bar based on the
+    /// status button's effective appearance. The menu bar switches between
+    /// vibrant-dark (light text) and vibrant-light (dark text) depending
+    /// on the desktop wallpaper behind it.
+    private func menuBarTextColor(for button: NSStatusBarButton) -> NSColor {
+        let isDark = button.effectiveAppearance
+            .bestMatch(from: [.vibrantDark, .vibrantLight]) == .vibrantDark
+        return isDark ? .white : .black
+    }
+
     private func updateShimmerTitle(_ text: String, button: NSStatusBarButton, phase: Int) {
         let baseAlpha: CGFloat = 0.4
         let highlightAlpha: CGFloat = 1.0
@@ -288,6 +298,7 @@ final class StatusBarController {
         
         let attributedString = NSMutableAttributedString(string: " \(text)")
         let font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        let baseColor = menuBarTextColor(for: button)
         
         // Apply gradient effect per character
         for i in 0..<attributedString.length {
@@ -295,7 +306,7 @@ final class StatusBarController {
             let distance = abs(charProgress - highlightCenter)
             let alpha = max(baseAlpha, highlightAlpha - distance * 2.5)
             
-            let color = NSColor.controlTextColor.withAlphaComponent(alpha)
+            let color = baseColor.withAlphaComponent(alpha)
             attributedString.addAttributes([
                 .font: font,
                 .foregroundColor: color
@@ -306,8 +317,7 @@ final class StatusBarController {
     }
     
     private func setButtonTitle(_ title: String, button: NSStatusBarButton, alpha: CGFloat = 1.0) {
-        // Use controlTextColor which adapts to system appearance automatically
-        let color = NSColor.controlTextColor.withAlphaComponent(alpha)
+        let color = menuBarTextColor(for: button).withAlphaComponent(alpha)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 12, weight: .medium),
             .foregroundColor: color

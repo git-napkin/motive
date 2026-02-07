@@ -45,27 +45,55 @@ extension Color {
         // MARK: - Accent Colors (Graphite)
         
         /// Accent start - Light Graphite
-        static let accentStart = Color(hex: "B0B0B0")
+        static var accentStart: Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark ? NSColor(hex: "B0B0B0") : NSColor(hex: "808080")
+            })
+        }
         
         /// Accent middle - Graphite
-        static let accentMid = Color(hex: "8B8B8B")
+        static var accentMid: Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark ? NSColor(hex: "8B8B8B") : NSColor(hex: "636363")
+            })
+        }
         
         /// Accent end - Deep Graphite
-        static let accentEnd = Color(hex: "6E6E6E")
+        static var accentEnd: Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark ? NSColor(hex: "6E6E6E") : NSColor(hex: "4A4A4A")
+            })
+        }
         
         /// Primary accent color
-        static let accent = Color(hex: "8B8B8B")
+        static var accent: Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark ? NSColor(hex: "8B8B8B") : NSColor(hex: "636363")
+            })
+        }
         
         // MARK: - Primary Colors (Graphite)
         
         /// Primary color - Graphite
-        static let primary = Color(hex: "8B8B8B")
+        static var primary: Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark ? NSColor(hex: "8B8B8B") : NSColor(hex: "555555")
+            })
+        }
         
         /// Primary light - for hover
-        static let primaryLight = Color(hex: "A3A3A3")
+        static var primaryLight: Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark ? NSColor(hex: "A3A3A3") : NSColor(hex: "6E6E6E")
+            })
+        }
         
         /// Primary dark - for pressed
-        static let primaryDark = Color(hex: "737373")
+        static var primaryDark: Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark ? NSColor(hex: "737373") : NSColor(hex: "3D3D3D")
+            })
+        }
         
         // MARK: - Semantic Colors (System-aligned)
         
@@ -81,26 +109,38 @@ extension Color {
         /// Info
         static let info = Color(nsColor: .systemBlue)
         
-        // MARK: - Text Colors (System semantic)
+        // MARK: - Text Colors (Adaptive)
         
         /// Primary text
         static var textPrimary: Color {
             Color(nsColor: .labelColor)
         }
         
-        /// Secondary text
+        /// Secondary text — slightly boosted in light mode for readability
         static var textSecondary: Color {
-            Color(nsColor: .secondaryLabelColor)
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark
+                    ? NSColor(white: 1.0, alpha: 0.55)   // ~secondaryLabelColor dark
+                    : NSColor(hex: "6B6B6B")
+            })
         }
         
-        /// Muted text
+        /// Muted text — boosted in light mode for readability on translucent glass
         static var textMuted: Color {
-            Color(nsColor: .tertiaryLabelColor)
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark
+                    ? NSColor(white: 1.0, alpha: 0.25)   // ~tertiaryLabelColor dark
+                    : NSColor(hex: "757575")
+            })
         }
         
         /// Disabled text
         static var textDisabled: Color {
-            Color(nsColor: .quaternaryLabelColor)
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark
+                    ? NSColor(white: 1.0, alpha: 0.10)   // ~quaternaryLabelColor dark
+                    : NSColor(hex: "ABABAB")
+            })
         }
         
         // MARK: - Border Colors
@@ -122,7 +162,13 @@ extension Color {
         }
         
         /// Focus border (Brand accent for visibility)
-        static let borderFocus = Color(hex: "8B8B8B").opacity(0.6)
+        static var borderFocus: Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark
+                    ? NSColor(hex: "8B8B8B").withAlphaComponent(0.6)
+                    : NSColor(hex: "555555").withAlphaComponent(0.5)
+            })
+        }
         
         // MARK: - Gradient Helpers
         
@@ -147,6 +193,18 @@ extension Color {
                 startPoint: .leading,
                 endPoint: .trailing
             )
+        }
+        
+        // MARK: - Glass Overlay Color
+        
+        /// Adaptive overlay for glass/translucent surfaces.
+        /// White in dark mode, black in light mode — used at low opacity
+        /// for separators, subtle button backgrounds, and border tints
+        /// so they remain visible against both light and dark backdrops.
+        static var glassOverlay: Color {
+            Color(nsColor: NSColor(name: nil) { appearance in
+                appearance.isDark ? .white : .black
+            })
         }
         
         // MARK: - Status Colors

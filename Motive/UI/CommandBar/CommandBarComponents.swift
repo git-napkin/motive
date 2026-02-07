@@ -52,7 +52,7 @@ struct CommandListItem: View {
             .padding(.vertical, AuroraSpacing.space2)
             .background(
                 RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                    .fill(isSelected ? Color.Aurora.primary.opacity(0.12) : (isHovering ? Color.Aurora.surfaceElevated : Color.clear))
+                    .fill(isSelected ? Color.Aurora.primary.opacity(0.12) : (isHovering ? Color.Aurora.glassOverlay.opacity(0.06) : Color.clear))
             )
         }
         .buttonStyle(.plain)
@@ -117,7 +117,7 @@ struct ProjectListItem: View {
             .padding(.vertical, AuroraSpacing.space2)
             .background(
                 RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                    .fill(isSelected ? Color.Aurora.primary.opacity(0.12) : (isHovering ? Color.Aurora.surfaceElevated : Color.clear))
+                    .fill(isSelected ? Color.Aurora.primary.opacity(0.12) : (isHovering ? Color.Aurora.glassOverlay.opacity(0.06) : Color.clear))
             )
         }
         .buttonStyle(.plain)
@@ -211,6 +211,45 @@ struct AuroraShortcutBadge: View {
             Text(label)
                 .font(.system(size: 10, weight: .regular))
                 .foregroundColor(Color.Aurora.textSecondary)
+        }
+    }
+}
+
+/// Raycast-style inline shortcut hint: "Label  key  |  Label  key"
+/// Much cleaner than individual bordered badges for the footer.
+struct InlineShortcutHint: View {
+    let items: [(label: String, key: String)]
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+
+    var body: some View {
+        HStack(spacing: AuroraSpacing.space3) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                if index > 0 {
+                    Text("|")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(Color.Aurora.textMuted.opacity(0.5))
+                }
+                HStack(spacing: AuroraSpacing.space1) {
+                    Text(item.label)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundColor(Color.Aurora.textMuted)
+
+                    Text(item.key)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundColor(Color.Aurora.textSecondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous)
+                                .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.08))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous)
+                                .strokeBorder(Color.Aurora.glassOverlay.opacity(isDark ? 0.08 : 0.18), lineWidth: 0.5)
+                        )
+                }
+            }
         }
     }
 }

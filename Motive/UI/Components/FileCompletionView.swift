@@ -114,7 +114,7 @@ private struct FileCompletionItemView: View {
             .padding(.vertical, AuroraSpacing.space2)
             .background(
                 RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                    .fill(isSelected ? Color.Aurora.accent.opacity(0.1) : (isHovering ? Color.Aurora.surfaceElevated : Color.clear))
+                    .fill(isSelected ? Color.Aurora.accent.opacity(0.1) : (isHovering ? Color.Aurora.glassOverlay.opacity(0.06) : Color.clear))
             )
             .overlay(
                 HStack {

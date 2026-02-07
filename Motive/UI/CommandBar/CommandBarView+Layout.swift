@@ -21,13 +21,13 @@ extension CommandBarView {
             if showsAboveContent {
                 aboveInputContent
                 Rectangle()
-                    .fill(Color.Aurora.border.opacity(0.5))
+                    .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.12))
                     .frame(height: 0.5)
             }
             inputAreaView
             if showsBelowContent {
                 Rectangle()
-                    .fill(Color.Aurora.border.opacity(0.5))
+                    .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.12))
                     .frame(height: 0.5)
                 belowInputContent
             } else {
@@ -36,7 +36,7 @@ extension CommandBarView {
             }
             footerView
         }
-        .frame(width: 620, height: currentHeight)
+        .frame(width: 680, height: currentHeight)
         .background(commandBarBackground)
         .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous))
         .overlay(borderOverlay)
@@ -183,14 +183,14 @@ extension CommandBarView {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(Color.Aurora.textSecondary)
                     .frame(width: 24, height: 24)
-                    .background(Color.Aurora.surface)
+                    .background(Color.Aurora.glassOverlay.opacity(0.1))
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Open conversation")
             .accessibilityHint("Opens the conversation drawer")
         }
-        .padding(.horizontal, AuroraSpacing.space5)
+        .padding(.horizontal, AuroraSpacing.space6)
         .padding(.vertical, AuroraSpacing.space3)
     }
     
@@ -269,12 +269,13 @@ extension CommandBarView {
                 .foregroundColor(Color.Aurora.textSecondary)
                 .padding(.horizontal, AuroraSpacing.space3)
                 .padding(.vertical, AuroraSpacing.space2)
-                .background(Color.Aurora.surface)
+                .background(Color.Aurora.glassOverlay.opacity(0.1))
                 .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(Color.Aurora.glassOverlay.opacity(0.06), lineWidth: 0.5))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, AuroraSpacing.space5)
+        .padding(.horizontal, AuroraSpacing.space6)
         .padding(.vertical, AuroraSpacing.space3)
     }
 
@@ -305,12 +306,13 @@ extension CommandBarView {
                     .foregroundColor(Color.Aurora.textSecondary)
                     .padding(.horizontal, AuroraSpacing.space3)
                     .padding(.vertical, AuroraSpacing.space2)
-                    .background(Color.Aurora.surface)
+                    .background(Color.Aurora.glassOverlay.opacity(0.1))
                     .clipShape(Capsule())
+                    .overlay(Capsule().strokeBorder(Color.Aurora.glassOverlay.opacity(0.06), lineWidth: 0.5))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, AuroraSpacing.space5)
+        .padding(.horizontal, AuroraSpacing.space6)
         .padding(.vertical, AuroraSpacing.space3)
     }
 
@@ -347,13 +349,13 @@ extension CommandBarView {
                 if let completion = autocompleteCompletion {
                     HStack(spacing: 0) {
                         // Invisible spacer for the typed text width
-                Text(inputText)
-                    .font(.system(size: 16, weight: .regular))
+                        Text(inputText)
+                            .font(.system(size: 17, weight: .regular))
                             .opacity(0)
 
                         // Gray completion hint
-                Text(completion)
-                    .font(.system(size: 16, weight: .regular))
+                        Text(completion)
+                            .font(.system(size: 17, weight: .regular))
                             .foregroundColor(Color.Aurora.textMuted)
                     }
                 }
@@ -386,19 +388,19 @@ extension CommandBarView {
                     .padding(.vertical, AuroraSpacing.space1)
                     .background(
                         RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous)
-                            .fill(Color.Aurora.surfaceElevated)
+                            .fill(Color.Aurora.glassOverlay.opacity(0.08))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous)
-                            .stroke(Color.Aurora.border.opacity(0.6), lineWidth: 1)
+                            .strokeBorder(Color.Aurora.glassOverlay.opacity(0.1), lineWidth: 0.5)
                     )
             }
 
             // Action button
             actionButton
         }
-        .frame(height: 50)
-        .padding(.horizontal, AuroraSpacing.space5)
+        .frame(height: 54)
+        .padding(.horizontal, AuroraSpacing.space6)
     }
 
     var placeholderText: String {
@@ -471,12 +473,12 @@ extension CommandBarView {
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)
         }
-        .frame(height: 40)
-        .padding(.horizontal, AuroraSpacing.space5)
-        .background(Color.clear)
+        .frame(height: 38)
+        .padding(.horizontal, AuroraSpacing.space6)
+        .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.04 : 0.08))
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(Color.Aurora.border.opacity(0.5))
+                .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.08 : 0.18))
                 .frame(height: 0.5)
         }
     }
@@ -507,68 +509,88 @@ extension CommandBarView {
 
     @ViewBuilder
     var rightFooterContent: some View {
-        HStack(spacing: AuroraSpacing.space4) {
-            if mode.isCommand {
-                AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.select)
-                AuroraShortcutBadge(keys: ["tab"], label: L10n.CommandBar.complete)
-                AuroraShortcutBadge(keys: ["↑↓"], label: L10n.CommandBar.navigate)
-                AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.back)
-            } else if mode.isHistory {
-                AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.open)
-                AuroraShortcutBadge(keys: ["⌘", "⌫"], label: L10n.CommandBar.delete)
-                AuroraShortcutBadge(keys: ["↑↓"], label: L10n.CommandBar.navigate)
-                AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.back)
-            } else if mode.isProjects {
-                AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.select)
-                AuroraShortcutBadge(keys: ["↑↓"], label: L10n.CommandBar.navigate)
-                AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.back)
-            } else {
-                switch mode {
-                case .idle:
-                    AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.run)
-                    AuroraShortcutBadge(keys: ["/"], label: L10n.CommandBar.commands)
-                    AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
-                case .input:
-                    AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.run)
-                    AuroraShortcutBadge(keys: ["/"], label: L10n.CommandBar.commands)
-                    AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
-                case .running:
-                    AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
-                case .completed:
-                    AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.send)
-                    AuroraShortcutBadge(keys: ["⌘", "N"], label: L10n.CommandBar.new)
-                    AuroraShortcutBadge(keys: ["/"], label: L10n.CommandBar.commands)
-                    AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
-                case .error:
-                    AuroraShortcutBadge(keys: ["↵"], label: L10n.CommandBar.retry)
-                    AuroraShortcutBadge(keys: ["/"], label: L10n.CommandBar.commands)
-                    AuroraShortcutBadge(keys: ["esc"], label: L10n.CommandBar.close)
-                default:
-                    EmptyView()
-                }
+        if mode.isCommand {
+            InlineShortcutHint(items: [
+                (L10n.CommandBar.select, "↵"),
+                (L10n.CommandBar.complete, "tab"),
+                (L10n.CommandBar.navigate, "↑↓"),
+                (L10n.CommandBar.back, "esc"),
+            ])
+        } else if mode.isHistory {
+            InlineShortcutHint(items: [
+                (L10n.CommandBar.open, "↵"),
+                (L10n.CommandBar.delete, "⌘⌫"),
+                (L10n.CommandBar.navigate, "↑↓"),
+                (L10n.CommandBar.back, "esc"),
+            ])
+        } else if mode.isProjects {
+            InlineShortcutHint(items: [
+                (L10n.CommandBar.select, "↵"),
+                (L10n.CommandBar.navigate, "↑↓"),
+                (L10n.CommandBar.back, "esc"),
+            ])
+        } else {
+            switch mode {
+            case .idle, .input:
+                InlineShortcutHint(items: [
+                    (L10n.CommandBar.run, "↵"),
+                    (L10n.CommandBar.commands, "/"),
+                    (L10n.CommandBar.close, "esc"),
+                ])
+            case .running:
+                InlineShortcutHint(items: [
+                    (L10n.CommandBar.close, "esc"),
+                ])
+            case .completed:
+                InlineShortcutHint(items: [
+                    (L10n.CommandBar.send, "↵"),
+                    (L10n.CommandBar.new, "⌘N"),
+                    (L10n.CommandBar.commands, "/"),
+                    (L10n.CommandBar.close, "esc"),
+                ])
+            case .error:
+                InlineShortcutHint(items: [
+                    (L10n.CommandBar.retry, "↵"),
+                    (L10n.CommandBar.commands, "/"),
+                    (L10n.CommandBar.close, "esc"),
+                ])
+            default:
+                EmptyView()
             }
         }
     }
 
     // MARK: - Border Overlay
 
-    @ViewBuilder
     var borderOverlay: some View {
-        // Use strokeBorder instead of stroke to keep the line fully inside the shape
-        // This prevents the outer clipShape from cutting off half the border
+        ZStack {
+            // Base border — tinted by mode
+            RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: 0.5)
+
+            // Top-edge inner luminance (mimics light reflection on glass)
+            // Always white — it's a bright highlight at the glass edge
+            RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(isDark ? 0.15 : 0.5), Color.clear],
+                        startPoint: .top,
+                        endPoint: .center
+                    ),
+                    lineWidth: 0.5
+                )
+        }
+    }
+
+    /// Border tint color that adapts to the current mode
+    private var borderColor: Color {
         switch mode {
         case .running:
-            RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .strokeBorder(Color.Aurora.primary.opacity(0.45), lineWidth: 0.5)
-        case .completed:
-            RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .strokeBorder(Color.Aurora.border.opacity(0.5), lineWidth: 0.5)
+            Color.Aurora.primary.opacity(0.45)
         case .error:
-            RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .strokeBorder(Color.Aurora.error.opacity(0.5), lineWidth: 0.5)
+            Color.Aurora.error.opacity(0.5)
         default:
-            RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .strokeBorder(Color.Aurora.border.opacity(0.5), lineWidth: 0.5)
+            Color.Aurora.glassOverlay.opacity(isDark ? 0.08 : 0.15)
         }
     }
 
@@ -576,13 +598,15 @@ extension CommandBarView {
 
     var commandBarBackground: some View {
         ZStack {
+            // Layer 1: Deep vibrancy blur (primary translucency)
             VisualEffectView(
-                material: .hudWindow,
+                material: .popover,
                 blendingMode: .behindWindow,
                 state: .active
             )
+            // Layer 2: Tint overlay — more opaque in light mode for text contrast
             RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .fill(Color.Aurora.background.opacity(0.9))
+                .fill(Color.Aurora.background.opacity(isDark ? 0.45 : 0.65))
         }
     }
 }
