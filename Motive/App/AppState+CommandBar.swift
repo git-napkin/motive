@@ -19,23 +19,47 @@ extension AppState {
             return
         }
         
-        // Only trigger reset if CommandBar is currently hidden
-        // This prevents unnecessary re-renders when already visible
         if !commandBarController.isVisible {
+            // Pre-compute the correct window height BEFORE showing.
+            // Without this, the window briefly shows at the stale height
+            // from a previous mode (e.g., 450px from /command list) because
+            // SwiftUI's onChange(commandBarResetTrigger) fires AFTER show().
+            let targetHeight = expectedCommandBarHeight()
+            commandBarController.updateHeight(to: targetHeight, animated: false)
+            
+            // Trigger recenterAndFocus() which syncs mode and resets stale state
             commandBarResetTrigger += 1
         }
         
         commandBarController.show()
+    }
+    
+    /// Pre-compute the expected command bar height based on current session state.
+    /// Mirrors the mode-selection logic in CommandBarView.recenterAndFocus().
+    private func expectedCommandBarHeight() -> CGFloat {
+        switch sessionStatus {
+        case .running:
+            return CommandBarWindowController.heights["running"] ?? 160
+        case .completed:
+            return CommandBarWindowController.heights["completed"] ?? 160
+        case .failed:
+            return CommandBarWindowController.heights["error"] ?? 160
+        case .idle, .interrupted:
+            if currentSessionRef != nil && !messages.isEmpty {
+                return CommandBarWindowController.heights["completed"] ?? 160
+            } else {
+                return CommandBarWindowController.heights["idle"] ?? 100
+            }
+        }
     }
 
     func hideCommandBar() {
         commandBarController?.hide()
     }
 
-    func updateCommandBarHeight(for modeName: String) {
-        commandBarController?.updateHeightForMode(modeName, animated: false)
-    }
-
+    /// Update the command bar window frame height.
+    /// Called automatically by CommandBarView's onChange(of: currentHeight).
+    /// Also called during showCommandBar() for pre-show sizing.
     func updateCommandBarHeight(to height: CGFloat) {
         commandBarController?.updateHeight(to: height, animated: false)
     }

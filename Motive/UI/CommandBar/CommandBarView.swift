@@ -122,7 +122,6 @@ struct CommandBarView: View {
     @State var deleteCandidateIndex: Int? = nil
     @State var selectedHistoryId: UUID? = nil
     @State var deleteCandidateId: UUID? = nil
-    @State var lastHeightApplied: CGFloat = 0
     @FocusState var isInputFocused: Bool
 
     // @ file completion state
@@ -134,29 +133,37 @@ struct CommandBarView: View {
     var body: some View {
         mainContent
             .onAppear(perform: handleOnAppear)
-        .onChange(of: appState.commandBarResetTrigger) { _, _ in recenterAndFocus() }
-        .onChange(of: inputText) { _, newValue in handleInputChange(newValue) }
-        .onChange(of: mode) { oldMode, newMode in handleModeChange(from: oldMode, to: newMode) }
-        .onChange(of: appState.sessionStatus) { _, newStatus in handleSessionStatusChange(newStatus) }
-        .onKeyPress(.escape, action: { handleEscape(); return .handled })
-        .onKeyPress(.upArrow, action: { handleUpArrow(); return .handled })
-        .onKeyPress(.downArrow, action: { handleDownArrow(); return .handled })
-        .onKeyPress(.tab, action: { handleTab(); return .handled })
-        .onChange(of: showDeleteConfirmation) { _, shouldShow in
-            if shouldShow {
-                showDeleteAlert()
+            .onChange(of: appState.commandBarResetTrigger) { _, _ in
+                recenterAndFocus()
+                // Force-sync: recenterAndFocus resets mode/state, but if
+                // currentHeight evaluates to the same value as before, the
+                // onChange(of: currentHeight) won't fire. Explicitly push
+                // the height to the window to cover that edge case.
+                appState.updateCommandBarHeight(to: currentHeight)
             }
-        }
+            .onChange(of: inputText) { _, newValue in handleInputChange(newValue) }
+            .onChange(of: mode) { oldMode, newMode in handleModeChange(from: oldMode, to: newMode) }
+            .onChange(of: appState.sessionStatus) { _, newStatus in handleSessionStatusChange(newStatus) }
+            // SINGLE source of truth for window height: whenever the SwiftUI-computed
+            // height changes (due to mode, file completion, input, etc.), automatically
+            // sync the NSWindow frame. This replaces all manual updateCommandBarHeight calls.
+            // `initial: true` ensures the first render also syncs the height, covering
+            // cases where the cached onChange value matches currentHeight but the window
+            // frame has drifted (e.g., after hide/show cycles with stale mode).
+            .onChange(of: currentHeight, initial: true) { _, newHeight in
+                appState.updateCommandBarHeight(to: newHeight)
+            }
+            .onKeyPress(.escape, action: { handleEscape(); return .handled })
+            .onKeyPress(.upArrow, action: { handleUpArrow(); return .handled })
+            .onKeyPress(.downArrow, action: { handleDownArrow(); return .handled })
+            .onKeyPress(.tab, action: { handleTab(); return .handled })
+            .onChange(of: showDeleteConfirmation) { _, shouldShow in
+                if shouldShow {
+                    showDeleteAlert()
+                }
+            }
             .onChange(of: appState.sessionListRefreshTrigger) { _, _ in
-            // Refresh list without jumping selection
-            refreshHistorySessions(preferredIndex: selectedHistoryIndex)
-            }
-            .onChange(of: showFileCompletion) { _, isShowing in
-                // File completion doesn't change height, just shows/hides list
-                // Height is controlled by mode, not file completion state
-            }
-            .onChange(of: fileCompletion.items) { _, newItems in
-                // Items change doesn't affect height either
+                refreshHistorySessions(preferredIndex: selectedHistoryIndex)
             }
     }
 }

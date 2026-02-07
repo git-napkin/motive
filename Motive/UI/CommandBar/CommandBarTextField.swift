@@ -22,11 +22,25 @@ struct CommandBarTextField: NSViewRepresentable {
         textField.delegate = context.coordinator
         textField.isBordered = false
         textField.drawsBackground = false
-        textField.font = NSFont.systemFont(ofSize: 16, weight: .regular)
+        textField.font = NSFont.systemFont(ofSize: 17, weight: .regular)
         textField.textColor = NSColor(Color.Aurora.textPrimary)
         textField.focusRingType = .none
         textField.cell?.truncatesLastVisibleLine = true
-        textField.placeholderString = placeholder
+
+        // Custom placeholder color for readability on translucent glass
+        // System placeholderTextColor (~#C5C5C7) is nearly invisible on bright glass
+        let placeholderColor = NSColor(name: nil) { appearance in
+            appearance.isDark
+                ? NSColor(white: 1.0, alpha: 0.25)
+                : NSColor(hex: "757575")
+        }
+        textField.placeholderAttributedString = NSAttributedString(
+            string: placeholder,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 17, weight: .regular),
+                .foregroundColor: placeholderColor,
+            ]
+        )
 
         // Set up keyboard event monitor
         context.coordinator.setupKeyboardMonitor()
@@ -35,10 +49,31 @@ struct CommandBarTextField: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSTextField, context: Context) {
-        if nsView.stringValue != text {
+        // IMPORTANT: Do NOT update stringValue during IME composition.
+        // When the field editor has marked text (uncommitted IME input like
+        // pinyin), setting stringValue would cancel the composition, trigger
+        // a cascade of controlTextDidChange → binding update → re-render,
+        // and potentially desync the window height.
+        if let fieldEditor = nsView.currentEditor() as? NSTextView,
+           fieldEditor.hasMarkedText()
+        {
+            // Skip stringValue update — let the IME handle composition.
+        } else if nsView.stringValue != text {
             nsView.stringValue = text
         }
-        nsView.placeholderString = placeholder
+        // Update placeholder with custom color (matches makeNSView)
+        let placeholderColor = NSColor(name: nil) { appearance in
+            appearance.isDark
+                ? NSColor(white: 1.0, alpha: 0.25)
+                : NSColor(hex: "757575")
+        }
+        nsView.placeholderAttributedString = NSAttributedString(
+            string: placeholder,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 17, weight: .regular),
+                .foregroundColor: placeholderColor,
+            ]
+        )
         nsView.isEnabled = !isDisabled
 
         // Update callbacks
@@ -107,6 +142,19 @@ struct CommandBarTextField: NSViewRepresentable {
 
         func controlTextDidChange(_ obj: Notification) {
             guard let textField = obj.object as? NSTextField else { return }
+
+            // Skip binding update during IME composition (marked text).
+            // controlTextDidChange fires for BOTH committed text and intermediate
+            // composition changes (e.g., pinyin keystrokes). Updating the binding
+            // with intermediate composition text causes unnecessary SwiftUI
+            // re-renders and can trigger handleInputChange with uncommitted text,
+            // potentially desynchronizing the window height.
+            if let fieldEditor = textField.currentEditor() as? NSTextView,
+               fieldEditor.hasMarkedText()
+            {
+                return
+            }
+
             parent.text = textField.stringValue
         }
 

@@ -31,11 +31,17 @@ extension CommandBarView {
         Log.config("🔍 checkForAtCompletion: loading query '\(query)'")
         fileCompletion.loadItems(query: query, baseDir: baseDir)
 
+        // Only show file completion if there are matching results
+        // (loadItems is synchronous, so items are available immediately)
+        guard !fileCompletion.items.isEmpty else {
+            Log.config("🔍 checkForAtCompletion: no results, hiding")
+            hideFileCompletion()
+            return
+        }
+
         showFileCompletion = true
         selectedFileIndex = 0
-
-        // Update window height to accommodate file completion list
-        appState.updateCommandBarHeight(to: fileCompletionHeight)
+        // Window height is auto-synced via onChange(of: currentHeight) — no manual call needed.
     }
 
     /// Find the current @ token (from @ to next whitespace)
@@ -67,9 +73,7 @@ extension CommandBarView {
         showFileCompletion = false
         atQueryRange = nil
         fileCompletion.clear()
-
-        // Restore window height to mode's default height
-        appState.updateCommandBarHeight(to: mode.dynamicHeight)
+        // Window height is auto-synced via onChange(of: currentHeight) — no manual call needed.
     }
 
     /// Select a file completion item
@@ -108,8 +112,15 @@ extension CommandBarView {
                 Log.config("📂 Reloading with query: '\(replacement)', baseDir: \(baseDir.path)")
                 fileCompletion.loadItems(query: replacement, baseDir: baseDir)
 
-                // Keep completion visible
-                showFileCompletion = true
+                // Only keep completion visible if there are items to show.
+                // Empty subdirectories must not leave a large empty box.
+                if fileCompletion.items.isEmpty {
+                    Log.config("📂 Subdirectory is empty, hiding file completion")
+                    hideFileCompletion()
+                } else {
+                    showFileCompletion = true
+                    // Window height auto-syncs via onChange(of: currentHeight)
+                }
             } else {
                 hideFileCompletion()
             }

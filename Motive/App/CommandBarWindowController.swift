@@ -18,7 +18,7 @@ final class CommandBarWindowController {
     private var currentHeight: CGFloat = CommandBarWindowController.heights["idle"] ?? 100
 
     // Must match SwiftUI CommandBarView width
-    private static let panelWidth: CGFloat = 620
+    private static let panelWidth: CGFloat = 680
     
     /// Whether the window has been shown at least once (for lazy initialization)
     private var hasBeenShown = false
@@ -26,8 +26,13 @@ final class CommandBarWindowController {
     /// When true, the window will not hide on resign key (used during delete confirmation)
     var suppressAutoHide: Bool = false
     
-    /// Whether the window is currently visible
-    var isVisible: Bool { window.isVisible }
+    /// Tracks intended visibility. Using window.isVisible is unreliable during
+    /// the 0.1s hide fade-out animation (still true until orderOut completes).
+    /// This flag is set synchronously in show()/hide() to prevent race conditions.
+    private var isIntendedVisible = false
+    
+    /// Whether the command bar is logically visible (not mid-hide-animation)
+    var isVisible: Bool { isIntendedVisible }
     
     // Height constants matching CommandBarMode
     static let heights: [String: CGFloat] = [
@@ -56,31 +61,14 @@ final class CommandBarWindowController {
             contentRect: NSRect(x: -10000, y: -10000, width: Self.panelWidth, height: 100),
             styleMask: [.titled, .fullSizeContentView],
             backing: .buffered,
-            defer: true  // Defer creation until needed
+            defer: true
         )
-        panel.isFloatingPanel = true
-        panel.level = .floating
+        panel.contentView = containerView
+        panel.applyFloatingPanelStyle()
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true  // Native window shadow - follows contentView's rounded corners
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        // Hide standard window buttons (we use .titled for shadow but don't show the chrome)
-        panel.standardWindowButton(.closeButton)?.isHidden = true
-        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        panel.standardWindowButton(.zoomButton)?.isHidden = true
         panel.isMovableByWindowBackground = false
-        panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = false
         panel.worksWhenModal = true
-        panel.contentView = containerView
-        panel.contentView?.wantsLayer = true
-        // Round the contentView layer - macOS native shadow will follow this shape
-        panel.contentView?.layer?.cornerRadius = AuroraRadius.xl
-        panel.contentView?.layer?.masksToBounds = true
-        
-        // Start hidden with 0 alpha
         panel.alphaValue = 0
         
         window = panel
@@ -123,15 +111,16 @@ final class CommandBarWindowController {
     }
     
     deinit {
-        if let observer = resignKeyObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        if let observer = resignActiveObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
+        [resignKeyObserver, resignActiveObserver]
+            .compactMap { $0 }
+            .forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     func show() {
+        // Mark as visible immediately (before animation) to prevent race conditions.
+        // This ensures subsequent showCommandBar() calls know we're visible.
+        isIntendedVisible = true
+        
         // 1. Position window BEFORE showing (invisible)
         positionWindowAtCenter()
         
@@ -159,8 +148,13 @@ final class CommandBarWindowController {
     }
 
     func hide() {
-        // Skip if already hidden
-        guard window.isVisible else { return }
+        // Skip if already logically hidden (prevents double-hide)
+        guard isIntendedVisible else { return }
+        
+        // Mark as hidden immediately, BEFORE the fade-out animation.
+        // This prevents the race condition where show() is called during the
+        // 0.1s fade-out and incorrectly thinks the window is still visible.
+        isIntendedVisible = false
         
         // Resign first responder immediately
         window.makeFirstResponder(nil)
@@ -171,16 +165,31 @@ final class CommandBarWindowController {
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             window.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
-            self?.window.orderOut(nil)
+            guard let self else { return }
+            // Only order out if we're still in "hidden" state.
+            // If show() was called during the fade-out, isIntendedVisible is
+            // now true and we must NOT order out.
+            if !self.isIntendedVisible {
+                self.window.orderOut(nil)
+            }
         })
     }
     
-    /// Update window height with smooth animation
-    /// Window expands DOWNWARD - top edge (input position) stays fixed
+    /// Update window height with smooth animation.
+    /// Window expands DOWNWARD — top edge (input position) stays fixed.
+    ///
+    /// Uses the **actual window frame height** for the guard, not just the
+    /// cached `currentHeight`, to self-correct any drift between the two
+    /// (e.g., after a `positionWindowAtCenter` call or animation artefact).
     func updateHeight(to newHeight: CGFloat, animated: Bool = true) {
-        guard newHeight != currentHeight else { return }
-        
         let currentFrame = window.frame
+        // Compare against the real window frame height — not the cached
+        // `currentHeight` — so we can fix drift caused by other frame changes.
+        guard abs(newHeight - currentFrame.height) > 0.5 else {
+            currentHeight = newHeight          // keep cache in sync
+            return
+        }
+        
         let heightDelta = newHeight - currentFrame.height
         
         var newFrame = currentFrame
@@ -202,13 +211,6 @@ final class CommandBarWindowController {
         currentHeight = newHeight
     }
     
-    /// Update height based on mode name
-    func updateHeightForMode(_ modeName: String, animated: Bool = true) {
-        if let height = Self.heights[modeName] {
-            updateHeight(to: height, animated: animated)
-        }
-    }
-
     func focusFirstResponder() {
         if let textField = window.contentView?.findFirstTextField() {
             window.makeFirstResponder(textField)
@@ -241,19 +243,53 @@ final class CommandBarWindowController {
     }
 
     private func screenForMouse() -> NSScreen? {
-        let mouseLocation = NSEvent.mouseLocation
-        var displayID: CGDirectDisplayID = 0
-        var count: UInt32 = 0
-        if CGGetDisplaysWithPoint(mouseLocation, 1, &displayID, &count) == .success, count > 0 {
-            return NSScreen.screens.first(where: { screen in
-                (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == displayID
-            })
-        }
-        return NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
+        KeyablePanel.screenForMouse()
     }
 }
 
 final class KeyablePanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    /// Apply shared floating-panel style used by CommandBar and Drawer.
+    ///
+    /// Rounded corners: the NSThemeFrame (from `.titled`) handles window-level
+    /// clipping and border — they share the same system corner radius, so no
+    /// double-outline. SwiftUI `.clipShape()` on each view provides the visual
+    /// content rounding at our custom radius.
+    ///
+    /// Shadow: system shadow via `hasShadow = true`, managed by the window
+    /// server. No custom NSShadow needed.
+    func applyFloatingPanelStyle() {
+        isFloatingPanel = true
+        level = .floating
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        hidesOnDeactivate = false
+
+        titleVisibility = .hidden
+        titlebarAppearsTransparent = true
+        standardWindowButton(.closeButton)?.isHidden = true
+        standardWindowButton(.miniaturizeButton)?.isHidden = true
+        standardWindowButton(.zoomButton)?.isHidden = true
+
+        // Do NOT set cornerRadius / masksToBounds on contentView.
+        // That creates a second clipping shape that conflicts with the
+        // NSThemeFrame's own border, producing the visible double-outline.
+        contentView?.wantsLayer = true
+    }
+
+    /// Find the screen that currently contains the mouse pointer.
+    static func screenForMouse() -> NSScreen? {
+        let mouseLocation = NSEvent.mouseLocation
+        var displayID: CGDirectDisplayID = 0
+        var count: UInt32 = 0
+        if CGGetDisplaysWithPoint(mouseLocation, 1, &displayID, &count) == .success, count > 0 {
+            return NSScreen.screens.first { screen in
+                (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == displayID
+            }
+        }
+        return NSScreen.screens.first { $0.frame.contains(mouseLocation) }
+    }
 }

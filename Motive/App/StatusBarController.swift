@@ -86,51 +86,9 @@ final class StatusBarController {
     /// Update the Command Bar menu item with current hotkey
     func updateCommandBarMenuItem() {
         guard let item = commandMenuItem, let configManager = configManager else { return }
-        let (keyEquivalent, modifiers) = parseHotkeyForMenu(configManager.hotkey)
-        item.keyEquivalent = keyEquivalent
-        item.keyEquivalentModifierMask = modifiers
-    }
-    
-    /// Parse hotkey string like "⌥Space" into (keyEquivalent, modifierMask) for NSMenuItem
-    private func parseHotkeyForMenu(_ hotkey: String) -> (String, NSEvent.ModifierFlags) {
-        var modifiers: NSEvent.ModifierFlags = []
-        var remaining = hotkey
-        
-        // Parse modifiers
-        while !remaining.isEmpty {
-            if remaining.hasPrefix("⌘") || remaining.hasPrefix("Cmd") {
-                modifiers.insert(.command)
-                remaining = remaining.hasPrefix("⌘") ? String(remaining.dropFirst()) : String(remaining.dropFirst(3))
-            } else if remaining.hasPrefix("⌥") || remaining.hasPrefix("Alt") || remaining.hasPrefix("Option") {
-                modifiers.insert(.option)
-                remaining = remaining.hasPrefix("⌥") ? String(remaining.dropFirst()) : (remaining.hasPrefix("Alt") ? String(remaining.dropFirst(3)) : String(remaining.dropFirst(6)))
-            } else if remaining.hasPrefix("⇧") || remaining.hasPrefix("Shift") {
-                modifiers.insert(.shift)
-                remaining = remaining.hasPrefix("⇧") ? String(remaining.dropFirst()) : String(remaining.dropFirst(5))
-            } else if remaining.hasPrefix("⌃") || remaining.hasPrefix("Ctrl") || remaining.hasPrefix("Control") {
-                modifiers.insert(.control)
-                remaining = remaining.hasPrefix("⌃") ? String(remaining.dropFirst()) : (remaining.hasPrefix("Ctrl") ? String(remaining.dropFirst(4)) : String(remaining.dropFirst(7)))
-            } else {
-                break
-            }
-        }
-        
-        // Parse key
-        let keyEquivalent: String
-        switch remaining.lowercased() {
-        case "space", " ":
-            keyEquivalent = " "
-        case "return", "enter":
-            keyEquivalent = "\r"
-        case "tab":
-            keyEquivalent = "\t"
-        case "escape", "esc":
-            keyEquivalent = "\u{1B}"
-        default:
-            keyEquivalent = remaining.lowercased()
-        }
-        
-        return (keyEquivalent, modifiers)
+        let parsed = HotkeyParser.parseToMenuShortcut(configManager.hotkey)
+        item.keyEquivalent = parsed.keyEquivalent
+        item.keyEquivalentModifierMask = parsed.modifiers
     }
     
     /// Get the frame of the status bar button in screen coordinates
@@ -320,6 +278,16 @@ final class StatusBarController {
         }
     }
     
+    /// Resolve the correct text color for the menu bar based on the
+    /// status button's effective appearance. The menu bar switches between
+    /// vibrant-dark (light text) and vibrant-light (dark text) depending
+    /// on the desktop wallpaper behind it.
+    private func menuBarTextColor(for button: NSStatusBarButton) -> NSColor {
+        let isDark = button.effectiveAppearance
+            .bestMatch(from: [.vibrantDark, .vibrantLight]) == .vibrantDark
+        return isDark ? .white : .black
+    }
+
     private func updateShimmerTitle(_ text: String, button: NSStatusBarButton, phase: Int) {
         let baseAlpha: CGFloat = 0.4
         let highlightAlpha: CGFloat = 1.0
@@ -330,6 +298,7 @@ final class StatusBarController {
         
         let attributedString = NSMutableAttributedString(string: " \(text)")
         let font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        let baseColor = menuBarTextColor(for: button)
         
         // Apply gradient effect per character
         for i in 0..<attributedString.length {
@@ -337,7 +306,7 @@ final class StatusBarController {
             let distance = abs(charProgress - highlightCenter)
             let alpha = max(baseAlpha, highlightAlpha - distance * 2.5)
             
-            let color = NSColor.controlTextColor.withAlphaComponent(alpha)
+            let color = baseColor.withAlphaComponent(alpha)
             attributedString.addAttributes([
                 .font: font,
                 .foregroundColor: color
@@ -348,8 +317,7 @@ final class StatusBarController {
     }
     
     private func setButtonTitle(_ title: String, button: NSStatusBarButton, alpha: CGFloat = 1.0) {
-        // Use controlTextColor which adapts to system appearance automatically
-        let color = NSColor.controlTextColor.withAlphaComponent(alpha)
+        let color = menuBarTextColor(for: button).withAlphaComponent(alpha)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 12, weight: .medium),
             .foregroundColor: color
