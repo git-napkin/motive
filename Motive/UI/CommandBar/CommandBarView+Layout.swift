@@ -60,7 +60,7 @@ extension CommandBarView {
     // Content BELOW input (lists)
     var showsBelowContent: Bool {
         mode.isCommand || mode.isHistory || mode.isProjects
-            || (showFileCompletion && !fileCompletion.items.isEmpty)
+            || isFileCompletionActive
     }
 
     /// Height to use when file completion is showing (matches command list)
@@ -68,10 +68,17 @@ extension CommandBarView {
         showsAboveContent ? 450 : 400
     }
 
+    /// Whether file completion should actively affect height.
+    /// Guards against stale `showFileCompletion` state by cross-checking the input.
+    var isFileCompletionActive: Bool {
+        showFileCompletion
+            && !fileCompletion.items.isEmpty
+            && currentAtToken(in: inputText) != nil
+    }
+
     /// Current command bar height
     var currentHeight: CGFloat {
-        (showFileCompletion && !fileCompletion.items.isEmpty)
-            ? fileCompletionHeight : mode.dynamicHeight
+        isFileCompletionActive ? fileCompletionHeight : mode.dynamicHeight
     }
 
     // MARK: - Above Input Content (Session Status)
@@ -104,7 +111,7 @@ extension CommandBarView {
     @ViewBuilder
     var belowInputContent: some View {
         Group {
-            if showFileCompletion && !fileCompletion.items.isEmpty {
+            if isFileCompletionActive {
                 // File completion takes priority
                 fileCompletionListView
             } else if mode.isCommand {

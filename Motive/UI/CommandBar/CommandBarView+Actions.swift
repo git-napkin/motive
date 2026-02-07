@@ -209,8 +209,7 @@ extension CommandBarView {
     }
 
     func handleModeChange(from oldMode: CommandBarMode, to newMode: CommandBarMode) {
-        // Update window height for new mode
-        applyCommandBarHeight()
+        // Window height is auto-synced via onChange(of: currentHeight) — no manual call needed.
 
         // Load data when entering specific modes
         if newMode.isHistory {
@@ -377,39 +376,43 @@ extension CommandBarView {
         // CommandBar stays visible - mode will change to .running via sessionStatus observer
     }
 
-    /// Re-center window and refocus input when CommandBar is shown
-    /// Syncs mode with current session state
+    /// Re-center window and refocus input when CommandBar is shown.
+    /// Called ONLY when commandBarResetTrigger fires (hidden → visible transition).
+    /// MUST unconditionally reset ALL stale state from previous interactions.
     func recenterAndFocus() {
-        // Reset stale file completion state from previous interaction
-        // (showFileCompletion persists across show/hide cycles because the
-        //  SwiftUI view is hosted in a long-lived NSHostingView)
-        if showFileCompletion {
-            hideFileCompletion()
-        }
+        // 1. Reset stale file completion state
+        //    (@State persists across show/hide cycles in the long-lived NSHostingView)
+        showFileCompletion = false
+        atQueryRange = nil
+        fileCompletion.clear()
 
-        // Sync mode with current session status (unless user is mid-action)
-        if !mode.isCommand && !mode.isHistory && !mode.isProjects {
-            switch appState.sessionStatus {
-            case .running:
-                mode = .running
-            case .completed:
+        // 2. Clear stale input text (user starts fresh on each show)
+        //    This prevents stale "/" or "@" from keeping the mode wrong.
+        inputText = ""
+
+        // 3. ALWAYS sync mode with current session status.
+        //    List modes (.command, .history, .projects) are only valid during active
+        //    interaction. When re-showing from hidden, they MUST be reset —
+        //    otherwise the stale mode produces a wrong currentHeight and the window
+        //    frame desyncs from the SwiftUI content.
+        switch appState.sessionStatus {
+        case .running:
+            mode = .running
+        case .completed:
+            mode = .completed
+        case .failed:
+            mode = .error(appState.lastErrorMessage ?? "An error occurred")
+        case .idle, .interrupted:
+            if appState.currentSessionRef != nil && !appState.messages.isEmpty {
                 mode = .completed
-            case .failed:
-                mode = .error(appState.lastErrorMessage ?? "An error occurred")
-            case .idle, .interrupted:
-                // If there's a current session with messages, show completed
-                if appState.currentSessionRef != nil && !appState.messages.isEmpty {
-                    mode = .completed
-                } else {
-                    mode = .idle
-                }
+            } else {
+                mode = .idle
             }
         }
 
-        // Update window height to match current mode
-        applyCommandBarHeight()
+        // Window height is auto-synced via onChange(of: currentHeight).
 
-        // Refocus input
+        // 4. Refocus input
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(100))
             isInputFocused = true
@@ -438,15 +441,6 @@ extension CommandBarView {
 
     func loadHistorySessions() {
         refreshHistorySessions(preferredIndex: nil)
-    }
-
-    func applyCommandBarHeight() {
-        let newHeight = currentHeight
-        if abs(newHeight - lastHeightApplied) < 0.5 { return }
-        lastHeightApplied = newHeight
-        DispatchQueue.main.async {
-            appState.updateCommandBarHeight(to: newHeight)
-        }
     }
 
     func refreshHistorySessions(preferredIndex: Int?) {

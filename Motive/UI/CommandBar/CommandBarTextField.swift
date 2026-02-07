@@ -35,7 +35,16 @@ struct CommandBarTextField: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSTextField, context: Context) {
-        if nsView.stringValue != text {
+        // IMPORTANT: Do NOT update stringValue during IME composition.
+        // When the field editor has marked text (uncommitted IME input like
+        // pinyin), setting stringValue would cancel the composition, trigger
+        // a cascade of controlTextDidChange → binding update → re-render,
+        // and potentially desync the window height.
+        if let fieldEditor = nsView.currentEditor() as? NSTextView,
+           fieldEditor.hasMarkedText()
+        {
+            // Skip stringValue update — let the IME handle composition.
+        } else if nsView.stringValue != text {
             nsView.stringValue = text
         }
         nsView.placeholderString = placeholder
@@ -107,6 +116,19 @@ struct CommandBarTextField: NSViewRepresentable {
 
         func controlTextDidChange(_ obj: Notification) {
             guard let textField = obj.object as? NSTextField else { return }
+
+            // Skip binding update during IME composition (marked text).
+            // controlTextDidChange fires for BOTH committed text and intermediate
+            // composition changes (e.g., pinyin keystrokes). Updating the binding
+            // with intermediate composition text causes unnecessary SwiftUI
+            // re-renders and can trigger handleInputChange with uncommitted text,
+            // potentially desynchronizing the window height.
+            if let fieldEditor = textField.currentEditor() as? NSTextView,
+               fieldEditor.hasMarkedText()
+            {
+                return
+            }
+
             parent.text = textField.stringValue
         }
 
