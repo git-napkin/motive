@@ -47,7 +47,7 @@ struct SessionListItem: View {
             .padding(.vertical, AuroraSpacing.space3)
             .background(
                 RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                    .fill(isHovering ? Color.Aurora.surfaceElevated : Color.clear)
+                    .fill(isHovering ? Color.Aurora.glassOverlay.opacity(0.06) : Color.clear)
             )
             .contentShape(Rectangle())
         }
@@ -140,9 +140,12 @@ struct MessageBubble: View {
             .foregroundColor(Color.Aurora.textPrimary)
             .padding(.horizontal, AuroraSpacing.space4)
             .padding(.vertical, AuroraSpacing.space3)
-            .background(Color.Aurora.surfaceElevated)
-            .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous))
-            .shadow(color: Color.black.opacity(0.04), radius: 3, y: 1)
+            .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.10 : 0.12))
+            .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: AuroraRadius.lg, style: .continuous)
+                    .strokeBorder(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.08), lineWidth: 0.5)
+            )
             .textSelection(.enabled)
     }
     
@@ -178,15 +181,18 @@ struct MessageBubble: View {
                 .markdownBlockStyle(\.codeBlock) { configuration in
                     configuration.label
                         .padding(8)
-                        .background(Color.Aurora.backgroundDeep.opacity(0.6))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.sm))
                 }
                 .textSelection(.enabled)
         }
         .padding(AuroraSpacing.space3)
-        .background(Color.Aurora.surface)
-        .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous))
-        .shadow(color: Color.black.opacity(0.03), radius: 2, y: 1)
+        .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.08))
+        .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AuroraRadius.lg, style: .continuous)
+                .strokeBorder(Color.Aurora.glassOverlay.opacity(isDark ? 0.04 : 0.06), lineWidth: 0.5)
+        )
     }
     
     // MARK: - Tool Bubble (with lifecycle status indicator)
@@ -245,19 +251,19 @@ struct MessageBubble: View {
                 .padding(.top, AuroraSpacing.space1)
                 .padding(AuroraSpacing.space2)
                 .background(
-                    RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous)
-                        .fill(Color.Aurora.backgroundDeep.opacity(0.6))
+                    RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
+                        .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.05))
                 )
             }
         }
         .padding(.horizontal, AuroraSpacing.space3)
         .padding(.vertical, AuroraSpacing.space2)
         .background(
-            RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                .fill(Color.Aurora.surface.opacity(0.8))
+            RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
+                .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.04 : 0.05))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
+            RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
                 .strokeBorder(toolBorderColor.opacity(0.3), lineWidth: 0.5)
         )
     }
@@ -348,11 +354,11 @@ struct MessageBubble: View {
         }
         .padding(AuroraSpacing.space3)
         .background(
-            RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                .fill(Color.Aurora.surface.opacity(0.8))
+            RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
+                .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.04 : 0.05))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
+            RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
                 .strokeBorder(Color.Aurora.primary.opacity(0.2), lineWidth: 0.5)
         )
     }
@@ -366,7 +372,7 @@ struct MessageBubble: View {
         return GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.Aurora.surface)
+                    .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.08))
                     .frame(height: 3)
                 
                 RoundedRectangle(cornerRadius: 2)
@@ -436,7 +442,7 @@ struct MessageBubble: View {
             .padding(.vertical, AuroraSpacing.space1)
             .background(
                 Capsule()
-                    .fill(Color.Aurora.surfaceElevated)
+                    .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.10 : 0.12))
             )
             .offset(
                 x: message.type == .user ? -8 : 8,
@@ -463,8 +469,8 @@ struct MessageBubble: View {
                 .markdownBlockStyle(\.codeBlock) { configuration in
                     configuration.label
                         .padding(6)
-                        .background(Color.Aurora.backgroundDeep.opacity(0.4))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.05 : 0.04))
+                        .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xs))
                 }
         } else {
             // Plain text fallback
@@ -581,7 +587,7 @@ struct ThinkingIndicator: View {
         .padding(.vertical, AuroraSpacing.space2)
         .background(
             RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                .fill(Color.Aurora.surfaceElevated)
+                .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.08))
         )
     }
 }

@@ -20,9 +20,13 @@ struct QuickConfirmView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             headerView
-            Divider()
+            Rectangle()
+                .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.12))
+                .frame(height: 0.5)
             contentView
-            Divider()
+            Rectangle()
+                .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.12))
+                .frame(height: 0.5)
             actionButtons
         }
         .padding(20)
@@ -31,7 +35,7 @@ struct QuickConfirmView: View {
         .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.lg, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: AuroraRadius.lg, style: .continuous)
-                .stroke(Color.Aurora.border, lineWidth: 1)
+                .strokeBorder(Color.Aurora.glassOverlay.opacity(isDark ? 0.1 : 0.15), lineWidth: 0.5)
         )
         .shadow(color: Color.black.opacity(isDark ? 0.25 : 0.12), radius: 18, y: 10)
     }
@@ -155,11 +159,11 @@ struct QuickConfirmView: View {
             .padding(.vertical, AuroraSpacing.space3)
             .background(
                 RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                    .fill(isSelected ? Color.Aurora.primary.opacity(0.1) : Color.Aurora.surface)
+                    .fill(isSelected ? Color.Aurora.primary.opacity(0.1) : Color.Aurora.glassOverlay.opacity(0.06))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                    .stroke(isSelected ? Color.Aurora.primary.opacity(0.3) : Color.Aurora.border, lineWidth: 1)
+                    .stroke(isSelected ? Color.Aurora.primary.opacity(0.3) : Color.Aurora.glassOverlay.opacity(0.12), lineWidth: 0.5)
             )
         }
         .buttonStyle(.plain)
@@ -192,7 +196,7 @@ struct QuickConfirmView: View {
                 }
                 .frame(maxHeight: 80)
                 .padding(AuroraSpacing.space2)
-                .background(Color.Aurora.surface)
+                .background(Color.Aurora.glassOverlay.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous))
             }
         }
@@ -268,8 +272,8 @@ struct QuickConfirmView: View {
     
     private var backgroundView: some View {
         ZStack {
-            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow, state: .active)
-            Color.Aurora.background.opacity(0.92)
+            VisualEffectView(material: .popover, blendingMode: .behindWindow, state: .active)
+            Color.Aurora.background.opacity(isDark ? 0.6 : 0.7)
         }
     }
     

@@ -39,8 +39,10 @@ struct DrawerView: View {
                     .padding(.top, AuroraSpacing.space4)
                     .padding(.bottom, AuroraSpacing.space3)
                 
-                // Subtle divider with fade edges
-                Divider()
+                // Subtle glass separator
+                Rectangle()
+                    .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.12))
+                    .frame(height: 0.5)
                 
                 // Error banner (if any)
                 if let error = appState.lastErrorMessage {
@@ -82,7 +84,7 @@ struct DrawerView: View {
         .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .strokeBorder(Color.Aurora.border.opacity(0.5), lineWidth: 0.5)
+                .strokeBorder(Color.Aurora.glassOverlay.opacity(isDark ? 0.10 : 0.15), lineWidth: 0.5)
         )
         .onAppear {
             withAnimation(.auroraSpring.delay(0.1)) {
@@ -134,18 +136,18 @@ struct DrawerView: View {
     
     private var drawerBackground: some View {
         ZStack {
-            // Use same approach as CommandBar: VisualEffectView with cornerRadius
+            // Layer 1: System vibrancy blur (primary translucency)
             VisualEffectView(
-                material: .hudWindow,
+                material: .popover,
                 blendingMode: .behindWindow,
                 state: .active,
                 cornerRadius: AuroraRadius.xl,
                 masksToBounds: true
             )
             
-            // Semi-transparent overlay for consistent appearance
+            // Layer 2: Tint overlay — translucent to let the glass show through
             RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .fill(Color.Aurora.background.opacity(0.92))
+                .fill(Color.Aurora.background.opacity(isDark ? 0.6 : 0.7))
         }
     }
     
@@ -179,7 +181,7 @@ struct DrawerView: View {
                 .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                        .fill(showSessionPicker ? Color.Aurora.surfaceElevated : Color.Aurora.surface.opacity(0.5))
+                        .fill(Color.Aurora.glassOverlay.opacity(showSessionPicker ? 0.10 : 0.06))
                 )
             }
             .buttonStyle(.plain)
@@ -198,7 +200,7 @@ struct DrawerView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(Color.Aurora.textSecondary)
                     .frame(width: 28, height: 28)
-                    .background(Color.Aurora.surfaceElevated)
+                    .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.08 : 0.10))
                     .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -211,7 +213,7 @@ struct DrawerView: View {
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(Color.Aurora.textMuted)
                     .frame(width: 28, height: 28)
-                    .background(Color.Aurora.surfaceElevated)
+                    .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.08 : 0.10))
                     .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -314,7 +316,7 @@ struct DrawerView: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(Color.Aurora.textMuted)
                     .frame(width: 22, height: 22)
-                    .background(Color.Aurora.surface)
+                    .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.08 : 0.10))
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
@@ -340,7 +342,7 @@ struct DrawerView: View {
             
             ZStack {
                 Circle()
-                    .fill(Color.Aurora.surface)
+                    .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.08))
                     .frame(width: 80, height: 80)
                 
                 Image(systemName: "sparkles")
@@ -451,9 +453,10 @@ struct DrawerView: View {
             }
             .padding(.horizontal, AuroraSpacing.space4)
             .padding(.vertical, AuroraSpacing.space2)
-            .background(Color.Aurora.surface.opacity(0.6))
             
-            Divider()
+            Rectangle()
+                .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.12))
+                .frame(height: 0.5)
             
             HStack(spacing: AuroraSpacing.space3) {
                 HStack(spacing: AuroraSpacing.space2) {
@@ -495,12 +498,17 @@ struct DrawerView: View {
                 }
                 .padding(.horizontal, AuroraSpacing.space3)
                 .padding(.vertical, AuroraSpacing.space2)
-                .background(Color.Aurora.surface.opacity(isRunning ? 0.6 : 1))
+                .background(
+                    RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
+                        .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.08))
+                )
                 .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
                         .strokeBorder(
-                            isInputFocused && !isRunning ? Color.Aurora.borderFocus.opacity(0.8) : Color.Aurora.border.opacity(0.5),
+                            isInputFocused && !isRunning
+                                ? Color.Aurora.borderFocus.opacity(0.8)
+                                : Color.Aurora.glassOverlay.opacity(isDark ? 0.1 : 0.15),
                             lineWidth: isInputFocused && !isRunning ? 1 : 0.5
                         )
                 )
@@ -508,7 +516,7 @@ struct DrawerView: View {
             }
             .padding(.horizontal, AuroraSpacing.space4)
             .padding(.vertical, AuroraSpacing.space3)
-            .background(Color.Aurora.surface.opacity(0.7))
+            .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.04 : 0.08))
         }
     }
     
@@ -711,7 +719,7 @@ private struct SessionPickerItem: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(Color.Aurora.textMuted)
                         .frame(width: 20, height: 20)
-                        .background(Color.Aurora.surface)
+                        .background(Color.Aurora.glassOverlay.opacity(0.08))
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
