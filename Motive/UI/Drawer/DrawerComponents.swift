@@ -229,6 +229,11 @@ struct MessageBubble: View {
                     .truncationMode(.middle)
             }
             
+            // Inline diff preview for file-editing tools (always visible, no click needed)
+            if let diff = message.diffContent, !diff.isEmpty {
+                diffPreview(diff)
+            }
+            
             // Uniform output summary: always "Output · N lines", click Show for details
             if let outputSummary = message.toolOutputSummary {
                 Text(outputSummary)
@@ -248,12 +253,7 @@ struct MessageBubble: View {
                         .textSelection(.enabled)
                 }
                 .frame(maxHeight: 300)
-                .padding(.top, AuroraSpacing.space1)
-                .padding(AuroraSpacing.space2)
-                .background(
-                    RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                        .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.05))
-                )
+                .padding(.top, AuroraSpacing.space2)
             }
         }
         .padding(.horizontal, AuroraSpacing.space3)
@@ -299,13 +299,61 @@ struct MessageBubble: View {
         }
     }
     
+    // MARK: - Diff Preview
+    
+    /// Inline diff preview with syntax-colored +/- lines
+    private func diffPreview(_ diff: String) -> some View {
+        let lines = diff.split(separator: "\n", omittingEmptySubsequences: false)
+        // Show at most 12 lines inline; truncate longer diffs
+        let maxPreviewLines = 12
+        let displayLines = Array(lines.prefix(maxPreviewLines))
+        let isTruncated = lines.count > maxPreviewLines
+        
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(displayLines.enumerated()), id: \.offset) { _, line in
+                let lineStr = String(line)
+                Text(lineStr)
+                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                    .foregroundColor(diffLineColor(lineStr))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 0.5)
+            }
+            if isTruncated {
+                Text("… \(lines.count - maxPreviewLines) more lines")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color.Aurora.textMuted)
+                    .padding(.top, 2)
+            }
+        }
+        .padding(AuroraSpacing.space2)
+        .background(
+            RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous)
+                .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.05))
+        )
+        .padding(.top, AuroraSpacing.space1)
+    }
+    
+    /// Color for a single diff line based on +/- prefix
+    private func diffLineColor(_ line: String) -> Color {
+        if line.hasPrefix("+++") || line.hasPrefix("---") {
+            return Color.Aurora.textMuted
+        } else if line.hasPrefix("+") {
+            return Color.Aurora.success
+        } else if line.hasPrefix("-") {
+            return Color.Aurora.error
+        } else if line.hasPrefix("@@") {
+            return Color.Aurora.primary.opacity(0.7)
+        }
+        return Color.Aurora.textSecondary
+    }
+    
     // MARK: - System Bubble
     
     private var systemBubble: some View {
         HStack(spacing: AuroraSpacing.space2) {
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: systemIcon)
                 .font(.system(size: 11))
-                .foregroundColor(Color.Aurora.success)
+                .foregroundColor(systemIconColor)
             
             Text(message.content)
                 .font(.Aurora.bodySmall)
@@ -313,6 +361,30 @@ struct MessageBubble: View {
         }
         .padding(.horizontal, AuroraSpacing.space3)
         .padding(.vertical, AuroraSpacing.space2)
+    }
+    
+    /// Icon for system messages — distinguishes completion from interruption
+    private var systemIcon: String {
+        if message.status == .failed {
+            return "xmark.circle.fill"
+        }
+        // Detect interruption from the localized content
+        let lower = message.content.lowercased()
+        if lower.contains("interrupt") || lower.contains("中断") || lower.contains("停止") {
+            return "stop.circle.fill"
+        }
+        return "checkmark.circle.fill"
+    }
+    
+    private var systemIconColor: Color {
+        if message.status == .failed {
+            return Color.Aurora.error
+        }
+        let lower = message.content.lowercased()
+        if lower.contains("interrupt") || lower.contains("中断") || lower.contains("停止") {
+            return Color.Aurora.textMuted
+        }
+        return Color.Aurora.success
     }
     
     // MARK: - Todo Bubble
@@ -568,27 +640,23 @@ struct ToolRunningIndicator: View {
 // MARK: - Thinking Indicator
 
 struct ThinkingIndicator: View {
-    let toolName: String?
     @Environment(\.colorScheme) private var colorScheme
     
     private var isDark: Bool { colorScheme == .dark }
     
     var body: some View {
-        HStack(spacing: AuroraSpacing.space2) {
-            // Aurora animated dots
-            AuroraLoadingDots()
-            
-            Text(toolName?.simplifiedToolName ?? L10n.Drawer.thinking)
-                .font(.Aurora.caption.weight(.medium))
-                .foregroundColor(Color.Aurora.textSecondary)
-                .auroraShimmer(isDark: isDark)
-        }
-        .padding(.horizontal, AuroraSpacing.space3)
-        .padding(.vertical, AuroraSpacing.space2)
-        .background(
-            RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.08))
-        )
+        // Shimmer text only — matches menu bar animation style.
+        // No bouncing dots; the shimmer sweep is the sole loading indicator.
+        Text(L10n.Drawer.thinking)
+            .font(.Aurora.caption.weight(.medium))
+            .foregroundColor(Color.Aurora.textSecondary)
+            .auroraShimmer(isDark: isDark)
+            .padding(.horizontal, AuroraSpacing.space3)
+            .padding(.vertical, AuroraSpacing.space2)
+            .background(
+                RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
+                    .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.08))
+            )
     }
 }
 

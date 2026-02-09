@@ -82,10 +82,8 @@ struct QuickConfirmView: View {
         switch request.type {
         case .question:
             questionContent
-        case .file:
-            filePermissionContent
-        case .tool:
-            toolPermissionContent
+        case .permission:
+            permissionContent
         }
     }
     
@@ -169,51 +167,40 @@ struct QuickConfirmView: View {
         .buttonStyle(.plain)
     }
     
-    private var filePermissionContent: some View {
+    private var permissionContent: some View {
         VStack(alignment: .leading, spacing: AuroraSpacing.space2) {
-            // Operation description
-            HStack(spacing: AuroraSpacing.space2) {
-                Text(operationVerb)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Color.Aurora.textPrimary)
-                
-                if let path = request.filePath {
-                    Text(shortenPath(path))
-                        .font(.Aurora.monoSmall)
-                        .foregroundColor(Color.Aurora.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
-            
-            // Preview if available
-            if let preview = request.contentPreview, !preview.isEmpty {
-                ScrollView {
-                    Text(preview)
-                        .font(.Aurora.monoSmall)
-                        .foregroundColor(Color.Aurora.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(maxHeight: 80)
-                .padding(AuroraSpacing.space2)
-                .background(Color.Aurora.glassOverlay.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous))
-            }
-        }
-    }
-    
-    private var toolPermissionContent: some View {
-        VStack(alignment: .leading, spacing: AuroraSpacing.space2) {
-            if let toolName = request.toolName {
+            // Permission type (e.g., "edit", "bash")
+            if let permType = request.permissionType {
                 HStack(spacing: AuroraSpacing.space2) {
-                    Text("Tool:")
+                    Text("Permission:")
                         .font(.system(size: 12))
                         .foregroundColor(Color.Aurora.textSecondary)
-                    
-                    Text(toolName.simplifiedToolName)
+
+                    Text(permType.capitalized)
                         .font(.Aurora.mono.weight(.medium))
                         .foregroundColor(Color.Aurora.textPrimary)
                 }
+            }
+
+            // File paths / patterns
+            if let patterns = request.patterns, !patterns.isEmpty {
+                HStack(spacing: AuroraSpacing.space2) {
+                    Text(patterns.count == 1 ? "Path:" : "Paths:")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.Aurora.textSecondary)
+
+                    Text(patterns.map { shortenPath($0) }.joined(separator: ", "))
+                        .font(.Aurora.monoSmall)
+                        .foregroundColor(Color.Aurora.textSecondary)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
+            }
+
+            // Diff preview if available
+            if let diff = request.diff, !diff.isEmpty {
+                DiffView(diff: diff)
+                    .frame(maxHeight: 160)
             }
         }
     }
@@ -248,21 +235,28 @@ struct QuickConfirmView: View {
                 }
             }
             
-        case .file, .tool:
+        case .permission:
             HStack(spacing: AuroraSpacing.space2) {
                 Spacer()
                 
-                Button(L10n.deny) {
-                    onResponse("denied")
+                Button("Reject") {
+                    onResponse("Reject")
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 
-                Button(L10n.allow) {
-                    onResponse("approved")
+                Button("Allow Once") {
+                    onResponse("Allow Once")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.Aurora.primary)
+                .controlSize(.small)
+                
+                Button("Always Allow") {
+                    onResponse("Always Allow")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.Aurora.success)
                 .controlSize(.small)
             }
         }
@@ -282,8 +276,7 @@ struct QuickConfirmView: View {
     private var iconName: String {
         switch request.type {
         case .question: return "hand.raised"
-        case .file: return "doc.badge.gearshape"
-        case .tool: return "hand.raised"
+        case .permission: return "lock.shield"
         }
     }
     
@@ -291,10 +284,8 @@ struct QuickConfirmView: View {
         switch request.type {
         case .question:
             return request.header ?? "Question"
-        case .file:
-            return "File Permission"
-        case .tool:
-            return "Tool Permission"
+        case .permission:
+            return "Permission Required"
         }
     }
     
@@ -302,24 +293,8 @@ struct QuickConfirmView: View {
         switch request.type {
         case .question:
             return nil
-        case .file:
-            return request.fileOperation?.rawValue.capitalized
-        case .tool:
-            return request.toolName?.simplifiedToolName
-        }
-    }
-    
-    private var operationVerb: String {
-        guard let op = request.fileOperation else { return "Access" }
-        switch op {
-        case .create: return "Create"
-        case .delete: return "Delete"
-        case .rename: return "Rename"
-        case .move: return "Move"
-        case .modify: return "Modify"
-        case .overwrite: return "Overwrite"
-        case .readBinary: return "Read"
-        case .execute: return "Execute"
+        case .permission:
+            return request.permissionType?.capitalized
         }
     }
     
@@ -389,49 +364,182 @@ private struct AuroraQuickConfirmButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Visual Effect (Legacy compatibility)
+// MARK: - Diff View
 
-struct VisualEffectBlur: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-    let blendingMode: NSVisualEffectView.BlendingMode
-    
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blendingMode
-        view.state = .active
-        return view
+/// Renders a unified diff with red/green colored lines like GitHub/Cursor.
+struct DiffView: View {
+    let diff: String
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDark: Bool { colorScheme == .dark }
+
+    private var parsedLines: [DiffLine] {
+        DiffParser.parse(diff)
     }
-    
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-        nsView.blendingMode = blendingMode
+
+    var body: some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(parsedLines.enumerated()), id: \.offset) { _, line in
+                    diffLineView(line)
+                }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous)
+                .fill(isDark ? Color(white: 0.08) : Color(white: 0.97))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous)
+                .stroke(Color.Aurora.border.opacity(0.5), lineWidth: 0.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous))
+    }
+
+    private func diffLineView(_ line: DiffLine) -> some View {
+        HStack(spacing: 0) {
+            // Line number gutter
+            HStack(spacing: 2) {
+                Text(line.oldLineNumber ?? "")
+                    .frame(width: 28, alignment: .trailing)
+                Text(line.newLineNumber ?? "")
+                    .frame(width: 28, alignment: .trailing)
+            }
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundColor(Color.Aurora.textMuted.opacity(0.6))
+            .padding(.trailing, 4)
+
+            // Prefix character (+, -, space)
+            Text(line.prefix)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundColor(line.prefixColor(isDark: isDark))
+                .frame(width: 12)
+
+            // Content
+            Text(line.content)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(line.textColor(isDark: isDark))
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 1)
+        .background(line.backgroundColor(isDark: isDark))
     }
 }
 
-// MARK: - Legacy Button Style (compatibility)
+// MARK: - Diff Parser
 
-struct QuickConfirmButtonStyle: ButtonStyle {
-    let isPrimary: Bool
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.Aurora.bodySmall.weight(.medium))
-            .foregroundColor(isPrimary ? .white : Color.Aurora.textPrimary)
-            .padding(.horizontal, AuroraSpacing.space4)
-            .padding(.vertical, AuroraSpacing.space2)
-            .background(
-                isPrimary
-                    ? AnyShapeStyle(Color.Aurora.auroraGradient)
-                    : AnyShapeStyle(Color.Aurora.surface)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous))
-            .overlay(
-                !isPrimary
-                    ? RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                        .stroke(Color.Aurora.border, lineWidth: 1)
-                    : nil
-            )
-            .opacity(configuration.isPressed ? 0.8 : 1)
+enum DiffLineType: Sendable {
+    case addition
+    case deletion
+    case context
+    case header     // @@ ... @@ or diff --git lines
+    case meta       // --- or +++ lines
+}
+
+struct DiffLine: Sendable {
+    let type: DiffLineType
+    let content: String
+    let prefix: String
+    let oldLineNumber: String?
+    let newLineNumber: String?
+
+    func backgroundColor(isDark: Bool) -> Color {
+        switch type {
+        case .addition:
+            return isDark
+                ? Color(red: 0.1, green: 0.3, blue: 0.1).opacity(0.5)
+                : Color(red: 0.85, green: 1.0, blue: 0.85)
+        case .deletion:
+            return isDark
+                ? Color(red: 0.35, green: 0.1, blue: 0.1).opacity(0.5)
+                : Color(red: 1.0, green: 0.9, blue: 0.9)
+        case .header, .meta:
+            return isDark
+                ? Color(red: 0.15, green: 0.2, blue: 0.35).opacity(0.4)
+                : Color(red: 0.92, green: 0.95, blue: 1.0)
+        case .context:
+            return .clear
+        }
+    }
+
+    func textColor(isDark: Bool) -> Color {
+        switch type {
+        case .addition:
+            return isDark ? Color(red: 0.5, green: 0.9, blue: 0.5) : Color(red: 0.1, green: 0.5, blue: 0.1)
+        case .deletion:
+            return isDark ? Color(red: 0.95, green: 0.5, blue: 0.5) : Color(red: 0.6, green: 0.1, blue: 0.1)
+        case .header, .meta:
+            return isDark ? Color(red: 0.5, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.3, blue: 0.6)
+        case .context:
+            return isDark ? Color(white: 0.7) : Color(white: 0.3)
+        }
+    }
+
+    func prefixColor(isDark: Bool) -> Color {
+        switch type {
+        case .addition:
+            return isDark ? Color(red: 0.3, green: 0.9, blue: 0.3) : Color(red: 0.1, green: 0.6, blue: 0.1)
+        case .deletion:
+            return isDark ? Color(red: 0.95, green: 0.35, blue: 0.35) : Color(red: 0.7, green: 0.1, blue: 0.1)
+        default:
+            return .clear
+        }
+    }
+}
+
+enum DiffParser {
+    /// Parse a unified diff string into typed lines with line numbers.
+    static func parse(_ diff: String) -> [DiffLine] {
+        let rawLines = diff.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var result: [DiffLine] = []
+        var oldLine = 0
+        var newLine = 0
+
+        for raw in rawLines {
+            if raw.hasPrefix("@@") {
+                // Parse hunk header: @@ -oldStart,oldCount +newStart,newCount @@
+                let numbers = parseHunkHeader(raw)
+                oldLine = numbers.oldStart
+                newLine = numbers.newStart
+                result.append(DiffLine(type: .header, content: raw, prefix: "", oldLineNumber: nil, newLineNumber: nil))
+            } else if raw.hasPrefix("diff ") || raw.hasPrefix("index ") {
+                result.append(DiffLine(type: .header, content: raw, prefix: "", oldLineNumber: nil, newLineNumber: nil))
+            } else if raw.hasPrefix("---") || raw.hasPrefix("+++") {
+                result.append(DiffLine(type: .meta, content: raw, prefix: "", oldLineNumber: nil, newLineNumber: nil))
+            } else if raw.hasPrefix("+") {
+                let content = String(raw.dropFirst())
+                result.append(DiffLine(type: .addition, content: content, prefix: "+", oldLineNumber: nil, newLineNumber: "\(newLine)"))
+                newLine += 1
+            } else if raw.hasPrefix("-") {
+                let content = String(raw.dropFirst())
+                result.append(DiffLine(type: .deletion, content: content, prefix: "-", oldLineNumber: "\(oldLine)", newLineNumber: nil))
+                oldLine += 1
+            } else {
+                // Context line (starts with space or is empty)
+                let content = raw.hasPrefix(" ") ? String(raw.dropFirst()) : raw
+                result.append(DiffLine(type: .context, content: content, prefix: " ", oldLineNumber: "\(oldLine)", newLineNumber: "\(newLine)"))
+                oldLine += 1
+                newLine += 1
+            }
+        }
+
+        return result
+    }
+
+    /// Parse @@ -start,count +start,count @@ into start values.
+    private static func parseHunkHeader(_ header: String) -> (oldStart: Int, newStart: Int) {
+        // Matches: @@ -10,5 +10,8 @@
+        let pattern = #"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: header, range: NSRange(header.startIndex..., in: header)) else {
+            return (1, 1)
+        }
+        let oldStart = Int(header[Range(match.range(at: 1), in: header)!]) ?? 1
+        let newStart = Int(header[Range(match.range(at: 2), in: header)!]) ?? 1
+        return (oldStart, newStart)
     }
 }

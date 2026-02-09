@@ -13,8 +13,6 @@ extension String {
     /// Simplify tool names for better UI display
     var simplifiedToolName: String {
         switch self {
-        case "AskUserQuestion": return "Question"
-        case "request_file_permission": return "Permission"
         case "ReadFile", "Read": return "Read"
         case "WriteFile", "Write": return "Write"
         case "EditFile", "Edit": return "Edit"
@@ -96,6 +94,7 @@ struct ConversationMessage: Identifiable, Sendable {
     let toolCallId: String?
     let status: Status          // Lifecycle status (replaces isStreaming)
     let todoItems: [TodoItem]?  // Parsed todo items for .todo type
+    let diffContent: String?    // Unified diff for file-editing tools
 
     init(
         id: UUID = UUID(),
@@ -107,7 +106,8 @@ struct ConversationMessage: Identifiable, Sendable {
         toolOutput: String? = nil,
         toolCallId: String? = nil,
         status: Status = .completed,
-        todoItems: [TodoItem]? = nil
+        todoItems: [TodoItem]? = nil,
+        diffContent: String? = nil
     ) {
         self.id = id
         self.type = type
@@ -119,6 +119,7 @@ struct ConversationMessage: Identifiable, Sendable {
         self.toolCallId = toolCallId
         self.status = status
         self.todoItems = todoItems
+        self.diffContent = diffContent
     }
 }
 
@@ -143,7 +144,7 @@ struct OpenCodeEvent: Sendable, Identifiable {
     let text: String
     let toolName: String?
     let toolInput: String?
-    let toolInputDict: [String: Any]?  // Full tool input for AskUserQuestion/TodoWrite parsing
+    let toolInputDict: [String: Any]?  // Full tool input for TodoWrite parsing
     let toolOutput: String?
     let toolCallId: String?
     let sessionId: String?
@@ -240,13 +241,111 @@ struct OpenCodeEvent: Sendable, Identifiable {
                 ?? "Unknown error"
             Log.bridge("⚠️ OpenCode error event: \(errorText)")
             self.init(kind: .error, rawJson: rawJson, text: errorText, sessionId: sessionId)
-            
+
+        case "user":
+            // User message (logged by Motive in submitIntent/resumeSession)
+            let userText = part?["text"] as? String ?? object["text"] as? String ?? ""
+            self.init(kind: .user, rawJson: rawJson, text: userText, sessionId: sessionId)
+
+        case "question.asked":
+            // Native question stored from bridge — reconstruct for replay
+            let questions = object["questions"] as? [[String: Any]] ?? []
+            let questionText = questions.first?["question"] as? String ?? "Question"
+            let questionId = object["id"] as? String
+            // Build inputDict with _isNativeQuestion for handleNativeQuestion interception
+            var inputDict: [String: Any] = ["_isNativeQuestion": true, "question": questionText]
+            if let id = questionId { inputDict["_nativeQuestionID"] = id }
+            if let q = questions.first {
+                inputDict["options"] = q["options"] ?? []
+                inputDict["multiple"] = q["multiple"] ?? false
+                inputDict["custom"] = q["custom"] ?? true
+            }
+            self.init(kind: .tool, rawJson: rawJson, text: questionText, toolName: "Question", toolInput: questionText, toolInputDict: inputDict, sessionId: sessionId)
+
+        case "permission.asked":
+            // Native permission stored from bridge — reconstruct for replay
+            let permission = object["permission"] as? String ?? "unknown"
+            let patterns = object["patterns"] as? [String] ?? []
+            let permId = object["id"] as? String
+            let metadata = object["metadata"] as? [String: String] ?? [:]
+            var inputDict: [String: Any] = [
+                "_isNativePermission": true,
+                "permission": permission,
+                "patterns": patterns,
+                "metadata": metadata,
+            ]
+            if let id = permId { inputDict["_nativePermissionID"] = id }
+            let description = "\(permission): \(patterns.joined(separator: ", "))"
+            self.init(kind: .tool, rawJson: rawJson, text: description, toolName: "Permission", toolInput: patterns.joined(separator: ", "), toolInputDict: inputDict, sessionId: sessionId)
+
         default:
             // Unknown message type — log it for debugging instead of silently dropping
             let message = OpenCodeEvent.extractString(from: object, keys: ["message", "text", "content", "summary", "detail"])
             Log.bridge("⚠️ Unrecognized event type: '\(messageType)' — raw: \(rawJson.prefix(500))")
             self.init(kind: .unknown, rawJson: rawJson, text: message ?? "Unrecognized event: \(messageType)", sessionId: sessionId)
         }
+    }
+
+    // MARK: - Replay Serialization
+
+    /// Serialize this event into JSON that `OpenCodeEvent(rawJson:)` can parse back.
+    /// Used by logEvent to persist bridge-created events (which have empty rawJson).
+    func toReplayJSON() -> String {
+        // If rawJson is already populated (e.g., question.asked, permission.asked), use it as-is
+        if !rawJson.isEmpty { return rawJson }
+
+        var dict: [String: Any] = [:]
+        if let sid = sessionId { dict["sessionID"] = sid }
+
+        switch kind {
+        case .assistant:
+            dict["type"] = "text"
+            dict["part"] = ["text": text, "sessionID": sessionId ?? ""]
+
+        case .tool, .call:
+            // Reconstruct as tool_use (combined call + result format)
+            var state: [String: Any] = ["tool": toolName ?? "Tool"]
+            if let input = toolInputDict, JSONSerialization.isValidJSONObject(input) {
+                state["input"] = input
+            } else if let inputStr = toolInput {
+                state["input"] = ["description": inputStr]
+            }
+            if let output = toolOutput { state["output"] = output }
+            if let callId = toolCallId { state["id"] = callId }
+            state["status"] = toolOutput != nil ? "completed" : "running"
+            dict["type"] = "tool_use"
+            dict["part"] = ["tool": toolName ?? "Tool", "state": state, "sessionID": sessionId ?? ""]
+
+        case .thought:
+            dict["type"] = "step_start"
+            dict["part"] = ["text": text, "sessionID": sessionId ?? ""]
+
+        case .finish:
+            dict["type"] = "step_finish"
+            dict["part"] = ["reason": isSecondaryFinish ? "idle" : "stop", "sessionID": sessionId ?? ""]
+
+        case .error:
+            dict["type"] = "error"
+            dict["error"] = text
+
+        case .diff:
+            dict["type"] = "tool_use"
+            dict["part"] = ["tool": toolName ?? "Edit", "state": ["status": "completed"], "sessionID": sessionId ?? ""]
+
+        case .user:
+            dict["type"] = "user"
+            dict["part"] = ["text": text]
+
+        case .unknown:
+            return rawJson  // Nothing useful to serialize
+        }
+
+        guard JSONSerialization.isValidJSONObject(dict),
+              let data = try? JSONSerialization.data(withJSONObject: dict),
+              let str = String(data: data, encoding: .utf8) else {
+            return rawJson
+        }
+        return str
     }
 
     private static func extractString(from object: [String: Any], keys: [String]) -> String? {
@@ -294,6 +393,62 @@ struct OpenCodeEvent: Sendable, Identifiable {
         return keys.lazy.compactMap { dict[$0] as? String }.first
     }
 
+    /// Whether this tool name represents a file-editing operation.
+    private static func isFileEditTool(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        return lower == "apply_patch" || lower == "applypatch"
+            || lower == "edit" || lower == "editfile" || lower == "edit_file"
+            || lower == "write" || lower == "writefile" || lower == "write_file"
+            || lower == "patch"
+    }
+
+    /// Extract unified diff / patch content from a file-editing tool's input dictionary.
+    /// Checks common keys used by different OpenCode tools.
+    /// For file-editing tools, any non-trivial input is treated as potential diff content.
+    static func extractDiffContent(from dict: [String: Any]?) -> String? {
+        guard let dict else { return nil }
+
+        // 1. Explicit "patch" key (apply_patch structured input)
+        if let patch = dict["patch"] as? String, !patch.isEmpty {
+            return patch
+        }
+        // 2. Explicit "diff" key
+        if let diffStr = dict["diff"] as? String, !diffStr.isEmpty {
+            return diffStr
+        }
+        // 3. Explicit "content" key (some write tools)
+        if let content = dict["content"] as? String, !content.isEmpty,
+           content.contains("\n") {
+            return content
+        }
+        // 4. For edit tools: construct a mini diff from old_string / new_string
+        if let oldStr = dict["old_string"] as? String,
+           let newStr = dict["new_string"] as? String {
+            let path = dict["path"] as? String ?? dict["filePath"] as? String ?? "file"
+            var diff = "--- a/\(path)\n+++ b/\(path)\n"
+            for line in oldStr.split(separator: "\n", omittingEmptySubsequences: false) {
+                diff += "-\(line)\n"
+            }
+            for line in newStr.split(separator: "\n", omittingEmptySubsequences: false) {
+                diff += "+\(line)\n"
+            }
+            return diff
+        }
+        // 5. Raw string input — for tools like apply_patch that send patch as a bare string.
+        //    Accept any multi-line raw input for file-editing tools (caller already
+        //    verified that this is a file-editing tool via isFileEditTool).
+        if let raw = dict["_rawInput"] as? String, !raw.isEmpty, raw.contains("\n") {
+            return raw
+        }
+        // 6. Last resort: try all string values in the dict that look like multi-line content
+        for (_, value) in dict {
+            if let str = value as? String, !str.isEmpty, str.contains("\n"), str.count > 20 {
+                return str
+            }
+        }
+        return nil
+    }
+
     /// Convert to ConversationMessage for UI display
     func toMessage() -> ConversationMessage? {
         // Skip empty messages — but always keep finish, error, and tool-with-name events
@@ -334,6 +489,18 @@ struct OpenCodeEvent: Sendable, Identifiable {
             messageStatus = .completed
         }
         
+        // Extract diff content for file-editing tools
+        let diff: String?
+        if let name = toolName, OpenCodeEvent.isFileEditTool(name) {
+            diff = OpenCodeEvent.extractDiffContent(from: toolInputDict)
+            // Diagnostic: log what we have for file-edit tools
+            let dictKeys = toolInputDict?.keys.sorted().joined(separator: ",") ?? "nil"
+            let diffLen = diff?.count ?? 0
+            Log.bridge("🔍 Diff extraction: tool=\(name) dictKeys=[\(dictKeys)] diffLen=\(diffLen) hasDict=\(toolInputDict != nil)")
+        } else {
+            diff = nil
+        }
+
         return ConversationMessage(
             id: id,
             type: messageType,
@@ -342,7 +509,8 @@ struct OpenCodeEvent: Sendable, Identifiable {
             toolInput: toolInput,
             toolOutput: toolOutput,
             toolCallId: toolCallId,
-            status: messageStatus
+            status: messageStatus,
+            diffContent: diff
         )
     }
 }
@@ -356,7 +524,7 @@ extension ConversationMessage {
             id: id, type: type, content: content, timestamp: timestamp,
             toolName: toolName, toolInput: toolInput,
             toolOutput: toolOutput, toolCallId: toolCallId,
-            status: newStatus, todoItems: todoItems
+            status: newStatus, todoItems: todoItems, diffContent: diffContent
         )
     }
 
@@ -366,7 +534,7 @@ extension ConversationMessage {
             id: id, type: type, content: newContent, timestamp: timestamp,
             toolName: toolName, toolInput: toolInput,
             toolOutput: toolOutput, toolCallId: toolCallId,
-            status: status, todoItems: todoItems
+            status: status, todoItems: todoItems, diffContent: diffContent
         )
     }
 
@@ -376,7 +544,7 @@ extension ConversationMessage {
             id: id, type: type, content: summary, timestamp: timestamp,
             toolName: toolName, toolInput: toolInput,
             toolOutput: toolOutput, toolCallId: toolCallId,
-            status: status, todoItems: items
+            status: status, todoItems: items, diffContent: diffContent
         )
     }
 
@@ -393,7 +561,8 @@ extension ConversationMessage {
             toolOutput: toolOutput ?? incoming.toolOutput,
             toolCallId: toolCallId ?? incoming.toolCallId,
             status: incoming.toolOutput != nil ? .completed : status,
-            todoItems: todoItems
+            todoItems: todoItems,
+            diffContent: diffContent ?? incoming.diffContent
         )
     }
 
@@ -417,5 +586,75 @@ extension ConversationMessage {
         let lines = trimmed.split(separator: "\n", omittingEmptySubsequences: false)
         let lineCount = max(lines.count, 1)
         return "Output · \(lineCount) \(lineCount == 1 ? "line" : "lines")"
+    }
+
+    // MARK: - Snapshot Serialization
+
+    /// Serialize a messages array to Data for persistence.
+    /// Saves exactly what the live UI displayed — no reconstruction needed for history.
+    static func serializeMessages(_ messages: [ConversationMessage]) -> Data? {
+        let dicts: [[String: Any]] = messages.compactMap { msg in
+            var dict: [String: Any] = [
+                "id": msg.id.uuidString,
+                "type": msg.type.rawValue,
+                "content": msg.content,
+                "status": msg.status.rawValue,
+                "timestamp": msg.timestamp.timeIntervalSince1970,
+            ]
+            if let v = msg.toolName { dict["toolName"] = v }
+            if let v = msg.toolInput { dict["toolInput"] = v }
+            if let v = msg.toolOutput { dict["toolOutput"] = v }
+            if let v = msg.toolCallId { dict["toolCallId"] = v }
+            if let v = msg.diffContent { dict["diffContent"] = v }
+            if let todos = msg.todoItems {
+                dict["todoItems"] = todos.map { [
+                    "id": $0.id,
+                    "content": $0.content,
+                    "status": $0.status.rawValue,
+                ] as [String: String] }
+            }
+            return dict
+        }
+        guard JSONSerialization.isValidJSONObject(dicts) else { return nil }
+        return try? JSONSerialization.data(withJSONObject: dicts)
+    }
+
+    /// Deserialize a messages array from persisted Data.
+    static func deserializeMessages(_ data: Data) -> [ConversationMessage]? {
+        guard let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
+        let results: [ConversationMessage] = array.compactMap { dict in
+            guard let idStr = dict["id"] as? String, let id = UUID(uuidString: idStr),
+                  let typeStr = dict["type"] as? String, let type = MessageType(rawValue: typeStr),
+                  let content = dict["content"] as? String,
+                  let statusStr = dict["status"] as? String, let status = Status(rawValue: statusStr)
+            else { return nil }
+
+            let ts = dict["timestamp"] as? TimeInterval ?? Date().timeIntervalSince1970
+
+            var todoItems: [TodoItem]?
+            if let todoDicts = dict["todoItems"] as? [[String: String]] {
+                todoItems = todoDicts.compactMap { td in
+                    guard let id = td["id"], let content = td["content"],
+                          let statusStr = td["status"], let status = TodoItem.Status(rawValue: statusStr)
+                    else { return nil }
+                    return TodoItem(id: id, content: content, status: status)
+                }
+            }
+
+            return ConversationMessage(
+                id: id,
+                type: type,
+                content: content,
+                timestamp: Date(timeIntervalSince1970: ts),
+                toolName: dict["toolName"] as? String,
+                toolInput: dict["toolInput"] as? String,
+                toolOutput: dict["toolOutput"] as? String,
+                toolCallId: dict["toolCallId"] as? String,
+                status: status,
+                todoItems: todoItems,
+                diffContent: dict["diffContent"] as? String
+            )
+        }
+        return results.isEmpty ? nil : results
     }
 }

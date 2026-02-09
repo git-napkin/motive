@@ -44,6 +44,9 @@ final class Session {
     /// Project directory used when the session was created (resolved path)
     var projectPath: String = ""
     @Relationship(deleteRule: .cascade) var logs: [LogEntry]
+    /// Snapshot of the live messages array, saved when session completes/interrupts.
+    /// This is the SINGLE source of truth for historical display — no reconstruction needed.
+    var messagesData: Data?
     
     /// Type-safe accessor for session status
     var sessionStatus: SessionStatus {

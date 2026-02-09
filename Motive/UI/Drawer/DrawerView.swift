@@ -389,9 +389,10 @@ struct DrawerView: View {
                             )
                     }
                     
-                    // Thinking indicator (with id for scrolling)
-                    if appState.sessionStatus == .running {
-                        ThinkingIndicator(toolName: appState.currentToolName)
+                    // Thinking indicator — only show when AI is thinking (no tool running).
+                    // When tools are executing, the tool bubbles themselves show running state.
+                    if appState.sessionStatus == .running && appState.currentToolName == nil {
+                        ThinkingIndicator()
                             .id("thinking-indicator")
                             .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
