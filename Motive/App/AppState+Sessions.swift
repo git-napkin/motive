@@ -273,7 +273,7 @@ extension AppState {
 
         sessionStatus = .running
         menuBarState = .executing
-        session.status = "running"
+        session.sessionStatus = .running
 
         // Add user message and log it for replay
         let userMessage = ConversationMessage(

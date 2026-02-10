@@ -11,7 +11,7 @@ import ServiceManagement
 import SwiftUI
 
 @MainActor
-final class ConfigManager: ObservableObject {
+final class ConfigManager: ObservableObject, SkillConfigProvider {
     enum Provider: String, CaseIterable, Identifiable {
         // Primary providers (most common)
         case claude
@@ -283,6 +283,26 @@ final class ConfigManager: ObservableObject {
     }
 
     let providerConfigStore = ProviderConfigStore()
+
+    // MARK: - Extracted Managers
+
+    lazy var binaryManager: BinaryManager = BinaryManager(
+        getSourcePath: { [weak self] in self?.openCodeBinarySourcePath ?? "" },
+        setSourcePath: { [weak self] in self?.openCodeBinarySourcePath = $0 },
+        setBinaryStatus: { [weak self] in self?.binaryStatus = $0 }
+    )
+
+    lazy var usageTracker: UsageTracker = UsageTracker(
+        getJSON: { [weak self] in self?.tokenUsageTotalsJSON ?? "{}" },
+        setJSON: { [weak self] in self?.tokenUsageTotalsJSON = $0 }
+    )
+
+    lazy var projectManager: ProjectManager = ProjectManager(
+        getCurrentPath: { [weak self] in self?.currentProjectPath ?? "" },
+        setCurrentPath: { [weak self] in self?.currentProjectPath = $0 },
+        getRecentJSON: { [weak self] in self?.recentProjectsJSON ?? "[]" },
+        setRecentJSON: { [weak self] in self?.recentProjectsJSON = $0 }
+    )
 
     let keychainService = "com.velvet.motive"
     

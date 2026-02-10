@@ -70,8 +70,6 @@ extension AppState {
         Log.bridge("⬇︎ Event: kind=\(event.kind.rawValue) tool=\(event.toolName ?? "-") session=\(event.sessionId ?? "-") text=«\(event.text)»")
 
         // Once the user has manually interrupted, ignore all subsequent events.
-        // OpenCode may send trailing tool/error events (e.g. "MessageAbortedError")
-        // that would overwrite the interrupted state and confuse the UI.
         if sessionStatus == .interrupted {
             Log.debug("Ignoring post-interrupt event: \(event.kind.rawValue)")
             logEvent(event)
@@ -80,138 +78,151 @@ extension AppState {
 
         // Reset session timeout on every event
         resetSessionTimeout()
-        
+
         // Update UI state based on event kind
         switch event.kind {
         case .usage:
             applyUsageUpdate(event)
-
         case .thought:
-            menuBarState = .reasoning
-            currentToolName = nil
-            currentToolInput = nil
-            // Cancel any pending dismiss — new reasoning is arriving
-            reasoningDismissTask?.cancel()
-            reasoningDismissTask = nil
-            // Accumulate reasoning text into transient state (not messages)
-            if !event.text.isEmpty {
-                currentReasoningText = (currentReasoningText ?? "") + event.text
-            }
-            // Update CloudKit for remote commands
-            nativePromptHandler.updateRemoteCommandStatus(toolName: "Thinking...")
-            // Don't flow to processEventContent — reasoning is transient
-            logEvent(event)
+            handleThoughtEvent(event)
             return
-
         case .call, .tool:
-            // Thinking is over — fade out transient reasoning
-            dismissReasoningAfterDelay()
-            menuBarState = .executing
-            currentToolName = event.toolName ?? "Processing"
-            currentToolInput = event.toolInput
-
-            // Intercept native question events from SSE
-            if let inputDict = event.toolInputDict,
-               inputDict["_isNativeQuestion"] as? Bool == true {
-                nativePromptHandler.handleNativeQuestion(inputDict: inputDict, event: event)
-                logEvent(event)
-                return
-            }
-
-            // Intercept native permission events from SSE
-            if let inputDict = event.toolInputDict,
-               inputDict["_isNativePermission"] as? Bool == true {
-                nativePromptHandler.handleNativePermission(inputDict: inputDict, event: event)
-                logEvent(event)
-                return
-            }
-
-            // Update CloudKit for remote commands
-            nativePromptHandler.updateRemoteCommandStatus(toolName: event.toolName)
-
+            if handleToolEvent(event) { return }
         case .diff:
-            dismissReasoningAfterDelay()
-            menuBarState = .executing
-            currentToolName = "Editing file"
-            nativePromptHandler.updateRemoteCommandStatus(toolName: "Editing file")
-
+            handleDiffEvent(event)
         case .finish:
-            // Cancel session timeout on finish
-            sessionTimeoutTask?.cancel()
-            sessionTimeoutTask = nil
-            reasoningDismissTask?.cancel()
-            reasoningDismissTask = nil
-            currentReasoningText = nil
-            
-            // --- Finish deduplication ---
-            if event.isSecondaryFinish && sessionStatus == .completed {
-                Log.debug("Ignoring secondary finish event (already completed)")
-                return
-            }
-
-            menuBarState = .idle
-            sessionStatus = .completed
-            currentToolName = nil
-            currentToolInput = nil
-
-            // Mark all running tool messages as completed (cleanup)
-            messageStore.finalizeRunningMessages()
-
-            // Update session status and snapshot messages
-            if let session = currentSession {
-                session.status = "completed"
-                session.messagesData = ConversationMessage.serializeMessages(messages)
-            }
-            // Show completion in status bar
-            statusBarController?.showCompleted()
-            // Complete remote command in CloudKit
-            if let commandId = currentRemoteCommandId {
-                let resultMessage = messages.last(where: { $0.type == .assistant })?.content ?? "Task completed"
-                cloudKitManager.completeCommand(commandId: commandId, result: resultMessage)
-                currentRemoteCommandId = nil
-            }
-
+            handleFinishEvent(event)
         case .assistant:
-            dismissReasoningAfterDelay()
-            // Model is actively outputting response text — NOT thinking/waiting.
-            menuBarState = .responding
-            currentToolName = nil
-
+            handleAssistantEvent(event)
         case .user:
-            // User messages are added directly in submitIntent
             return
-
         case .error:
-            // Explicit error from OpenCode — always surface to user
-            sessionTimeoutTask?.cancel()
-            sessionTimeoutTask = nil
-            reasoningDismissTask?.cancel()
-            reasoningDismissTask = nil
-            currentReasoningText = nil
-            lastErrorMessage = event.text
-            sessionStatus = .failed
-            menuBarState = .idle
-            currentToolName = nil
-            currentToolInput = nil
-            messageStore.finalizeRunningMessages()
-            if let session = currentSession {
-                session.status = "failed"
-            }
-            statusBarController?.showError()
-            if let commandId = currentRemoteCommandId {
-                cloudKitManager.failCommand(commandId: commandId, error: event.text)
-                currentRemoteCommandId = nil
-            }
-
+            handleErrorEvent(event)
         case .unknown:
-            // With SSE, unknown events are rare — just log them
-            if !event.text.isEmpty {
-                Log.debug("Unknown event: \(event.text.prefix(200))")
-            }
+            handleUnknownEvent(event)
         }
 
         // Process event content (save session ID, add messages)
         processEventContent(event)
+    }
+
+    // MARK: - Event Handlers
+
+    /// Reset shared event state (timers, reasoning)
+    private func resetEventState() {
+        sessionTimeoutTask?.cancel()
+        sessionTimeoutTask = nil
+        reasoningDismissTask?.cancel()
+        reasoningDismissTask = nil
+        currentReasoningText = nil
+    }
+
+    /// Transition the current session to a new status
+    private func transitionSession(to status: SessionStatus) {
+        currentSession?.sessionStatus = status
+    }
+
+    private func handleThoughtEvent(_ event: OpenCodeEvent) {
+        menuBarState = .reasoning
+        currentToolName = nil
+        currentToolInput = nil
+        reasoningDismissTask?.cancel()
+        reasoningDismissTask = nil
+        if !event.text.isEmpty {
+            currentReasoningText = (currentReasoningText ?? "") + event.text
+        }
+        nativePromptHandler.updateRemoteCommandStatus(toolName: "Thinking...")
+        logEvent(event)
+    }
+
+    /// Handle tool/call events. Returns true if the event was intercepted and should not flow to processEventContent.
+    private func handleToolEvent(_ event: OpenCodeEvent) -> Bool {
+        dismissReasoningAfterDelay()
+        menuBarState = .executing
+        currentToolName = event.toolName ?? "Processing"
+        currentToolInput = event.toolInput
+
+        // Intercept native question events from SSE
+        if let inputDict = event.toolInputDict,
+           inputDict["_isNativeQuestion"] as? Bool == true {
+            nativePromptHandler.handleNativeQuestion(inputDict: inputDict, event: event)
+            logEvent(event)
+            return true
+        }
+
+        // Intercept native permission events from SSE
+        if let inputDict = event.toolInputDict,
+           inputDict["_isNativePermission"] as? Bool == true {
+            nativePromptHandler.handleNativePermission(inputDict: inputDict, event: event)
+            logEvent(event)
+            return true
+        }
+
+        nativePromptHandler.updateRemoteCommandStatus(toolName: event.toolName)
+        return false
+    }
+
+    private func handleDiffEvent(_ event: OpenCodeEvent) {
+        dismissReasoningAfterDelay()
+        menuBarState = .executing
+        currentToolName = "Editing file"
+        nativePromptHandler.updateRemoteCommandStatus(toolName: "Editing file")
+    }
+
+    private func handleFinishEvent(_ event: OpenCodeEvent) {
+        resetEventState()
+
+        // Finish deduplication
+        if event.isSecondaryFinish && sessionStatus == .completed {
+            Log.debug("Ignoring secondary finish event (already completed)")
+            return
+        }
+
+        menuBarState = .idle
+        sessionStatus = .completed
+        currentToolName = nil
+        currentToolInput = nil
+
+        messageStore.finalizeRunningMessages()
+
+        if let session = currentSession {
+            transitionSession(to: .completed)
+            session.messagesData = ConversationMessage.serializeMessages(messages)
+        }
+        statusBarController?.showCompleted()
+        if let commandId = currentRemoteCommandId {
+            let resultMessage = messages.last(where: { $0.type == .assistant })?.content ?? "Task completed"
+            cloudKitManager.completeCommand(commandId: commandId, result: resultMessage)
+            currentRemoteCommandId = nil
+        }
+    }
+
+    private func handleAssistantEvent(_ event: OpenCodeEvent) {
+        dismissReasoningAfterDelay()
+        menuBarState = .responding
+        currentToolName = nil
+    }
+
+    private func handleErrorEvent(_ event: OpenCodeEvent) {
+        resetEventState()
+        lastErrorMessage = event.text
+        sessionStatus = .failed
+        menuBarState = .idle
+        currentToolName = nil
+        currentToolInput = nil
+        messageStore.finalizeRunningMessages()
+        transitionSession(to: .failed)
+        statusBarController?.showError()
+        if let commandId = currentRemoteCommandId {
+            cloudKitManager.failCommand(commandId: commandId, error: event.text)
+            currentRemoteCommandId = nil
+        }
+    }
+
+    private func handleUnknownEvent(_ event: OpenCodeEvent) {
+        if !event.text.isEmpty {
+            Log.debug("Unknown event: \(event.text.prefix(200))")
+        }
     }
 
     // MARK: - Reasoning Lifecycle
