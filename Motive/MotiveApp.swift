@@ -41,7 +41,7 @@ struct MotiveApp: App {
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
             // Schema mismatch or corrupted database - delete and retry
-            print("[Motive] ModelContainer failed: \(error). Recreating database...")
+            Log.fault("ModelContainer failed: \(error). Recreating database...")
             Self.deleteCorruptedDatabase()
             do {
                 container = try ModelContainer(for: schema, configurations: [modelConfiguration])
@@ -82,7 +82,7 @@ struct MotiveApp: App {
         for url in filesToDelete {
             try? FileManager.default.removeItem(at: url)
         }
-        print("[Motive] Deleted corrupted database files at \(storeURL.path)")
+        Log.warning("Deleted corrupted database files at \(storeURL.path)")
     }
     
     /// Show a fatal error dialog and exit the application gracefully

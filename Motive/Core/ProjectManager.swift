@@ -77,11 +77,15 @@ final class ProjectManager {
     /// Recent projects list
     var recentProjects: [RecentProject] {
         get {
-            guard let data = getRecentJSON().data(using: .utf8),
-                  let projects = try? JSONDecoder().decode([RecentProject].self, from: data) else {
+            guard let data = getRecentJSON().data(using: .utf8) else {
                 return []
             }
-            return projects
+            do {
+                return try JSONDecoder().decode([RecentProject].self, from: data)
+            } catch {
+                Log.error("Failed to decode recent projects: \(error)")
+                return []
+            }
         }
         set {
             if let data = try? JSONEncoder().encode(newValue),

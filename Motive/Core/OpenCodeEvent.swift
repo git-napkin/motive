@@ -245,24 +245,8 @@ struct OpenCodeEvent: Sendable, Identifiable {
             self.init(kind: .tool, rawJson: rawJson, text: "", toolName: "Result", toolOutput: output, toolCallId: toolCallId, sessionId: sessionId)
             
         case "step_start":
-            // Step started
             self.init(kind: .thought, rawJson: rawJson, text: "Processing...", sessionId: sessionId)
-            
-        case "step_finish":
-            // Step finished — treat ALL reasons as a finish event.
-            // Previously only "stop" and "end_turn" were recognized, causing
-            // other reasons (e.g., "done", "max_tokens") to be silently dropped,
-            // leaving the UI stuck in "thinking" forever.
-            let reason = part?["reason"] as? String ?? "done"
-            let isTerminal = (reason == "stop" || reason == "end_turn" || reason == "done")
-            if isTerminal {
-                self.init(kind: .finish, rawJson: rawJson, text: "Completed", sessionId: sessionId)
-            } else {
-                // Non-terminal step_finish (e.g., "tool_use") — intermediate step, not final
-                // Still parse as thought so it doesn't prematurely end the session
-                self.init(kind: .thought, rawJson: rawJson, text: "", sessionId: sessionId)
-            }
-            
+
         case "error":
             // Error message — surface to user, not silently drop
             let errorText = object["error"] as? String
@@ -278,41 +262,61 @@ struct OpenCodeEvent: Sendable, Identifiable {
             self.init(kind: .user, rawJson: rawJson, text: userText, sessionId: sessionId)
 
         case "question.asked":
-            // Native question stored from bridge — reconstruct for replay
-            let questions = object["questions"] as? [[String: Any]] ?? []
-            let questionText = questions.first?["question"] as? String ?? "Question"
-            let questionId = object["id"] as? String
-            // Build inputDict with _isNativeQuestion for handleNativeQuestion interception
-            var inputDict: [String: Any] = ["_isNativeQuestion": true, "question": questionText]
-            if let id = questionId { inputDict["_nativeQuestionID"] = id }
-            if let q = questions.first {
-                inputDict["options"] = q["options"] ?? []
-                inputDict["multiple"] = q["multiple"] ?? false
-                inputDict["custom"] = q["custom"] ?? true
-            }
-            self.init(kind: .tool, rawJson: rawJson, text: questionText, toolName: "Question", toolInput: questionText, toolInputDict: inputDict, sessionId: sessionId)
+            self = Self.parseQuestionAsked(from: object, rawJson: rawJson, sessionId: sessionId)
 
         case "permission.asked":
-            // Native permission stored from bridge — reconstruct for replay
-            let permission = object["permission"] as? String ?? "unknown"
-            let patterns = object["patterns"] as? [String] ?? []
-            let permId = object["id"] as? String
-            let metadata = object["metadata"] as? [String: String] ?? [:]
-            var inputDict: [String: Any] = [
-                "_isNativePermission": true,
-                "permission": permission,
-                "patterns": patterns,
-                "metadata": metadata,
-            ]
-            if let id = permId { inputDict["_nativePermissionID"] = id }
-            let description = "\(permission): \(patterns.joined(separator: ", "))"
-            self.init(kind: .tool, rawJson: rawJson, text: description, toolName: "Permission", toolInput: patterns.joined(separator: ", "), toolInputDict: inputDict, sessionId: sessionId)
+            self = Self.parsePermissionAsked(from: object, rawJson: rawJson, sessionId: sessionId)
+
+        case "step_finish":
+            self = Self.parseStepFinish(from: part, rawJson: rawJson, sessionId: sessionId)
 
         default:
             // Unknown message type — log it for debugging instead of silently dropping
             let message = OpenCodeEvent.extractString(from: object, keys: ["message", "text", "content", "summary", "detail"])
             Log.bridge("⚠️ Unrecognized event type: '\(messageType)' — raw: \(rawJson.prefix(500))")
             self.init(kind: .unknown, rawJson: rawJson, text: message ?? "Unrecognized event: \(messageType)", sessionId: sessionId)
+        }
+    }
+
+    // MARK: - Extracted Parsers
+
+    private static func parseQuestionAsked(from object: [String: Any], rawJson: String, sessionId: String?) -> OpenCodeEvent {
+        let questions = object["questions"] as? [[String: Any]] ?? []
+        let questionText = questions.first?["question"] as? String ?? "Question"
+        let questionId = object["id"] as? String
+        var inputDict: [String: Any] = ["_isNativeQuestion": true, "question": questionText]
+        if let id = questionId { inputDict["_nativeQuestionID"] = id }
+        if let q = questions.first {
+            inputDict["options"] = q["options"] ?? []
+            inputDict["multiple"] = q["multiple"] ?? false
+            inputDict["custom"] = q["custom"] ?? true
+        }
+        return OpenCodeEvent(kind: .tool, rawJson: rawJson, text: questionText, toolName: "Question", toolInput: questionText, toolInputDict: inputDict, sessionId: sessionId)
+    }
+
+    private static func parsePermissionAsked(from object: [String: Any], rawJson: String, sessionId: String?) -> OpenCodeEvent {
+        let permission = object["permission"] as? String ?? "unknown"
+        let patterns = object["patterns"] as? [String] ?? []
+        let permId = object["id"] as? String
+        let metadata = object["metadata"] as? [String: String] ?? [:]
+        var inputDict: [String: Any] = [
+            "_isNativePermission": true,
+            "permission": permission,
+            "patterns": patterns,
+            "metadata": metadata,
+        ]
+        if let id = permId { inputDict["_nativePermissionID"] = id }
+        let description = "\(permission): \(patterns.joined(separator: ", "))"
+        return OpenCodeEvent(kind: .tool, rawJson: rawJson, text: description, toolName: "Permission", toolInput: patterns.joined(separator: ", "), toolInputDict: inputDict, sessionId: sessionId)
+    }
+
+    private static func parseStepFinish(from part: [String: Any]?, rawJson: String, sessionId: String?) -> OpenCodeEvent {
+        let reason = part?["reason"] as? String ?? "done"
+        let isTerminal = (reason == "stop" || reason == "end_turn" || reason == "done")
+        if isTerminal {
+            return OpenCodeEvent(kind: .finish, rawJson: rawJson, text: "Completed", sessionId: sessionId)
+        } else {
+            return OpenCodeEvent(kind: .thought, rawJson: rawJson, text: "", sessionId: sessionId)
         }
     }
 

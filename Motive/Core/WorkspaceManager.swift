@@ -215,11 +215,13 @@ final class WorkspaceManager {
     
     /// Load template content from bundle or fallback
     private func loadTemplate(named filename: String) -> String {
-        // Try bundle first
         let resourceName = filename.replacingOccurrences(of: ".md", with: "")
-        if let url = Bundle.main.url(forResource: resourceName, withExtension: "md", subdirectory: "Templates"),
-           let content = try? String(contentsOf: url) {
-            return content
+        if let url = Bundle.main.url(forResource: resourceName, withExtension: "md", subdirectory: "Templates") {
+            do {
+                return try String(contentsOf: url, encoding: .utf8)
+            } catch {
+                Log.warning("Failed to load template \(filename): \(error)")
+            }
         }
         
         // Fallback to hardcoded templates
@@ -250,7 +252,11 @@ final class WorkspaceManager {
     /// Load and parse agent identity from IDENTITY.md
     func loadIdentity() -> AgentIdentity? {
         let identityURL = workspaceURL.appendingPathComponent(Self.identityFilename)
-        guard let content = try? String(contentsOf: identityURL, encoding: .utf8) else {
+        let content: String
+        do {
+            content = try String(contentsOf: identityURL, encoding: .utf8)
+        } catch {
+            Log.warning("Failed to load identity file: \(error)")
             return nil
         }
         

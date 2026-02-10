@@ -160,7 +160,7 @@ extension AppState {
 
         // Clear OpenCodeBridge session ID for fresh start
         Task { await bridge.setSessionId(nil) }
-        // @Observable handles change tracking automatically
+        // @Observable handles change tracking automatically 
     }
 
     /// Clear current session messages without deleting
@@ -187,7 +187,11 @@ extension AppState {
         }
 
         modelContext.delete(session)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            Log.error("Failed to save after deleting session: \(error)")
+        }
         
         // Trigger list refresh so CommandBarView updates
         sessionListRefreshTrigger += 1
@@ -207,7 +211,11 @@ extension AppState {
         )
         if let session = try? modelContext.fetch(descriptor).first {
             modelContext.delete(session)
-            try? modelContext.save()
+            do {
+                try modelContext.save()
+            } catch {
+                Log.error("Failed to save after deleting session by id: \(error)")
+            }
             
             // Trigger list refresh so CommandBarView updates
             sessionListRefreshTrigger += 1

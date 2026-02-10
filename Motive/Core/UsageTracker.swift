@@ -91,7 +91,12 @@ final class UsageTracker {
         guard let data = getJSON().data(using: .utf8) else {
             return [:]
         }
-        return (try? JSONDecoder().decode([String: TokenUsageTotals].self, from: data)) ?? [:]
+        do {
+            return try JSONDecoder().decode([String: TokenUsageTotals].self, from: data)
+        } catch {
+            Log.error("Failed to decode token usage totals: \(error)")
+            return [:]
+        }
     }
 
     private func saveTokenUsageTotals(_ totals: [String: TokenUsageTotals]) {

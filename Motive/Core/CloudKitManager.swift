@@ -167,7 +167,7 @@ final class CloudKitManager {
         // Poll every 5 seconds as backup for push notifications
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(5))
+                try? await Task.sleep(for: .seconds(MotiveConstants.Timeouts.cloudKitPoll))
                 guard !Task.isCancelled else { break }
                 await self?.pollForPendingCommands()
             }
@@ -241,7 +241,7 @@ final class CloudKitManager {
                 // Conflict - retry with fresh record
                 if attempt < 3 {
                     Log.debug("CloudKitManager: Conflict on attempt \(attempt), retrying...")
-                    try? await Task.sleep(nanoseconds: 100_000_000)  // 0.1s delay
+                    try? await Task.sleep(nanoseconds: UInt64(MotiveConstants.Timeouts.cloudKitRetry * 1_000_000_000))
                     continue
                 }
                 Log.debug("CloudKitManager: Conflict after 3 attempts, giving up")
@@ -268,7 +268,7 @@ final class CloudKitManager {
             }
             
             // Wait 2 seconds before next poll
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(MotiveConstants.Timeouts.cloudKitPermissionPoll * 1_000_000_000))
         }
         
         Log.debug("CloudKitManager: Permission request timed out")

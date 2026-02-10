@@ -180,13 +180,22 @@ final class BinaryManager {
     }
 
     /// Resolve the OpenCode binary path
+    /// Minimum file size for a valid opencode binary (~1MB).
+    /// Rejects shell script stubs or corrupted files.
+    private static let minimumBinarySize: UInt64 = 1_000_000
+
     func resolveBinary() -> (url: URL?, error: String?) {
         let fileManager = FileManager.default
 
         if let signedPath = signedBinaryPath, fileManager.fileExists(atPath: signedPath.path) {
-            Log.config(" Using signed binary: \(signedPath.path)")
-            setBinaryStatus(.ready(signedPath.path))
-            return (signedPath, nil)
+            if Self.isValidBinary(at: signedPath) {
+                Log.config(" Using signed binary: \(signedPath.path)")
+                setBinaryStatus(.ready(signedPath.path))
+                return (signedPath, nil)
+            } else {
+                Log.warning("Signed binary at \(signedPath.path) is invalid (too small or not a Mach-O), removing")
+                try? fileManager.removeItem(at: signedPath)
+            }
         }
 
         if let nvmPath = findNvmOpenCode() {
@@ -224,7 +233,8 @@ final class BinaryManager {
     func getSignedBinaryURL(sourcePath: String) async -> (url: URL?, error: String?) {
         let fileManager = FileManager.default
 
-        if let signedPath = signedBinaryPath, fileManager.fileExists(atPath: signedPath.path) {
+        if let signedPath = signedBinaryPath, fileManager.fileExists(atPath: signedPath.path),
+           Self.isValidBinary(at: signedPath) {
             return (signedPath, nil)
         }
 
@@ -275,5 +285,14 @@ final class BinaryManager {
         }
 
         return nil
+    }
+
+    /// Check if a file is a valid opencode binary (not a shell script stub or corrupted file)
+    private static func isValidBinary(at url: URL) -> Bool {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let fileSize = attrs[.size] as? UInt64 else {
+            return false
+        }
+        return fileSize >= minimumBinarySize
     }
 }

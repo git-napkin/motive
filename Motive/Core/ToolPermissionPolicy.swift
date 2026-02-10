@@ -504,8 +504,15 @@ final class ToolPermissionPolicy {
     // MARK: - Persistence
 
     private static func loadConfigs() -> [ToolPermission: ToolPermissionConfig] {
-        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              let decoded = try? JSONDecoder().decode([String: ToolPermissionConfig].self, from: data) else {
+        guard let data = UserDefaults.standard.data(forKey: userDefaultsKey) else {
+            return defaultConfigs()
+        }
+
+        let decoded: [String: ToolPermissionConfig]
+        do {
+            decoded = try JSONDecoder().decode([String: ToolPermissionConfig].self, from: data)
+        } catch {
+            Log.error("Failed to decode tool permission configs: \(error)")
             return defaultConfigs()
         }
 
@@ -523,8 +530,11 @@ final class ToolPermissionPolicy {
         for (tool, config) in configs {
             dict[tool.rawValue] = config
         }
-        if let data = try? JSONEncoder().encode(dict) {
+        do {
+            let data = try JSONEncoder().encode(dict)
             UserDefaults.standard.set(data, forKey: Self.userDefaultsKey)
+        } catch {
+            Log.error("Failed to encode tool permission configs: \(error)")
         }
     }
 }

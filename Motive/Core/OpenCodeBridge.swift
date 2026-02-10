@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import os
 
 actor OpenCodeBridge {
 
@@ -41,7 +40,6 @@ actor OpenCodeBridge {
     private var textBuffer: [String: String] = [:]
 
     private let eventHandler: @Sendable (OpenCodeEvent) async -> Void
-    private let logger = Logger(subsystem: "com.velvet.motive", category: "Bridge")
 
     // MARK: - Init
 
@@ -60,12 +58,12 @@ actor OpenCodeBridge {
     /// Start the HTTP server and connect SSE if not already running.
     func startIfNeeded() async {
         guard let configuration else {
-            logger.error("Cannot start: no configuration")
+            Log.error("Cannot start: no configuration")
             return
         }
 
         guard await !server.isRunning else {
-            logger.info("Server already running")
+            Log.bridge("Server already running")
             return
         }
 
@@ -73,7 +71,7 @@ actor OpenCodeBridge {
             let serverConfig = OpenCodeServer.Configuration(
                 binaryURL: configuration.binaryURL,
                 environment: configuration.environment,
-                workingDirectory: await currentWorkingDirectory()
+                workingDirectory: currentWorkingDirectory()
             )
 
             // Register restart handler BEFORE starting so it's ready
@@ -84,16 +82,16 @@ actor OpenCodeBridge {
 
             let url = try await server.start(configuration: serverConfig)
             await apiClient.updateBaseURL(url)
-            await apiClient.updateDirectory(await currentWorkingDirectory())
+            await apiClient.updateDirectory(currentWorkingDirectory())
 
             // Don't start SSE here — submitIntent will start it with the
             // correct working directory. Starting without a directory causes
             // a wasted connection that gets cancelled immediately when
             // submitIntent detects the directory mismatch and reconnects.
 
-            logger.info("Bridge started with server at \(url.absoluteString)")
+            Log.bridge("Bridge started with server at \(url.absoluteString)")
         } catch {
-            logger.error("Failed to start server: \(error.localizedDescription)")
+            Log.error("Failed to start server: \(error.localizedDescription)")
             await eventHandler(OpenCodeEvent(
                 kind: .error,
                 rawJson: "",
@@ -105,7 +103,7 @@ actor OpenCodeBridge {
     /// Called by OpenCodeServer when the server auto-restarts on a new URL.
     /// Reconnects SSE and updates the API client to point at the new port.
     private func handleServerRestart(_ newURL: URL) async {
-        logger.info("Server restarted at \(newURL.absoluteString), reconnecting SSE...")
+        Log.bridge("Server restarted at \(newURL.absoluteString), reconnecting SSE...")
 
         // Update API client to the new URL
         await apiClient.updateBaseURL(newURL)
@@ -114,7 +112,7 @@ actor OpenCodeBridge {
         await sseClient.disconnect()
         startEventLoop(baseURL: newURL, directory: sseDirectory)
 
-        logger.info("Reconnected to restarted server at \(newURL.absoluteString)")
+        Log.bridge("Reconnected to restarted server at \(newURL.absoluteString)")
     }
 
     /// Stop the server and SSE.
@@ -125,7 +123,7 @@ actor OpenCodeBridge {
         await server.stop()
         activeSessions.removeAll()
         textBuffer.removeAll()
-        logger.info("Bridge stopped")
+        Log.bridge("Bridge stopped")
     }
 
     /// Restart: stop everything and start fresh.
@@ -150,7 +148,7 @@ actor OpenCodeBridge {
         if let sessionId {
             activeSessions.insert(sessionId)
         }
-        logger.info("Session ID set to: \(sessionId ?? "nil")")
+        Log.bridge("Session ID set to: \(sessionId ?? "nil")")
     }
 
     // MARK: - Intent Submission
@@ -185,11 +183,11 @@ actor OpenCodeBridge {
 
             if needsReconnect {
                 if cwd != sseDirectory {
-                    logger.info("Directory changed to \(cwd), reconnecting SSE...")
+                    Log.bridge("Directory changed to \(cwd), reconnecting SSE...")
                 } else if !sseAlive {
-                    logger.info("SSE stream dead, reconnecting for \(cwd)...")
+                    Log.bridge("SSE stream dead, reconnecting for \(cwd)...")
                 } else {
-                    logger.info("Starting SSE for directory: \(cwd)")
+                    Log.bridge("Starting SSE for directory: \(cwd)")
                 }
                 sseDirectory = cwd
                 await sseClient.disconnect()
@@ -200,7 +198,7 @@ actor OpenCodeBridge {
         do {
             try await submitPrompt(text: text)
         } catch {
-            logger.error("Failed to submit intent: \(error.localizedDescription)")
+            Log.error("Failed to submit intent: \(error.localizedDescription)")
             await eventHandler(OpenCodeEvent(
                 kind: .error,
                 rawJson: "",
@@ -221,15 +219,15 @@ actor OpenCodeBridge {
     /// Interrupt/abort the current session.
     func interrupt() async {
         guard let sessionId = currentSessionId else {
-            logger.warning("No active session to interrupt")
+            Log.warning("No active session to interrupt")
             return
         }
 
         do {
             try await apiClient.abortSession(id: sessionId)
-            logger.info("Aborted session: \(sessionId)")
+            Log.bridge("Aborted session: \(sessionId)")
         } catch {
-            logger.error("Failed to abort session: \(error.localizedDescription)")
+            Log.error("Failed to abort session: \(error.localizedDescription)")
         }
     }
 
@@ -240,7 +238,7 @@ actor OpenCodeBridge {
         do {
             try await apiClient.replyToQuestion(requestID: requestID, answers: answers)
         } catch {
-            logger.error("Failed to reply to question \(requestID): \(error.localizedDescription)")
+            Log.error("Failed to reply to question \(requestID): \(error.localizedDescription)")
         }
     }
 
@@ -249,7 +247,7 @@ actor OpenCodeBridge {
         do {
             try await apiClient.rejectQuestion(requestID: requestID)
         } catch {
-            logger.error("Failed to reject question \(requestID): \(error.localizedDescription)")
+            Log.error("Failed to reject question \(requestID): \(error.localizedDescription)")
         }
     }
 
@@ -258,7 +256,7 @@ actor OpenCodeBridge {
         do {
             try await apiClient.replyToPermission(requestID: requestID, reply: reply)
         } catch {
-            logger.error("Failed to reply to permission \(requestID): \(error.localizedDescription)")
+            Log.error("Failed to reply to permission \(requestID): \(error.localizedDescription)")
         }
     }
 
@@ -277,7 +275,7 @@ actor OpenCodeBridge {
                 await self.handleSSEEvent(sseEvent)
             }
 
-            await self.logger.info("SSE event loop ended")
+            Log.bridge("SSE event loop ended")
         }
     }
 
@@ -285,147 +283,191 @@ actor OpenCodeBridge {
     private func handleSSEEvent(_ event: SSEClient.SSEEvent) async {
         switch event {
         case .connected:
-            logger.info("SSE connected")
+            Log.bridge("SSE connected")
 
         case .heartbeat:
-            break // Silent
+            break
 
         case .textDelta(let info):
-            guard isTrackedSession(info.sessionID) else {
-                logger.debug("Dropping textDelta for untracked session: \(info.sessionID)")
-                return
-            }
-            // Accumulate text and emit as assistant event
-            textBuffer[info.sessionID, default: ""] += info.delta
-            // Emit the delta for streaming display
-            await eventHandler(OpenCodeEvent(
-                kind: .assistant,
-                rawJson: "",
-                text: info.delta,
-                sessionId: info.sessionID
-            ))
+            await handleTextDelta(info)
 
         case .textComplete(let info):
-            guard isTrackedSession(info.sessionID) else { return }
-            // Flush any remaining buffer
-            textBuffer.removeValue(forKey: info.sessionID)
-            // Don't emit another event — the streamed deltas are already displayed
+            handleTextComplete(info)
 
         case .reasoningDelta(let info):
-            guard isTrackedSession(info.sessionID) else { return }
-            await eventHandler(OpenCodeEvent(
-                kind: .thought,
-                rawJson: "",
-                text: info.delta,
-                sessionId: info.sessionID
-            ))
+            await handleReasoningDelta(info)
 
         case .toolRunning(let info):
-            guard isTrackedSession(info.sessionID) else { return }
-            let inputDict = deserializeInputJSON(info.inputJSON)
-            await eventHandler(OpenCodeEvent(
-                kind: .tool,
-                rawJson: "",
-                text: info.inputSummary ?? "",
-                toolName: info.toolName,
-                toolInput: info.inputSummary,
-                toolInputDict: inputDict,
-                toolCallId: info.toolCallID,
-                sessionId: info.sessionID
-            ))
+            await handleToolRunning(info)
 
         case .toolCompleted(let info):
-            guard isTrackedSession(info.sessionID) else { return }
-            let inputDict = deserializeInputJSON(info.inputJSON)
-            await eventHandler(OpenCodeEvent(
-                kind: .tool,
-                rawJson: "",
-                text: info.inputSummary ?? "",
-                toolName: info.toolName,
-                toolInput: info.inputSummary,
-                toolInputDict: inputDict,
-                toolOutput: info.output,
-                toolCallId: info.toolCallID,
-                sessionId: info.sessionID,
-                diff: info.diff
-            ))
+            await handleToolCompleted(info)
 
         case .toolError(let info):
-            guard isTrackedSession(info.sessionID) else { return }
-            await eventHandler(OpenCodeEvent(
-                kind: .tool,
-                rawJson: "",
-                text: info.error,
-                toolName: info.toolName,
-                toolOutput: "Error: \(info.error)",
-                toolCallId: info.toolCallID,
-                sessionId: info.sessionID
-            ))
+            await handleToolError(info)
 
         case .usageUpdated(let info):
-            guard isTrackedSession(info.sessionID) else { return }
-            await eventHandler(OpenCodeEvent(
-                kind: .usage,
-                rawJson: "",
-                text: "",
-                sessionId: info.sessionID,
-                model: info.model,
-                usage: info.usage,
-                cost: info.cost,
-                messageId: info.messageID
-            ))
+            await handleUsageUpdate(info)
 
         case .sessionIdle(let sessionID):
-            guard isTrackedSession(sessionID) else { return }
-            textBuffer.removeValue(forKey: sessionID)
-            await eventHandler(OpenCodeEvent(
-                kind: .finish,
-                rawJson: "",
-                text: "Completed",
-                sessionId: sessionID
-            ))
+            await handleSessionIdle(sessionID)
 
         case .sessionStatus(let info):
             guard isTrackedSession(info.sessionID) else { return }
-            // Ignore busy status to avoid injecting synthetic "Processing..." text.
             break
 
         case .sessionError(let info):
-            guard isTrackedSession(info.sessionID) else { return }
-            textBuffer.removeValue(forKey: info.sessionID)
-            await eventHandler(OpenCodeEvent(
-                kind: .error,
-                rawJson: "",
-                text: info.error,
-                sessionId: info.sessionID
-            ))
+            await handleSessionError(info)
 
         case .questionAsked(let request):
-            guard isTrackedSession(request.sessionID) else { return }
-            // Forward to AppState for QuickConfirm UI
-            await eventHandler(OpenCodeEvent(
-                kind: .tool,
-                rawJson: encodeQuestionAsJSON(request),
-                text: request.questions.first?.question ?? "Question",
-                toolName: "Question",
-                toolInput: request.questions.first?.question,
-                toolInputDict: buildQuestionInputDict(request),
-                sessionId: request.sessionID
-            ))
+            await handleQuestionSSEEvent(request)
 
         case .permissionAsked(let request):
-            guard isTrackedSession(request.sessionID) else { return }
-            // Forward to AppState for permission UI
-            await eventHandler(OpenCodeEvent(
-                kind: .tool,
-                rawJson: encodePermissionAsJSON(request),
-                text: "Permission: \(request.permission) for \(request.patterns.joined(separator: ", "))",
-                toolName: "Permission",
-                toolInput: request.patterns.joined(separator: ", "),
-                toolInputDict: buildPermissionInputDict(request),
-                sessionId: request.sessionID
-            ))
+            await handlePermissionSSEEvent(request)
         }
+    }
+
+    // MARK: - Text Event Handlers
+
+    private func handleTextDelta(_ info: SSEClient.TextDeltaInfo) async {
+        guard isTrackedSession(info.sessionID) else { return }
+        textBuffer[info.sessionID, default: ""] += info.delta
+        await eventHandler(OpenCodeEvent(
+            kind: .assistant,
+            rawJson: "",
+            text: info.delta,
+            sessionId: info.sessionID
+        ))
+    }
+
+    private func handleTextComplete(_ info: SSEClient.TextCompleteInfo) {
+        guard isTrackedSession(info.sessionID) else { return }
+        textBuffer.removeValue(forKey: info.sessionID)
+    }
+
+    private func handleReasoningDelta(_ info: SSEClient.ReasoningDeltaInfo) async {
+        guard isTrackedSession(info.sessionID) else { return }
+        await eventHandler(OpenCodeEvent(
+            kind: .thought,
+            rawJson: "",
+            text: info.delta,
+            sessionId: info.sessionID
+        ))
+    }
+
+    // MARK: - Tool Event Handlers
+
+    private func handleToolRunning(_ info: SSEClient.ToolInfo) async {
+        guard isTrackedSession(info.sessionID) else { return }
+        let inputDict = deserializeInputJSON(info.inputJSON)
+        await eventHandler(OpenCodeEvent(
+            kind: .tool,
+            rawJson: "",
+            text: info.inputSummary ?? "",
+            toolName: info.toolName,
+            toolInput: info.inputSummary,
+            toolInputDict: inputDict,
+            toolCallId: info.toolCallID,
+            sessionId: info.sessionID
+        ))
+    }
+
+    private func handleToolCompleted(_ info: SSEClient.ToolCompletedInfo) async {
+        guard isTrackedSession(info.sessionID) else { return }
+        let inputDict = deserializeInputJSON(info.inputJSON)
+        await eventHandler(OpenCodeEvent(
+            kind: .tool,
+            rawJson: "",
+            text: info.inputSummary ?? "",
+            toolName: info.toolName,
+            toolInput: info.inputSummary,
+            toolInputDict: inputDict,
+            toolOutput: info.output,
+            toolCallId: info.toolCallID,
+            sessionId: info.sessionID,
+            diff: info.diff
+        ))
+    }
+
+    private func handleToolError(_ info: SSEClient.ToolErrorInfo) async {
+        guard isTrackedSession(info.sessionID) else { return }
+        await eventHandler(OpenCodeEvent(
+            kind: .tool,
+            rawJson: "",
+            text: info.error,
+            toolName: info.toolName,
+            toolOutput: "Error: \(info.error)",
+            toolCallId: info.toolCallID,
+            sessionId: info.sessionID
+        ))
+    }
+
+    // MARK: - Usage Event Handler
+
+    private func handleUsageUpdate(_ info: SSEClient.UsageInfo) async {
+        guard isTrackedSession(info.sessionID) else { return }
+        await eventHandler(OpenCodeEvent(
+            kind: .usage,
+            rawJson: "",
+            text: "",
+            sessionId: info.sessionID,
+            model: info.model,
+            usage: info.usage,
+            cost: info.cost,
+            messageId: info.messageID
+        ))
+    }
+
+    // MARK: - Session Lifecycle Handlers
+
+    private func handleSessionIdle(_ sessionID: String) async {
+        guard isTrackedSession(sessionID) else { return }
+        textBuffer.removeValue(forKey: sessionID)
+        await eventHandler(OpenCodeEvent(
+            kind: .finish,
+            rawJson: "",
+            text: "Completed",
+            sessionId: sessionID
+        ))
+    }
+
+    private func handleSessionError(_ info: SSEClient.SessionErrorInfo) async {
+        guard isTrackedSession(info.sessionID) else { return }
+        textBuffer.removeValue(forKey: info.sessionID)
+        await eventHandler(OpenCodeEvent(
+            kind: .error,
+            rawJson: "",
+            text: info.error,
+            sessionId: info.sessionID
+        ))
+    }
+
+    // MARK: - Native Prompt Handlers
+
+    private func handleQuestionSSEEvent(_ request: SSEClient.QuestionRequest) async {
+        guard isTrackedSession(request.sessionID) else { return }
+        await eventHandler(OpenCodeEvent(
+            kind: .tool,
+            rawJson: encodeQuestionAsJSON(request),
+            text: request.questions.first?.question ?? "Question",
+            toolName: "Question",
+            toolInput: request.questions.first?.question,
+            toolInputDict: buildQuestionInputDict(request),
+            sessionId: request.sessionID
+        ))
+    }
+
+    private func handlePermissionSSEEvent(_ request: SSEClient.NativePermissionRequest) async {
+        guard isTrackedSession(request.sessionID) else { return }
+        await eventHandler(OpenCodeEvent(
+            kind: .tool,
+            rawJson: encodePermissionAsJSON(request),
+            text: "Permission: \(request.permission) for \(request.patterns.joined(separator: ", "))",
+            toolName: "Permission",
+            toolInput: request.patterns.joined(separator: ", "),
+            toolInputDict: buildPermissionInputDict(request),
+            sessionId: request.sessionID
+        ))
     }
 
     // MARK: - Helpers
@@ -449,19 +491,19 @@ actor OpenCodeBridge {
         let sessionID: String
         if let existing = currentSessionId {
             sessionID = existing
-            logger.info("Reusing existing session: \(sessionID)")
+            Log.bridge("Reusing existing session: \(sessionID)")
         } else {
             let session = try await apiClient.createSession()
             sessionID = session.id
             currentSessionId = sessionID
             activeSessions.insert(sessionID)
-            logger.info("Created new session: \(sessionID)")
+            Log.bridge("Created new session: \(sessionID)")
         }
 
         let sessionCount = activeSessions.count
         let sseAlive = await sseClient.hasActiveStream
         let sseConnected = await sseClient.connected
-        logger.info("Active sessions: \(sessionCount), SSE alive: \(sseAlive), SSE connected: \(sseConnected)")
+        Log.bridge("Active sessions: \(sessionCount), SSE alive: \(sseAlive), SSE connected: \(sseConnected)")
 
         // Send prompt asynchronously (results via SSE)
         try await apiClient.sendPromptAsync(
@@ -469,7 +511,7 @@ actor OpenCodeBridge {
             text: text,
             model: configuration?.model
         )
-        logger.info("Submitted intent to session \(sessionID)")
+        Log.bridge("Submitted intent to session \(sessionID)")
     }
 
     // MARK: - JSON Encoding Helpers
