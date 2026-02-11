@@ -47,12 +47,13 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case model
     case usage
     case skills
+    case memory
     case permissions
     case advanced
     case about
-    
+
     var id: String { rawValue }
-    
+
     var title: String {
         switch self {
         case .general: return L10n.Settings.general
@@ -60,6 +61,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .model: return L10n.Settings.aiProvider
         case .usage: return L10n.Settings.usage
         case .skills: return L10n.Settings.skills
+        case .memory: return "Memory"
         case .permissions: return L10n.Settings.permissions
         case .advanced: return L10n.Settings.advanced
         case .about: return L10n.Settings.about
@@ -73,12 +75,13 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .model: return L10n.Settings.aiProviderSubtitle
         case .usage: return L10n.Settings.usageSubtitle
         case .skills: return L10n.Settings.skillsSubtitle
+        case .memory: return "Persistent memory and knowledge base"
         case .permissions: return L10n.Settings.permissionsSubtitle
         case .advanced: return L10n.Settings.advancedSubtitle
         case .about: return L10n.Settings.aboutSubtitle
         }
     }
-    
+
     var icon: String {
         switch self {
         case .general: return "gearshape.fill"
@@ -86,6 +89,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .model: return "cpu.fill"
         case .usage: return "chart.bar.fill"
         case .skills: return "sparkles"
+        case .memory: return "brain.fill"
         case .permissions: return "lock.shield.fill"
         case .advanced: return "wrench.and.screwdriver.fill"
         case .about: return "info.circle.fill"
@@ -110,6 +114,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
             UsageSettingsView()
         case .skills:
             SkillsSettingsView()
+        case .memory:
+            MemorySettingsView()
         case .permissions:
             PermissionPolicyView()
         case .advanced:

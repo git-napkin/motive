@@ -66,7 +66,8 @@ final class WorkspaceManager {
     static let userFilename = "USER.md"
     static let agentsFilename = "AGENTS.md"
     static let bootstrapFilename = "BOOTSTRAP.md"
-    
+    static let memoryFilename = "MEMORY.md"
+
     static let bootstrapFiles = [soulFilename, identityFilename, userFilename, agentsFilename, bootstrapFilename]
     static let personaFiles = [soulFilename, identityFilename, userFilename, agentsFilename]
     
@@ -186,7 +187,7 @@ final class WorkspaceManager {
         }
         
         // Create subdirectories
-        let subdirs = ["config", "skills", "mcp"]
+        let subdirs = ["config", "skills", "mcp", "memory", "plugins"]
         for subdir in subdirs {
             let subdirURL = workspaceURL.appendingPathComponent(subdir)
             if !fm.fileExists(atPath: subdirURL.path) {
@@ -196,20 +197,74 @@ final class WorkspaceManager {
         
         // Create bootstrap files (write-if-missing pattern)
         try ensureBootstrapFiles()
+
+        // Create memory files
+        try ensureMemoryFiles()
     }
     
     /// Create bootstrap files if they don't exist
     private func ensureBootstrapFiles() throws {
         let fm = FileManager.default
-        
+
         for filename in Self.bootstrapFiles {
             let targetPath = workspaceURL.appendingPathComponent(filename)
             guard !fm.fileExists(atPath: targetPath.path) else { continue }
-            
+
             // Load from bundle or use fallback
             let content = loadTemplate(named: filename)
             try content.write(to: targetPath, atomically: true, encoding: .utf8)
             Log.config("Created bootstrap file: \(filename)")
+        }
+    }
+
+    /// Create MEMORY.md if it doesn't exist
+    private func ensureMemoryFiles() throws {
+        let fm = FileManager.default
+        let memoryPath = workspaceURL.appendingPathComponent(Self.memoryFilename)
+        guard !fm.fileExists(atPath: memoryPath.path) else { return }
+
+        let content = FallbackTemplates.memoryTemplate
+        try content.write(to: memoryPath, atomically: true, encoding: .utf8)
+        Log.config("Created memory file: \(Self.memoryFilename)")
+    }
+
+    /// Deploy the motive-memory plugin from the app bundle to ~/.motive/plugins/motive-memory/.
+    /// Overwrites existing files to ensure the plugin stays up to date with the app version.
+    func ensureMemoryPlugin() {
+        let fm = FileManager.default
+        let pluginDir = workspaceURL.appendingPathComponent("plugins/motive-memory")
+
+        // Look for bundled plugin resources
+        guard let bundleDir = Bundle.main.url(
+            forResource: "motive-memory",
+            withExtension: nil,
+            subdirectory: "Plugins"
+        ) else {
+            Log.config("No bundled motive-memory plugin found — skipping deployment")
+            return
+        }
+
+        do {
+            // Create plugin directory
+            try fm.createDirectory(at: pluginDir, withIntermediateDirectories: true)
+
+            // Copy all files from bundle to plugin directory
+            let contents = try fm.contentsOfDirectory(
+                at: bundleDir,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+            for item in contents {
+                let dest = pluginDir.appendingPathComponent(item.lastPathComponent)
+                // Overwrite existing to keep plugin up to date
+                if fm.fileExists(atPath: dest.path) {
+                    try fm.removeItem(at: dest)
+                }
+                try fm.copyItem(at: item, to: dest)
+            }
+            Log.config("Deployed motive-memory plugin to \(pluginDir.path)")
+        } catch {
+            Log.config("Failed to deploy motive-memory plugin: \(error)")
         }
     }
     
@@ -372,22 +427,41 @@ enum FallbackTemplates {
     
     static let bootstrapTemplate = """
     # Welcome to Your Motive Workspace
-    
+
     This is your personal AI workspace. The files here define who your AI assistant is and how it behaves.
-    
+
     ## Files
-    
+
     - **SOUL.md** - Core personality and values
     - **IDENTITY.md** - Name, emoji, and character traits
     - **USER.md** - Information about you for personalization
     - **AGENTS.md** - Workspace rules and project conventions
-    
+    - **MEMORY.md** - Long-term memory across sessions
+
     ## Getting Started
-    
+
     1. Open IDENTITY.md and give your assistant a name and emoji
     2. Add some info about yourself in USER.md
     3. Customize SOUL.md if you want a different personality
-    
+
     The assistant will read these files and embody the persona you define.
+    """
+
+    static let memoryTemplate = """
+    # MEMORY.md - Long-Term Memory
+
+    _This file persists across sessions. Your AI reads it at the start of each conversation._
+
+    ## User Preferences
+
+    *(Learned preferences will be recorded here)*
+
+    ## Key Facts
+
+    *(Important facts about the user and their projects)*
+
+    ## Patterns & Conventions
+
+    *(Recurring patterns, coding conventions, workflow preferences)*
     """
 }

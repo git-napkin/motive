@@ -9,6 +9,7 @@ import AppKit
 import Combine
 import SwiftData
 import SwiftUI
+import UserNotifications
 
 extension AppState {
     func submitIntent(_ text: String) {
@@ -158,7 +159,7 @@ extension AppState {
         currentContextTokens = nil
         resetUsageDeduplication()
 
-        // Clear OpenCodeBridge session ID for fresh start
+        // Clear OpenCodeBridge session ID for fresh start 、 h
         Task { await bridge.setSessionId(nil) }
         // @Observable handles change tracking automatically 
     }
@@ -311,5 +312,66 @@ extension AppState {
         let session = Session(intent: intent, projectPath: sessionProjectPath)
         currentSession = session
         modelContext?.insert(session)
+    }
+
+    // MARK: - Background Sessions
+
+    /// Submit an intent as a background session (does not switch focus).
+    func submitBackgroundIntent(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let cwd = configManager.currentProjectURL.path
+        let bgSession = BackgroundSession(id: UUID().uuidString, intent: trimmed, startedAt: Date())
+        backgroundSessions.append(bgSession)
+
+        Task {
+            if let sessionId = await bridge.createBackgroundSession(text: trimmed, cwd: cwd) {
+                // Update the background session with the real OpenCode session ID
+                if let idx = backgroundSessions.firstIndex(where: { $0.id == bgSession.id }) {
+                    backgroundSessions[idx] = BackgroundSession(
+                        id: sessionId,
+                        intent: trimmed,
+                        startedAt: bgSession.startedAt
+                    )
+                }
+            } else {
+                // Failed to create — remove from list
+                backgroundSessions.removeAll { $0.id == bgSession.id }
+            }
+        }
+    }
+
+    /// Called when a background session completes (from SSE event handler).
+    func completeBackgroundSession(sessionId: String) {
+        guard let idx = backgroundSessions.firstIndex(where: { $0.id == sessionId }) else { return }
+        let session = backgroundSessions[idx]
+        backgroundSessions[idx].status = .completed
+
+        // Send macOS notification with result summary
+        let content = UNMutableNotificationContent()
+        content.title = "Task Completed"
+        if let result = session.resultText, !result.isEmpty {
+            // Show result (truncated) with intent as subtitle for context
+            content.subtitle = String(session.intent.prefix(60))
+            content.body = String(result.prefix(200))
+        } else {
+            content.body = String(session.intent.prefix(80))
+        }
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "bg-session-\(sessionId)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+        // Session stays in the list until user dismisses it
+    }
+
+    /// Dismiss a background session (user action from BackgroundSessionsBar).
+    func dismissBackgroundSession(id: String) {
+        backgroundSessions.removeAll { $0.id == id }
+        updateStatusBar()
     }
 }

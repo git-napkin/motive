@@ -34,6 +34,10 @@ extension CommandBarView {
             if selectedProjectIndex > 0 {
                 selectedProjectIndex -= 1
             }
+        } else if mode.isModes {
+            if selectedModeIndex > 0 {
+                selectedModeIndex -= 1
+            }
         }
     }
 
@@ -62,6 +66,10 @@ extension CommandBarView {
             let totalItems = 2 + configManager.recentProjects.count
             if selectedProjectIndex < totalItems - 1 {
                 selectedProjectIndex += 1
+            }
+        } else if mode.isModes {
+            if selectedModeIndex < 1 {  // 2 modes: agent(0), plan(1)
+                selectedModeIndex += 1
             }
         }
     }
@@ -105,7 +113,7 @@ extension CommandBarView {
             return
         }
 
-        if mode.isCommand || mode.isHistory || mode.isProjects {
+        if mode.isCommand || mode.isHistory || mode.isProjects || mode.isModes {
             // Return to previous mode (session or idle)
             if appState.sessionStatus == .running {
                 mode = .running

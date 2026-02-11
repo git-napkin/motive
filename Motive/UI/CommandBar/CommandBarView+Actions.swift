@@ -95,8 +95,8 @@ extension CommandBarView {
         // Always check for @ file completion
         checkForAtCompletion(newValue)
 
-        // If file completion, history/projects, or running — don't alter mode
-        guard !showFileCompletion, !mode.isHistory, !mode.isProjects, mode != .running else { return }
+        // If file completion, history/projects/modes, or running — don't alter mode
+        guard !showFileCompletion, !mode.isHistory, !mode.isProjects, !mode.isModes, mode != .running else { return }
 
         let isInSession = mode == .completed || mode == .running || mode.isFromSession
 
@@ -134,8 +134,8 @@ extension CommandBarView {
     }
 
     func handleSessionStatusChange(_ status: SessionStatus) {
-        // Don't change mode if user is browsing commands/history/projects
-        if mode.isCommand || mode.isHistory || mode.isProjects {
+        // Don't change mode if user is browsing commands/history/projects/modes
+        if mode.isCommand || mode.isHistory || mode.isProjects || mode.isModes {
             return
         }
 

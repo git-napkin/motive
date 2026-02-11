@@ -247,6 +247,29 @@ struct AdvancedSettingsView: View {
                             .controlSize(.small)
                     }
                 }
+
+                // Context Compaction Section
+                CollapsibleSection("Context Compaction", icon: "arrow.triangle.2.circlepath") {
+                    SettingRow("Auto Compaction", description: "Automatically compress context when approaching model limits") {
+                        Toggle("", isOn: $configManager.compactionEnabled)
+                            .toggleStyle(.switch)
+                            .tint(Color.Aurora.primary)
+                            .controlSize(.small)
+                            .onChange(of: configManager.compactionEnabled) { _, _ in
+                                appState.scheduleAgentRestart()
+                            }
+                    }
+
+                    SettingRow("Memory System", description: "Enable persistent memory across sessions (requires motive-memory plugin)", showDivider: false) {
+                        Toggle("", isOn: $configManager.memoryEnabled)
+                            .toggleStyle(.switch)
+                            .tint(Color.Aurora.primary)
+                            .controlSize(.small)
+                            .onChange(of: configManager.memoryEnabled) { _, _ in
+                                appState.scheduleAgentRestart()
+                            }
+                    }
+                }
             }
         }
         .fileImporter(

@@ -45,6 +45,9 @@ extension AppState {
         SkillManager.shared.setConfigManager(configManager)
         SkillRegistry.shared.setConfigManager(configManager)
 
+        // Migrate legacy "motive" agent name to "agent"
+        configManager.migrateAgentNameIfNeeded()
+
         observeMenuBarState()
         Task {
             await configureBridge()
@@ -99,11 +102,13 @@ extension AppState {
     func updateStatusBar() {
         let isWaiting = pendingQuestionMessageId != nil
         let inputType = "Question"
+        let bgCount = backgroundSessions.filter { $0.status == .running }.count
         statusBarController?.update(
             state: menuBarState,
             toolName: currentToolName,
             isWaitingForInput: isWaiting,
-            inputType: inputType
+            inputType: inputType,
+            backgroundCount: bgCount
         )
     }
 
@@ -115,11 +120,13 @@ extension AppState {
                 guard let self else { return }
                 let isWaiting = self.pendingQuestionMessageId != nil
                 let inputType = "Question"
+                let bgCount = self.backgroundSessions.filter { $0.status == .running }.count
                 self.statusBarController?.update(
                     state: state,
                     toolName: self.currentToolName,
                     isWaitingForInput: isWaiting,
-                    inputType: inputType
+                    inputType: inputType,
+                    backgroundCount: bgCount
                 )
             }
             .store(in: &cancellables)

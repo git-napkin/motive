@@ -41,6 +41,7 @@ extension CommandBarView {
                         }
                     },
                     onCmdN: handleCmdN,
+                    onCmdReturn: submitBackground,
                     onEscape: handleEscape
                 )
                 .focused($isInputFocused)

@@ -26,6 +26,8 @@ extension CommandBarView {
             }
         case .projects:
             submitProjectSelection()
+        case .modes:
+            submitModeSelection()
         case .completed:
             sendFollowUp()
         default:
@@ -47,6 +49,17 @@ extension CommandBarView {
             }
         }
         executeSelectedCommand()
+    }
+
+    /// Handle submit in modes mode — switch agent/plan.
+    private func submitModeSelection() {
+        let modeName = selectedModeIndex == 0 ? "agent" : "plan"
+        configManager.currentAgent = modeName
+        configManager.generateOpenCodeConfig()
+        appState.reconfigureBridge()
+        let wasFromSession = mode.isFromSession || !appState.messages.isEmpty
+        mode = wasFromSession ? .completed : .idle
+        inputText = ""
     }
 
     /// Handle submit in projects mode — Choose folder / Default / Recent.
@@ -81,6 +94,11 @@ extension CommandBarView {
     func executeCommand(_ command: CommandDefinition) {
         let wasFromSession = mode.isFromSession || !appState.messages.isEmpty
         switch command.id {
+        case "mode":
+            inputText = ""
+            mode = .modes(fromSession: wasFromSession)
+            // Pre-select the current mode
+            selectedModeIndex = configManager.currentAgent == "plan" ? 1 : 0
         case "project":
             inputText = ""
             configManager.ensureCurrentProjectInRecents()
@@ -116,5 +134,13 @@ extension CommandBarView {
         inputText = ""
         appState.resumeSession(with: text)
         // CommandBar stays visible - mode will change to .running via sessionStatus observer
+    }
+
+    /// Submit the current input as a background task (Cmd+Enter)
+    func submitBackground() {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        inputText = ""
+        appState.submitBackgroundIntent(text)
     }
 }

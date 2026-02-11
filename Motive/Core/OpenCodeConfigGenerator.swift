@@ -14,6 +14,18 @@ struct OpenCodeConfigGenerator {
         let baseURL: String
         let workspaceDirectory: URL
         let skillsSystemEnabled: Bool
+        let compactionEnabled: Bool
+        let memoryEnabled: Bool
+        let agents: [AgentConfig]
+        let defaultAgent: String
+    }
+
+    struct AgentConfig {
+        let name: String
+        let description: String
+        let prompt: String
+        let mode: String
+        let permission: [String: Any]
     }
 
     /// Generate opencode.json configuration and write skill files.
@@ -53,21 +65,74 @@ struct OpenCodeConfigGenerator {
         var permissionRules = permissionPolicy.toOpenCodePermissionRules()
         permissionRules["skill"] = skillPermissions
 
+        // Build agent configurations
+        var agentDict: [String: Any] = [:]
+        if inputs.agents.isEmpty {
+            // Fallback: single agent
+            agentDict["agent"] = [
+                "description": "Default agent",
+                "prompt": systemPrompt,
+                "mode": "primary",
+                "permission": permissionRules
+            ] as [String: Any]
+        } else {
+            for agent in inputs.agents {
+                agentDict[agent.name] = [
+                    "description": agent.description,
+                    "prompt": agent.prompt,
+                    "mode": agent.mode,
+                    "permission": agent.permission
+                ] as [String: Any]
+            }
+        }
+
         var config: [String: Any] = [
             "$schema": "https://opencode.ai/config.json",
-            "default_agent": "motive",
+            "default_agent": inputs.defaultAgent,
             "enabled_providers": [providerName],
             // Permission rules from ToolPermissionPolicy (native enforcement)
             "permission": permissionRules,
-            "agent": [
-                "motive": [
-                    "description": "Motive default agent",
-                    "prompt": systemPrompt,
-                    "mode": "primary",
-                    "permission": permissionRules
-                ]
-            ]
+            "agent": agentDict
         ]
+
+        // Compaction configuration
+        if inputs.compactionEnabled {
+            config["compaction"] = [
+                "auto": true,
+                "prune": true
+            ]
+        }
+
+        // Memory plugin configuration
+        if inputs.memoryEnabled {
+            let pluginPath = inputs.workspaceDirectory
+                .appendingPathComponent("plugins/motive-memory/src/index.ts").path
+            config["plugin"] = ["file://\(pluginPath)"]
+        }
+
+        // Native instructions: point to persona files so OpenCode auto-injects them
+        var instructions: [String] = []
+        let personaFiles = ["SOUL.md", "IDENTITY.md", "USER.md", "AGENTS.md", "MEMORY.md"]
+        for file in personaFiles {
+            let path = inputs.workspaceDirectory.appendingPathComponent(file)
+            if FileManager.default.fileExists(atPath: path.path) {
+                instructions.append(path.path)
+            }
+        }
+        if !instructions.isEmpty {
+            config["instructions"] = instructions
+        }
+
+        // Skills paths configuration
+        // NOTE: "skills" top-level key requires OpenCode >= v1.1.45.
+        // For older versions, skills are already discovered via
+        // syncSkillsToDirectory() writing to $OPENCODE_CONFIG_DIR/skills/.
+        // Only emit this key when the binary is new enough.
+        // TODO: enable once Motive ships with OpenCode >= 1.1.45
+        // if inputs.skillsSystemEnabled {
+        //     let skillsPath = inputs.workspaceDirectory.appendingPathComponent("skills").path
+        //     config["skills"] = ["paths": [skillsPath]]
+        // }
 
         // Add provider options (baseURL) if configured
         // Per OpenCode docs: set options.baseURL on the provider directly

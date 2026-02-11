@@ -34,25 +34,30 @@ extension CommandBarView {
 
     @ViewBuilder
     var leftFooterContent: some View {
-        // Show current project directory
-        HStack(spacing: AuroraSpacing.space2) {
-            Image(systemName: "folder")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(Color.Aurora.textMuted)
+        HStack(spacing: AuroraSpacing.space3) {
+            // Agent indicator
+            AgentIndicator()
 
-            Text(configManager.currentProjectShortPath)
-                .font(.Aurora.micro)
-                .foregroundColor(Color.Aurora.textMuted)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
-        .padding(.horizontal, AuroraSpacing.space1)
-        .padding(.vertical, AuroraSpacing.space1)
-        .onTapGesture {
-            // Quick access to /project command
-            inputText = "/"
-            mode = .command(fromSession: !appState.messages.isEmpty)
-            selectedCommandIndex = 0  // /project is first in the list
+            // Show current project directory
+            HStack(spacing: AuroraSpacing.space2) {
+                Image(systemName: "folder")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color.Aurora.textMuted)
+
+                Text(configManager.currentProjectShortPath)
+                    .font(.Aurora.micro)
+                    .foregroundColor(Color.Aurora.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .padding(.horizontal, AuroraSpacing.space1)
+            .padding(.vertical, AuroraSpacing.space1)
+            .onTapGesture {
+                // Quick access to /project command
+                inputText = "/"
+                mode = .command(fromSession: !appState.messages.isEmpty)
+                selectedCommandIndex = 0  // /project is first in the list
+            }
         }
     }
 
@@ -78,11 +83,18 @@ extension CommandBarView {
                 (L10n.CommandBar.navigate, "↑↓"),
                 (L10n.CommandBar.back, "esc"),
             ])
+        } else if mode.isModes {
+            InlineShortcutHint(items: [
+                (L10n.CommandBar.select, "↵"),
+                (L10n.CommandBar.navigate, "↑↓"),
+                (L10n.CommandBar.back, "esc"),
+            ])
         } else {
             switch mode {
             case .idle, .input:
                 InlineShortcutHint(items: [
                     (L10n.CommandBar.run, "↵"),
+                    ("Background", "⌘↵"),
                     (L10n.CommandBar.commands, "/"),
                     (L10n.CommandBar.close, "esc"),
                 ])
@@ -156,5 +168,46 @@ extension CommandBarView {
             RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
                 .fill(Color.Aurora.background.opacity(0.45))
         }
+    }
+}
+
+// MARK: - Agent Indicator
+
+private struct AgentIndicator: View {
+    @EnvironmentObject private var configManager: ConfigManager
+
+    private var agentName: String {
+        configManager.currentAgent
+    }
+
+    private var agentIcon: String {
+        switch agentName {
+        case "plan": return "doc.text.magnifyingglass"
+        default: return "sparkle"
+        }
+    }
+
+    private var agentColor: Color {
+        switch agentName {
+        case "plan": return Color.Aurora.info
+        default: return Color.Aurora.primary
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: agentIcon)
+                .font(.system(size: 9, weight: .semibold))
+            Text(agentName)
+                .font(.system(size: 10, weight: .medium))
+        }
+        .foregroundColor(agentColor)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(agentColor.opacity(0.12))
+        )
+        .help("Current mode: \(agentName) (use /mode to switch)")
     }
 }

@@ -49,8 +49,8 @@ extension CommandBarView {
         switch mode {
         case .running, .completed, .error:
             return true
-        case .command(let fromSession), .history(let fromSession):
-            // Keep status visible when command/history triggered from session
+        case .command(let fromSession), .history(let fromSession), .modes(let fromSession):
+            // Keep status visible when command/history/modes triggered from session
             return fromSession
         default:
             return false
@@ -59,7 +59,7 @@ extension CommandBarView {
 
     // Content BELOW input (lists)
     var showsBelowContent: Bool {
-        mode.isCommand || mode.isHistory || mode.isProjects
+        mode.isCommand || mode.isHistory || mode.isProjects || mode.isModes
             || isFileCompletionActive
     }
 
@@ -99,6 +99,8 @@ extension CommandBarView {
             case .history(let fromSession) where fromSession:
                 // Show completed status when history triggered from session
                 completedSummaryView
+            case .modes(let fromSession) where fromSession:
+                completedSummaryView
             default:
                 EmptyView()
             }
@@ -120,6 +122,8 @@ extension CommandBarView {
                 historiesListView
             } else if mode.isProjects {
                 projectsListView
+            } else if mode.isModes {
+                modesListView
             } else {
                 EmptyView()
             }

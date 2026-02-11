@@ -9,6 +9,17 @@ import AppKit
 import Combine
 import SwiftData
 import SwiftUI
+import UserNotifications
+
+/// Represents a background session running in parallel
+struct BackgroundSession: Identifiable {
+    let id: String  // OpenCode session ID
+    let intent: String
+    let startedAt: Date
+    var status: SessionStatus = .running
+    var resultText: String?
+    var errorText: String?
+}
 
 @MainActor
 final class AppState: ObservableObject {
@@ -30,6 +41,8 @@ final class AppState: ObservableObject {
     @Published var currentToolName: String?
     @Published var currentToolInput: String?  // Current tool's input (e.g., command, file path)
     @Published var currentContextTokens: Int?
+    /// Background sessions running in parallel
+    @Published var backgroundSessions: [BackgroundSession] = []
     /// Transient reasoning text — shown live during thinking, cleared when thinking ends.
     /// Not stored in the messages array.
     @Published var currentReasoningText: String?
@@ -86,6 +99,12 @@ final class AppState: ObservableObject {
             .store(in: &cancellables)
     }
     
+    /// Lightweight bridge reconfiguration (no server restart).
+    /// Used when switching agents to update the Configuration for the next prompt.
+    func reconfigureBridge() {
+        Task { await configureBridge() }
+    }
+
     /// Schedule an agent restart that respects running tasks.
     /// - If no task is running (`menuBarState == .idle`), restarts immediately.
     /// - If a task is running, defers the restart until it finishes.

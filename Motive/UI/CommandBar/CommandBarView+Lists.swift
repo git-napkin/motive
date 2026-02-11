@@ -75,6 +75,48 @@ extension CommandBarView {
         .frame(maxHeight: .infinity)
     }
 
+    // MARK: - Modes List (below input)
+
+    var modesListView: some View {
+        ScrollView {
+            VStack(spacing: 2) {
+                ModeListItem(
+                    name: "Agent",
+                    icon: "sparkle",
+                    description: "Default mode — full tool access",
+                    isSelected: selectedModeIndex == 0,
+                    isCurrent: configManager.currentAgent == "agent"
+                ) {
+                    selectMode("agent")
+                }
+                .id(0)
+
+                ModeListItem(
+                    name: "Plan",
+                    icon: "doc.text.magnifyingglass",
+                    description: "Read-only analysis and planning",
+                    isSelected: selectedModeIndex == 1,
+                    isCurrent: configManager.currentAgent == "plan"
+                ) {
+                    selectMode("plan")
+                }
+                .id(1)
+            }
+            .padding(.vertical, AuroraSpacing.space2)
+            .padding(.horizontal, AuroraSpacing.space3)
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    private func selectMode(_ mode: String) {
+        configManager.currentAgent = mode
+        configManager.generateOpenCodeConfig()
+        appState.reconfigureBridge()
+        let wasFromSession = self.mode.isFromSession || !appState.messages.isEmpty
+        self.mode = wasFromSession ? .completed : .idle
+        inputText = ""
+    }
+
     // MARK: - Command List View (Below Input)
 
     var commandListView: some View {

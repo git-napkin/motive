@@ -179,9 +179,18 @@ actor SSEClient {
 
     // MARK: - Errors
 
-    enum SSEError: Error {
+    enum SSEError: Error, LocalizedError {
         case badStatus(Int)
         case noResponse
+
+        var errorDescription: String? {
+            switch self {
+            case .badStatus(let code):
+                return "SSE endpoint returned HTTP \(code)"
+            case .noResponse:
+                return "SSE endpoint returned no HTTP response"
+            }
+        }
     }
 }
 

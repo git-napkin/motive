@@ -123,16 +123,22 @@ actor OpenCodeAPIClient {
     ///   - text: The user's prompt text.
     ///   - model: Provider/model string (e.g. `"anthropic/claude-sonnet-4-5-20250929"`).
     ///     Split into `{ providerID, modelID }` for the server.
+    ///   - agent: Agent name to use for this prompt (e.g. `"motive"`, `"plan"`).
     func sendPromptAsync(
         sessionID: String,
         text: String,
-        model: String? = nil
+        model: String? = nil,
+        agent: String? = nil
     ) async throws {
         var body: [String: Any] = [
             "parts": [
                 ["type": "text", "text": text]
             ]
         ]
+
+        if let agent {
+            body["agent"] = agent
+        }
 
         // Server expects model as { providerID, modelID }, not a flat string
         if let model {
@@ -150,7 +156,7 @@ actor OpenCodeAPIClient {
             body: body,
             expectedStatus: 204
         )
-        logger.info("Sent prompt to session \(sessionID)")
+        logger.info("Sent prompt to session \(sessionID) (agent: \(agent ?? "default"))")
     }
 
     // MARK: - Native Question Reply

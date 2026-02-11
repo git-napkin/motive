@@ -61,6 +61,7 @@ final class StatusBarController {
     private let menu: NSMenu
     private weak var delegate: StatusBarControllerDelegate?
     private var animationTask: Task<Void, Never>?
+    private var backgroundPulseTask: Task<Void, Never>?
     private var animationDots = 0
     private var notificationPanel: NSPanel?
     private var notificationDismissTask: Task<Void, Never>?
@@ -99,9 +100,9 @@ final class StatusBarController {
         return window.convertToScreen(buttonRect)
     }
 
-    func update(state: AppState.MenuBarState, toolName: String? = nil, isWaitingForInput: Bool = false, inputType: String? = nil) {
+    func update(state: AppState.MenuBarState, toolName: String? = nil, isWaitingForInput: Bool = false, inputType: String? = nil, backgroundCount: Int = 0) {
         let displayState: StatusBarDisplayState
-        
+
         if isWaitingForInput {
             displayState = .waitingForInput(type: inputType ?? "Input Required")
         } else {
@@ -116,8 +117,9 @@ final class StatusBarController {
                 displayState = .executing(tool: toolName)
             }
         }
-        
+
         updateDisplay(state: displayState)
+        updateBadge(count: backgroundCount)
     }
     
     func showCompleted() {
@@ -377,5 +379,49 @@ final class StatusBarController {
 
     @objc private func openCommandBar() {
         delegate?.statusBarDidRequestCommandBar()
+    }
+
+    // MARK: - Background Activity Indicator
+
+    private static let pulseDotIdentifier = NSUserInterfaceItemIdentifier("backgroundPulseDot")
+
+    /// Show a pulsing dot on the status bar icon when background sessions are running
+    private func updateBadge(count: Int) {
+        guard let button = statusItem.button else { return }
+
+        // Remove existing dot
+        backgroundPulseTask?.cancel()
+        backgroundPulseTask = nil
+        button.subviews
+            .filter { $0.identifier == Self.pulseDotIdentifier }
+            .forEach { $0.removeFromSuperview() }
+
+        guard count > 0 else { return }
+
+        let dotSize: CGFloat = 6
+        let dot = NSView()
+        dot.identifier = Self.pulseDotIdentifier
+        dot.wantsLayer = true
+        dot.layer?.backgroundColor = NSColor.systemCyan.cgColor
+        dot.layer?.cornerRadius = dotSize / 2
+        dot.frame = NSRect(
+            x: button.bounds.width - dotSize + 1,
+            y: button.bounds.height - dotSize + 1,
+            width: dotSize,
+            height: dotSize
+        )
+        button.addSubview(dot)
+
+        // Pulse opacity between 0.4 and 1.0 over 0.8s cycle
+        backgroundPulseTask = Task { @MainActor [weak dot] in
+            var phase: CGFloat = 0
+            while !Task.isCancelled {
+                guard let dot else { break }
+                let alpha = 0.4 + 0.6 * (0.5 + 0.5 * cos(phase))
+                dot.layer?.opacity = Float(alpha)
+                phase += .pi / 13  // ~26 steps per cycle at 30ms = ~0.8s
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+        }
     }
 }

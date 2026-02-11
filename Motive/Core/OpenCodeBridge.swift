@@ -16,6 +16,7 @@ actor OpenCodeBridge {
         let binaryURL: URL
         let environment: [String: String]
         let model: String?  // e.g., "openai/gpt-4o" or "anthropic/claude-sonnet-4-5-20250929"
+        let agent: String?  // e.g., "motive", "plan" — per-message agent override
         let debugMode: Bool
         let projectDirectory: String  // Current project directory for server CWD
     }
@@ -212,6 +213,50 @@ actor OpenCodeBridge {
         currentSessionId = sessionId
         activeSessions.insert(sessionId)
         await submitIntent(text: text, cwd: cwd)
+    }
+
+    // MARK: - Background Sessions
+
+    /// Create a new session in the background without switching focus.
+    /// Returns the session ID if successful.
+    func createBackgroundSession(text: String, cwd: String) async -> String? {
+        guard configuration != nil else { return nil }
+
+        // Ensure server is running
+        if await !server.isRunning {
+            await startIfNeeded()
+            guard await server.isRunning else { return nil }
+        }
+
+        await apiClient.updateDirectory(cwd)
+
+        // Ensure SSE is connected
+        if let url = await server.serverURL {
+            let sseAlive = await sseClient.hasActiveStream
+            if !sseAlive || cwd != sseDirectory {
+                sseDirectory = cwd
+                await sseClient.disconnect()
+                startEventLoop(baseURL: url, directory: cwd)
+            }
+        }
+
+        do {
+            let session = try await apiClient.createSession()
+            let sessionID = session.id
+            activeSessions.insert(sessionID)
+            Log.bridge("Created background session: \(sessionID)")
+
+            try await apiClient.sendPromptAsync(
+                sessionID: sessionID,
+                text: text,
+                model: configuration?.model,
+                agent: configuration?.agent
+            )
+            return sessionID
+        } catch {
+            Log.error("Failed to create background session: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     // MARK: - Interruption
@@ -509,7 +554,8 @@ actor OpenCodeBridge {
         try await apiClient.sendPromptAsync(
             sessionID: sessionID,
             text: text,
-            model: configuration?.model
+            model: configuration?.model,
+            agent: configuration?.agent
         )
         Log.bridge("Submitted intent to session \(sessionID)")
     }

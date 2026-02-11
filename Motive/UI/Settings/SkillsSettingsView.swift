@@ -18,6 +18,7 @@ struct SkillsSettingsView: View {
     @State private var markdownContent: String = ""
     @State private var markdownError: String? = nil
     @State private var isMarkdownLoading: Bool = false
+    @State private var showSkillBrowser: Bool = false
 
 
     /// Filtered skills based on search
@@ -96,6 +97,11 @@ struct SkillsSettingsView: View {
         }
         // Skill changes use scheduleAgentRestart() which waits for
         // any running task to finish before restarting the agent.
+        .sheet(isPresented: $showSkillBrowser) {
+            SkillBrowserView()
+                .environmentObject(configManager)
+                .environmentObject(appState)
+        }
     }
 
     // MARK: - Controls Bar
@@ -171,6 +177,30 @@ struct SkillsSettingsView: View {
                 .buttonStyle(.plain)
                 .disabled(viewModel.isLoading)
                 .accessibilityLabel(L10n.Settings.skillsRefreshA11y)
+
+                // Browse button
+                Button {
+                    showSkillBrowser = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "globe")
+                            .font(.system(size: 11))
+                        Text("Browse")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(Color.Aurora.textSecondary)
+                    .padding(.horizontal, 10)
+                    .frame(height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.Aurora.surface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(Color.Aurora.border, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
             }
 
             // Pending-restart banner — shown when restart is deferred until task finishes

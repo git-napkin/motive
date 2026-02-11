@@ -233,6 +233,16 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
     @AppStorage("skillsSystemEnabled") var skillsSystemEnabled: Bool = true
     @AppStorage("skillsConfigJSON") var skillsConfigJSON: String = ""
 
+    // Context compaction
+    @AppStorage("compactionEnabled") var compactionEnabled: Bool = true
+
+    // Memory system
+    @AppStorage("memoryEnabled") var memoryEnabled: Bool = true
+    @AppStorage("memoryEmbeddingProvider") var memoryEmbeddingProvider: String = "auto"
+
+    // Multi-agent
+    @AppStorage("currentAgent") var currentAgent: String = "agent"
+
     // Trust level — controls how aggressively the AI operates
     @AppStorage("trustLevel") var trustLevelRawValue: String = TrustLevel.careful.rawValue
 
@@ -429,6 +439,16 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
         Log.config("Stale state reset complete. User will see onboarding on next launch.")
     }
     
+    // MARK: - Migration
+
+    /// Migrate legacy "motive" agent name to "agent"
+    func migrateAgentNameIfNeeded() {
+        if currentAgent == "motive" {
+            Log.config("Migrating agent name: motive → agent")
+            currentAgent = "agent"
+        }
+    }
+
     // MARK: - Errors
     
     enum BinaryError: LocalizedError {

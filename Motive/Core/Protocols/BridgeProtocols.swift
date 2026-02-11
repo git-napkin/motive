@@ -20,7 +20,7 @@ nonisolated protocol OpenCodeAPIClientProtocol: Sendable {
     func updateDirectory(_ path: String) async
     func createSession(title: String?) async throws -> OpenCodeAPIClient.SessionInfo
     func abortSession(id: String) async throws
-    func sendPromptAsync(sessionID: String, text: String, model: String?) async throws
+    func sendPromptAsync(sessionID: String, text: String, model: String?, agent: String?) async throws
     func replyToQuestion(requestID: String, answers: [[String]]) async throws
     func rejectQuestion(requestID: String) async throws
     func replyToPermission(requestID: String, reply: OpenCodeAPIClient.PermissionReply) async throws

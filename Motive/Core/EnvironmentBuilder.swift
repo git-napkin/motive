@@ -19,6 +19,9 @@ struct EnvironmentBuilder {
         let browserAgentBaseUrl: String
         let openCodeConfigPath: String
         let openCodeConfigDir: String
+        let memoryEnabled: Bool
+        let memoryEmbeddingProvider: String
+        let workspaceDirectory: String
     }
 
     /// Build the environment dictionary for the OpenCode subprocess.
@@ -113,6 +116,14 @@ struct EnvironmentBuilder {
             }
         } else {
             Log.config(" WARNING - openCodeConfigPath is empty!")
+        }
+
+        // Motive workspace and memory plugin environment
+        if inputs.memoryEnabled {
+            environment["MOTIVE_WORKSPACE"] = inputs.workspaceDirectory
+            if !inputs.memoryEmbeddingProvider.isEmpty {
+                environment["MOTIVE_EMBEDDING_PROVIDER"] = inputs.memoryEmbeddingProvider
+            }
         }
 
         return environment

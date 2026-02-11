@@ -45,18 +45,52 @@ extension ConfigManager {
     /// Uses ToolPermissionPolicy for permission rules and OpenCode's
     /// native question/permission system (no MCP sidecar needed).
     func generateOpenCodeConfig() {
+        let promptBuilder = SystemPromptBuilder()
+        let permissionPolicy = ToolPermissionPolicy.shared
+
+        // Build agent configurations
+        var agents: [OpenCodeConfigGenerator.AgentConfig] = []
+        let systemPrompt = promptBuilder.build()
+        let permissionRules = permissionPolicy.toOpenCodePermissionRules()
+
+        // Primary agent
+        agents.append(OpenCodeConfigGenerator.AgentConfig(
+            name: "agent",
+            description: "Default agent - full tool access",
+            prompt: systemPrompt,
+            mode: "primary",
+            permission: permissionRules
+        ))
+
+        // Plan agent (read-only analysis)
+        let planPrompt = promptBuilder.build(sessionType: .plan)
+        var readOnlyRules = permissionRules
+        readOnlyRules["edit"] = "deny"
+        readOnlyRules["bash"] = "ask"
+        agents.append(OpenCodeConfigGenerator.AgentConfig(
+            name: "plan",
+            description: "Read-only analysis and planning",
+            prompt: planPrompt,
+            mode: "primary",
+            permission: readOnlyRules
+        ))
+
         let inputs = OpenCodeConfigGenerator.Inputs(
             providerName: provider.openCodeProviderName,
             baseURL: baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
             workspaceDirectory: workspaceDirectory,
-            skillsSystemEnabled: skillsSystemEnabled
+            skillsSystemEnabled: skillsSystemEnabled,
+            compactionEnabled: compactionEnabled,
+            memoryEnabled: memoryEnabled,
+            agents: agents,
+            defaultAgent: currentAgent
         )
         let result = OpenCodeConfigGenerator.generate(
             inputs: inputs,
-            permissionPolicy: ToolPermissionPolicy.shared,
+            permissionPolicy: permissionPolicy,
             skillRegistry: SkillRegistry.shared,
             skillManager: SkillManager.shared,
-            promptBuilder: SystemPromptBuilder()
+            promptBuilder: promptBuilder
         )
         openCodeConfigPath = result.configPath
         openCodeConfigDir = result.configDir

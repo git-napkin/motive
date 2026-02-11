@@ -18,7 +18,10 @@ extension ConfigManager {
             cachedBrowserAgentAPIKey: cachedBrowserAgentAPIKey,
             browserAgentBaseUrl: browserAgentBaseUrl,
             openCodeConfigPath: openCodeConfigPath,
-            openCodeConfigDir: openCodeConfigDir
+            openCodeConfigDir: openCodeConfigDir,
+            memoryEnabled: memoryEnabled,
+            memoryEmbeddingProvider: memoryEmbeddingProvider,
+            workspaceDirectory: workspaceDirectory.path
         )
         return EnvironmentBuilder.build(from: inputs)
     }

@@ -32,6 +32,7 @@ extension AppState {
             binaryURL: binaryURL,
             environment: configManager.makeEnvironment(),
             model: configManager.getModelString(),
+            agent: configManager.currentAgent,
             debugMode: configManager.debugMode,
             projectDirectory: configManager.currentProjectURL.path
         )
@@ -73,6 +74,13 @@ extension AppState {
         if sessionStatus == .interrupted {
             Log.debug("Ignoring post-interrupt event: \(event.kind.rawValue)")
             logEvent(event)
+            return
+        }
+
+        // Route background session events away from foreground UI
+        if let eventSessionId = event.sessionId,
+           backgroundSessions.contains(where: { $0.id == eventSessionId && $0.status == .running }) {
+            handleBackgroundSessionEvent(event, sessionId: eventSessionId)
             return
         }
 
@@ -322,6 +330,59 @@ extension AppState {
         if usage.input > 0 {
             currentContextTokens = usage.input
             currentSession?.contextTokens = usage.input
+        }
+    }
+
+    // MARK: - Background Session Events
+
+    /// Handle events belonging to a background session.
+    /// Routes question/permission to the native prompt handler so the user
+    /// can still approve actions. Accumulates assistant text for result display.
+    /// All other events are silently discarded to prevent foreground pollution.
+    private func handleBackgroundSessionEvent(_ event: OpenCodeEvent, sessionId: String) {
+        switch event.kind {
+        case .call, .tool:
+            // Route question/permission events to native handler — background tasks
+            // must still be able to ask the user for input, otherwise they hang.
+            if let inputDict = event.toolInputDict,
+               inputDict["_isNativeQuestion"] as? Bool == true {
+                nativePromptHandler.handleNativeQuestion(inputDict: inputDict, event: event)
+                return
+            }
+            if let inputDict = event.toolInputDict,
+               inputDict["_isNativePermission"] as? Bool == true {
+                nativePromptHandler.handleNativePermission(inputDict: inputDict, event: event)
+                return
+            }
+            Log.bridge("Discarding background tool event: \(event.toolName ?? "?") session=\(sessionId)")
+
+        case .assistant:
+            // Accumulate assistant text so we can show the result on completion
+            if !event.text.isEmpty,
+               let idx = backgroundSessions.firstIndex(where: { $0.id == sessionId }) {
+                let existing = backgroundSessions[idx].resultText ?? ""
+                backgroundSessions[idx].resultText = existing + event.text
+            }
+
+        case .usage:
+            // Token usage should still be tracked for billing accuracy
+            applyUsageUpdate(event)
+
+        case .finish:
+            Log.debug("Background session finished: \(sessionId)")
+            completeBackgroundSession(sessionId: sessionId)
+            updateStatusBar()
+
+        case .error:
+            Log.debug("Background session error: \(sessionId) — \(event.text.prefix(200))")
+            if let idx = backgroundSessions.firstIndex(where: { $0.id == sessionId }) {
+                backgroundSessions[idx].status = .failed
+                backgroundSessions[idx].errorText = event.text
+            }
+            updateStatusBar()
+
+        default:
+            Log.bridge("Discarding background event: kind=\(event.kind.rawValue) session=\(sessionId)")
         }
     }
 
