@@ -11,16 +11,6 @@ import SwiftData
 import SwiftUI
 import UserNotifications
 
-/// Represents a background session running in parallel
-struct BackgroundSession: Identifiable {
-    let id: String  // OpenCode session ID
-    let intent: String
-    let startedAt: Date
-    var status: SessionStatus = .running
-    var resultText: String?
-    var errorText: String?
-}
-
 @MainActor
 final class AppState: ObservableObject {
     enum MenuBarState: String, Sendable {
@@ -31,6 +21,9 @@ final class AppState: ObservableObject {
     }
 
     @Published var menuBarState: MenuBarState = .idle
+    /// The active agent for the current session as reported by the server (e.g. "plan", "build").
+    /// Distinct from `configManager.currentAgent` which is the user's selected default.
+    @Published var currentSessionAgent: String = "agent"
     let messageStore = MessageStore()
     var messages: [ConversationMessage] {
         get { messageStore.messages }
@@ -41,8 +34,10 @@ final class AppState: ObservableObject {
     @Published var currentToolName: String?
     @Published var currentToolInput: String?  // Current tool's input (e.g., command, file path)
     @Published var currentContextTokens: Int?
-    /// Background sessions running in parallel
-    @Published var backgroundSessions: [BackgroundSession] = []
+    /// OpenCode sessionId → messages for running sessions (persisted on completion)
+    var runningSessionMessages: [String: [ConversationMessage]] = [:]
+    /// OpenCode sessionId → Session for event routing and logging
+    var runningSessions: [String: Session] = [:]
     /// Transient reasoning text — shown live during thinking, cleared when thinking ends.
     /// Not stored in the messages array.
     @Published var currentReasoningText: String?
@@ -52,11 +47,16 @@ final class AppState: ObservableObject {
     @Published var sessionListRefreshTrigger: Int = 0  // Increment to refresh session list
 
     let configManager: ConfigManager
-    lazy var bridge: OpenCodeBridge = {
-        OpenCodeBridge { [weak self] event in
-            await MainActor.run { self?.handle(event: event) }
-        }
-    }()
+    let bridge: OpenCodeBridge
+    /// Task consuming events from the bridge's AsyncStream. Stored for cancellation.
+    private var eventConsumerTask: Task<Void, Never>?
+    /// Stored reference for the latest bridge operation Task.
+    /// Cancels the previous operation before starting a new one,
+    /// preventing races when the user switches sessions rapidly.
+    var bridgeTask: Task<Void, Never>?
+    /// Periodic snapshot timer for crash recovery.
+    /// Persists running session message buffers to SwiftData every 30s.
+    private var snapshotTimer: Task<Void, Never>?
     var modelContext: ModelContext?
     var currentSession: Session?
     var commandBarController: CommandBarWindowController?
@@ -82,7 +82,22 @@ final class AppState: ObservableObject {
     var pendingQuestionMessageId: UUID?
     
     var cancellables = Set<AnyCancellable>()
-    
+
+    /// Set to `true` when `resumeSession` sends a new prompt.
+    /// While true, incoming finish events are stale (from the *previous* turn) and must be ignored.
+    /// Cleared when the first substantive response event arrives for the new prompt.
+    var awaitingFirstResponseAfterResume = false
+
+    /// Queue of Sessions waiting for `__session_bind__` events from the bridge.
+    /// Enqueued in `submitIntent`, dequeued in `handle(event:)` when binds arrive.
+    /// Uses a FIFO queue because the bridge (actor) processes requests sequentially,
+    /// so bind events arrive in the same order as submissions.
+    /// Capped at `maxPendingBindSessions` entries; oldest are orphaned if exceeded.
+    var pendingBindSessions: [Session] = []
+    private static let maxPendingBindSessions = 10
+    /// Timer for cleaning up orphaned entries in pendingBindSessions.
+    private var bindQueueCleanupTask: Task<Void, Never>?
+
     /// When true, the agent will auto-restart as soon as the current task finishes.
     @Published var pendingAgentRestart = false
     private var restartObserver: AnyCancellable?
@@ -93,10 +108,24 @@ final class AppState: ObservableObject {
 
     init(configManager: ConfigManager) {
         self.configManager = configManager
+
+        // Create AsyncStream channel for bridge → AppState event delivery.
+        // The bridge yields events non-blockingly; AppState consumes on MainActor.
+        // AsyncStream preserves FIFO ordering, so events arrive in correct sequence.
+        let (stream, continuation) = AsyncStream.makeStream(of: OpenCodeEvent.self)
+        self.bridge = OpenCodeBridge(eventContinuation: continuation)
+
         // Forward messageStore changes to AppState's objectWillChange
         messageStore.$messages
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+
+        // Start consuming bridge events on MainActor
+        eventConsumerTask = Task { @MainActor [weak self] in
+            for await event in stream {
+                self?.handle(event: event)
+            }
+        }
     }
     
     /// Lightweight bridge reconfiguration (no server restart).
@@ -133,6 +162,162 @@ final class AppState: ObservableObject {
                 self.restartObserver = nil
                 self.restartAgent()
             }
+    }
+
+    // MARK: - Session Lifecycle Helpers
+
+    /// Reset all transient per-turn UI state.
+    /// Call when switching sessions, starting new sessions, or cleaning up after interrupts.
+    func resetTransientState() {
+        awaitingFirstResponseAfterResume = false
+        // NOTE: pendingBindSessions is NOT cleared here — it's a cross-turn binding queue,
+        // not transient UI state. Clearing it would orphan sessions waiting for IDs.
+        currentReasoningText = nil
+        reasoningDismissTask?.cancel()
+        reasoningDismissTask = nil
+        sessionTimeoutTask?.cancel()
+        sessionTimeoutTask = nil
+        currentToolName = nil
+        currentToolInput = nil
+        lastErrorMessage = nil
+    }
+
+    /// Save the current session's live messages for backgrounding.
+    /// Call before `messages = []` or switching sessions to avoid data loss.
+    func saveCurrentSessionToBuffer() {
+        guard let session = currentSession,
+              session.sessionStatus == .running else { return }
+        if let ocId = session.openCodeSessionId {
+            // Session already bound — save to in-memory buffer for live event appending
+            runningSessionMessages[ocId] = messages
+        } else {
+            // Binding hasn't arrived yet — persist to SwiftData so the binding handler
+            // can retrieve messages when it eventually fires.
+            session.messagesData = ConversationMessage.serializeMessages(messages)
+        }
+    }
+
+    /// Remove a session from all in-memory tracking dictionaries AND the bridge's active set.
+    /// This is the SINGLE cleanup path for completed/failed/interrupted sessions.
+    func removeSessionFromTracking(_ openCodeId: String) {
+        runningSessions.removeValue(forKey: openCodeId)
+        runningSessionMessages.removeValue(forKey: openCodeId)
+        // Tell the bridge to stop tracking this session (stops SSE event forwarding)
+        Task { await bridge.removeActiveSession(openCodeId) }
+        // Stop the snapshot timer if no more running sessions
+        stopSnapshotTimerIfNeeded()
+    }
+
+    /// Persist current session's messages to SwiftData and clean up tracking.
+    /// Call after all message content has been inserted (including system messages).
+    func persistAndCleanupCurrentSession() {
+        guard let session = currentSession else { return }
+        session.messagesData = ConversationMessage.serializeMessages(messages)
+        if let ocId = session.openCodeSessionId {
+            removeSessionFromTracking(ocId)
+        }
+        trySaveContext()
+    }
+
+    // MARK: - Bind Queue Management
+
+    /// Add a session to the pending bind queue with overflow protection.
+    func enqueuePendingBind(_ session: Session) {
+        if pendingBindSessions.count >= Self.maxPendingBindSessions {
+            let dropped = pendingBindSessions.removeFirst()
+            Log.warning("Bind queue overflow: dropping oldest pending session \(dropped.id)")
+            transitionSessionStatus(.failed, for: dropped)
+        }
+        pendingBindSessions.append(session)
+        startBindQueueCleanup()
+    }
+
+    /// Start a cleanup timer that removes orphaned bind entries after 30s.
+    private func startBindQueueCleanup() {
+        guard bindQueueCleanupTask == nil else { return }
+        bindQueueCleanupTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled, let self else { break }
+                self.cleanupStaleBindEntries()
+                if self.pendingBindSessions.isEmpty {
+                    self.bindQueueCleanupTask = nil
+                    break
+                }
+            }
+        }
+    }
+
+    /// Remove sessions that have been waiting for a bind for too long (>30s).
+    private func cleanupStaleBindEntries() {
+        let cutoff = Date().addingTimeInterval(-30)
+        let stale = pendingBindSessions.filter { $0.createdAt < cutoff }
+        for session in stale {
+            Log.warning("Bind queue: orphaned session \(session.id) (created \(session.createdAt)), marking failed")
+            transitionSessionStatus(.failed, for: session)
+        }
+        pendingBindSessions.removeAll { $0.createdAt < cutoff }
+    }
+
+    // MARK: - Centralized Status Transition
+
+    /// Centralized status transition for session lifecycle.
+    /// Updates both the Session model AND AppState.sessionStatus if the session is the current one.
+    /// - Parameters:
+    ///   - newStatus: The target status.
+    ///   - session: The Session model to update. If `nil`, only AppState.sessionStatus is updated.
+    func transitionSessionStatus(_ newStatus: SessionStatus, for session: Session? = nil) {
+        session?.sessionStatus = newStatus
+        if session == nil || session?.id == currentSession?.id {
+            sessionStatus = newStatus
+        }
+    }
+
+    /// Attempt to save the SwiftData context. Logs on failure.
+    func trySaveContext() {
+        do {
+            try modelContext?.save()
+        } catch {
+            Log.error("Failed to save model context: \(error)")
+        }
+    }
+
+    // MARK: - Crash Recovery Snapshot Timer
+
+    /// Start periodic snapshotting of running session message buffers.
+    /// Called when the first session starts running; stopped when no sessions remain.
+    func startSnapshotTimerIfNeeded() {
+        guard snapshotTimer == nil else { return }
+        snapshotTimer = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled else { break }
+                self?.snapshotRunningSessionMessages()
+            }
+        }
+    }
+
+    /// Stop the periodic snapshot timer.
+    func stopSnapshotTimerIfNeeded() {
+        guard runningSessions.isEmpty else { return }
+        snapshotTimer?.cancel()
+        snapshotTimer = nil
+    }
+
+    /// Persist all running session message buffers to SwiftData.
+    /// This is a crash-recovery measure — if the app terminates unexpectedly,
+    /// messages are recoverable from `session.messagesData`.
+    private func snapshotRunningSessionMessages() {
+        var snapshotCount = 0
+        for (sessionId, buffer) in runningSessionMessages {
+            guard let session = runningSessions[sessionId] else { continue }
+            session.messagesData = ConversationMessage.serializeMessages(buffer)
+            snapshotCount += 1
+        }
+        if snapshotCount > 0 {
+            trySaveContext()
+            Log.debug("Snapshot: persisted \(snapshotCount) running session buffers")
+        }
     }
 
     func resetUsageDeduplication() {

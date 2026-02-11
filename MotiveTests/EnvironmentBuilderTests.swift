@@ -24,7 +24,10 @@ final class EnvironmentBuilderTests: XCTestCase {
         cachedBrowserAgentAPIKey: String? = nil,
         browserAgentBaseUrl: String = "",
         openCodeConfigPath: String = "",
-        openCodeConfigDir: String = ""
+        openCodeConfigDir: String = "",
+        memoryEnabled: Bool = false,
+        memoryEmbeddingProvider: String = "",
+        workspaceDirectory: String = ""
     ) -> EnvironmentBuilder.Inputs {
         EnvironmentBuilder.Inputs(
             provider: provider,
@@ -37,7 +40,10 @@ final class EnvironmentBuilderTests: XCTestCase {
             cachedBrowserAgentAPIKey: cachedBrowserAgentAPIKey,
             browserAgentBaseUrl: browserAgentBaseUrl,
             openCodeConfigPath: openCodeConfigPath,
-            openCodeConfigDir: openCodeConfigDir
+            openCodeConfigDir: openCodeConfigDir,
+            memoryEnabled: memoryEnabled,
+            memoryEmbeddingProvider: memoryEmbeddingProvider,
+            workspaceDirectory: workspaceDirectory
         )
     }
 

@@ -102,13 +102,11 @@ extension AppState {
     func updateStatusBar() {
         let isWaiting = pendingQuestionMessageId != nil
         let inputType = "Question"
-        let bgCount = backgroundSessions.filter { $0.status == .running }.count
         statusBarController?.update(
             state: menuBarState,
             toolName: currentToolName,
             isWaitingForInput: isWaiting,
-            inputType: inputType,
-            backgroundCount: bgCount
+            inputType: inputType
         )
     }
 
@@ -120,13 +118,11 @@ extension AppState {
                 guard let self else { return }
                 let isWaiting = self.pendingQuestionMessageId != nil
                 let inputType = "Question"
-                let bgCount = self.backgroundSessions.filter { $0.status == .running }.count
                 self.statusBarController?.update(
                     state: state,
                     toolName: self.currentToolName,
                     isWaitingForInput: isWaiting,
-                    inputType: inputType,
-                    backgroundCount: bgCount
+                    inputType: inputType
                 )
             }
             .store(in: &cancellables)

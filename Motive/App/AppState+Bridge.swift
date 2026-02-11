@@ -7,10 +7,15 @@
 //  Handles OpenCode SSE events routed through OpenCodeBridge.
 //  Uses native question/permission system (no MCP sidecar).
 //
+//  ARCHITECTURE: All sessions (foreground and background) go through
+//  the SAME processEvent() method. The only difference is whether
+//  transient UI state is updated. This eliminates the dual-path bug class.
+//
 
 import Combine
 import Foundation
 import SwiftData
+import UserNotifications
 
 extension AppState {
     func restartAgent() {
@@ -50,13 +55,13 @@ extension AppState {
     /// Reset the UI-level session timeout whenever we receive an event
     func resetSessionTimeout() {
         sessionTimeoutTask?.cancel()
-        
+
         guard sessionStatus == .running else { return }
-        
+
         sessionTimeoutTask = Task {
             try? await Task.sleep(nanoseconds: UInt64(Self.sessionTimeoutSeconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            
+
             // Still running after timeout — warn the user
             if sessionStatus == .running {
                 Log.debug("Session timeout: no events for \(Int(Self.sessionTimeoutSeconds))s while still running")
@@ -66,57 +71,299 @@ extension AppState {
         }
     }
 
-    func handle(event: OpenCodeEvent) {
-        // Log every event arrival for diagnostics — full text, no truncation
-        Log.bridge("⬇︎ Event: kind=\(event.kind.rawValue) tool=\(event.toolName ?? "-") session=\(event.sessionId ?? "-") text=«\(event.text)»")
+    // MARK: - Event Entry Point
 
-        // Once the user has manually interrupted, ignore all subsequent events.
-        if sessionStatus == .interrupted {
-            Log.debug("Ignoring post-interrupt event: \(event.kind.rawValue)")
+    func handle(event: OpenCodeEvent) {
+        // Log every event arrival for diagnostics
+        Log.bridge("⬇︎ Event: kind=\(event.kind.rawValue) tool=\(event.toolName ?? "-") session=\(event.sessionId ?? "-") text=«\(event.text.prefix(60))»")
+
+        // --- Explicit session binding from bridge ---
+        if event.rawJson == "__session_bind__", let sid = event.sessionId, !sid.isEmpty {
+            let sessionToBind: Session?
+            if !pendingBindSessions.isEmpty {
+                sessionToBind = pendingBindSessions.removeFirst()
+            } else {
+                sessionToBind = currentSession
+            }
+            if let session = sessionToBind, session.openCodeSessionId == nil {
+                session.openCodeSessionId = sid
+                runningSessions[sid] = session
+                if currentSession?.id == session.id {
+                    runningSessionMessages[sid] = messages
+                } else {
+                    if let data = session.messagesData,
+                       let saved = ConversationMessage.deserializeMessages(data) {
+                        runningSessionMessages[sid] = saved
+                    } else {
+                        runningSessionMessages[sid] = []
+                    }
+                }
+                startSnapshotTimerIfNeeded()
+                Log.debug("Bound session ID from bridge: \(sid) to session \(session.id) (current=\(currentSession?.id == session.id))")
+            }
+            return
+        }
+
+        // --- Resolve target session ---
+        let targetSession: Session?
+        if let sid = event.sessionId, !sid.isEmpty {
+            if let running = runningSessions[sid] {
+                targetSession = running
+            } else if currentSession?.openCodeSessionId == sid {
+                targetSession = currentSession
+            } else {
+                targetSession = nil
+            }
+        } else {
+            targetSession = currentSession
+        }
+
+        guard let target = targetSession else {
+            Log.debug("Dropping unroutable event: kind=\(event.kind.rawValue) session=\(event.sessionId ?? "nil")")
+            return
+        }
+
+        // Ignore post-interrupt events for current session
+        if sessionStatus == .interrupted, target.id == currentSession?.id {
             logEvent(event)
             return
         }
 
-        // Route background session events away from foreground UI
-        if let eventSessionId = event.sessionId,
-           backgroundSessions.contains(where: { $0.id == eventSessionId && $0.status == .running }) {
-            handleBackgroundSessionEvent(event, sessionId: eventSessionId)
-            return
+        // --- Route through UNIFIED processor ---
+        let isCurrent = target.id == currentSession?.id
+        let sid = event.sessionId ?? ""
+
+        if isCurrent {
+            resetSessionTimeout()
+            // Process into live messages array (messages is messageStore.messages)
+            var liveMessages = messages
+            processEvent(event, for: target, into: &liveMessages, sessionId: sid, isCurrentSession: true)
+            messages = liveMessages
+        } else if !sid.isEmpty {
+            var buffer = runningSessionMessages[sid] ?? []
+            processEvent(event, for: target, into: &buffer, sessionId: sid, isCurrentSession: false)
+            // Write back only if session is still tracked (finish/error removes it)
+            if runningSessions[sid] != nil {
+                runningSessionMessages[sid] = buffer
+            }
         }
-
-        // Reset session timeout on every event
-        resetSessionTimeout()
-
-        // Update UI state based on event kind
-        switch event.kind {
-        case .usage:
-            applyUsageUpdate(event)
-        case .thought:
-            handleThoughtEvent(event)
-            return
-        case .call, .tool:
-            if handleToolEvent(event) { return }
-        case .diff:
-            handleDiffEvent(event)
-        case .finish:
-            handleFinishEvent(event)
-        case .assistant:
-            handleAssistantEvent(event)
-        case .user:
-            return
-        case .error:
-            handleErrorEvent(event)
-        case .unknown:
-            handleUnknownEvent(event)
-        }
-
-        // Process event content (save session ID, add messages)
-        processEventContent(event)
     }
 
-    // MARK: - Event Handlers
+    // MARK: - Unified Event Processor
+    //
+    // EVERY session (foreground or background) goes through this SINGLE method.
+    // `isCurrentSession` controls ONLY transient UI state updates.
+    // Message buffer operations are IDENTICAL for all sessions.
 
-    /// Reset shared event state (timers, reasoning)
+    private func processEvent(
+        _ event: OpenCodeEvent,
+        for session: Session,
+        into buffer: inout [ConversationMessage],
+        sessionId: String,
+        isCurrentSession: Bool
+    ) {
+        // --- Agent change tracking ---
+        if let agent = event.agent, !agent.isEmpty {
+            if isCurrentSession { updateSessionAgent(agent) }
+            // Pure agent-change carrier (empty text) — skip message processing
+            if event.kind == .assistant && event.text.isEmpty {
+                logEvent(event, session: session)
+                return
+            }
+        }
+
+        // --- Stale finish guard (current session only, after resume) ---
+        if isCurrentSession && awaitingFirstResponseAfterResume {
+            if event.kind == .finish {
+                Log.debug("Ignoring stale finish event (awaiting first response after resume)")
+                logEvent(event, session: session)
+                return
+            }
+            if event.kind != .usage {
+                awaitingFirstResponseAfterResume = false
+            }
+        }
+
+        // --- Process by event kind ---
+        switch event.kind {
+
+        // ── Usage ──────────────────────────────────────────────
+        case .usage:
+            applyUsageUpdate(event, session: session, isCurrentSession: isCurrentSession)
+            logEvent(event, session: session)
+            return
+
+        // ── Thought (transient, not stored in buffer) ─────────
+        case .thought:
+            if isCurrentSession {
+                menuBarState = .reasoning
+                currentToolName = nil
+                currentToolInput = nil
+                reasoningDismissTask?.cancel()
+                reasoningDismissTask = nil
+                if !event.text.isEmpty {
+                    currentReasoningText = (currentReasoningText ?? "") + event.text
+                }
+                nativePromptHandler.updateRemoteCommandStatus(toolName: "Thinking...")
+            }
+            logEvent(event, session: session)
+            return
+
+        // ── User messages (already in buffer from submitIntent/resumeSession) ──
+        case .user:
+            logEvent(event, session: session)
+            return
+
+        // ── Tool / Call ────────────────────────────────────────
+        case .call, .tool:
+            // UI state (current session only)
+            if isCurrentSession {
+                dismissReasoningAfterDelay()
+                menuBarState = .executing
+                currentToolName = event.toolName ?? "Processing"
+                currentToolInput = event.toolInput
+            }
+
+            // Native question interception (all sessions)
+            if let inputDict = event.toolInputDict,
+               inputDict["_isNativeQuestion"] as? Bool == true {
+                nativePromptHandler.handleNativeQuestion(inputDict: inputDict, event: event)
+                logEvent(event, session: session)
+                return
+            }
+            // Native permission interception (all sessions)
+            if let inputDict = event.toolInputDict,
+               inputDict["_isNativePermission"] as? Bool == true {
+                nativePromptHandler.handleNativePermission(inputDict: inputDict, event: event)
+                logEvent(event, session: session)
+                return
+            }
+            // Named question/permission result — skip
+            if let toolName = event.toolName?.lowercased(),
+               toolName == "question" || toolName == "permission" {
+                logEvent(event, session: session)
+                return
+            }
+            // TodoWrite
+            if let toolName = event.toolName, toolName.isTodoWriteTool {
+                if event.kind == .tool {
+                    messageStore.handleTodoWriteEvent(event, buffer: &buffer)
+                }
+                logEvent(event, session: session)
+                return
+            }
+            if isCurrentSession {
+                nativePromptHandler.updateRemoteCommandStatus(toolName: event.toolName)
+            }
+            // Regular tool — insert
+            messageStore.insertEventIntoBuffer(event, buffer: &buffer)
+
+        // ── Diff ───────────────────────────────────────────────
+        case .diff:
+            if isCurrentSession {
+                dismissReasoningAfterDelay()
+                menuBarState = .executing
+                currentToolName = "Editing file"
+                nativePromptHandler.updateRemoteCommandStatus(toolName: "Editing file")
+            }
+            messageStore.insertEventIntoBuffer(event, buffer: &buffer)
+
+        // ── Assistant text ─────────────────────────────────────
+        case .assistant:
+            if isCurrentSession {
+                dismissReasoningAfterDelay()
+                menuBarState = .responding
+                currentToolName = nil
+            }
+            messageStore.insertEventIntoBuffer(event, buffer: &buffer)
+
+        // ── Finish ─────────────────────────────────────────────
+        case .finish:
+            // Dedup: server may send both session.idle and session.status(idle)
+            if session.sessionStatus == .completed {
+                logEvent(event, session: session)
+                return
+            }
+            messageStore.finalizeRunningMessages(in: &buffer)
+            transitionSessionStatus(.completed, for: session)
+            // Insert "Completed" system message
+            messageStore.insertEventIntoBuffer(event, buffer: &buffer)
+            // Persist to SwiftData
+            session.messagesData = ConversationMessage.serializeMessages(buffer)
+            if let ocId = session.openCodeSessionId {
+                removeSessionFromTracking(ocId)
+            }
+            trySaveContext()
+            // UI state (current session)
+            if isCurrentSession {
+                resetEventState()
+                menuBarState = .idle
+                currentToolName = nil
+                currentToolInput = nil
+                statusBarController?.showCompleted()
+                if let commandId = currentRemoteCommandId {
+                    let resultMessage = buffer.last(where: { $0.type == .assistant })?.content ?? "Task completed"
+                    cloudKitManager.completeCommand(commandId: commandId, result: resultMessage)
+                    currentRemoteCommandId = nil
+                }
+            } else {
+                sendSessionCompletionNotification(session: session, result: buffer)
+            }
+            updateStatusBar()
+            sessionListRefreshTrigger += 1
+            logEvent(event, session: session)
+            return
+
+        // ── Error ──────────────────────────────────────────────
+        case .error:
+            messageStore.finalizeRunningMessages(in: &buffer)
+            transitionSessionStatus(.failed, for: session)
+            // Insert error system message
+            messageStore.insertEventIntoBuffer(event, buffer: &buffer)
+            // Persist to SwiftData
+            session.messagesData = ConversationMessage.serializeMessages(buffer)
+            if let ocId = session.openCodeSessionId {
+                removeSessionFromTracking(ocId)
+            }
+            trySaveContext()
+            // UI state (current session)
+            if isCurrentSession {
+                resetEventState()
+                lastErrorMessage = event.text
+                menuBarState = .idle
+                currentToolName = nil
+                currentToolInput = nil
+                statusBarController?.showError()
+                if let commandId = currentRemoteCommandId {
+                    cloudKitManager.failCommand(commandId: commandId, error: event.text)
+                    currentRemoteCommandId = nil
+                }
+            }
+            updateStatusBar()
+            sessionListRefreshTrigger += 1
+            logEvent(event, session: session)
+            return
+
+        // ── Unknown ────────────────────────────────────────────
+        case .unknown:
+            if !event.text.isEmpty {
+                Log.debug("Unknown event: \(event.text.prefix(200))")
+            }
+            messageStore.insertEventIntoBuffer(event, buffer: &buffer)
+        }
+
+        logEvent(event, session: session)
+    }
+
+    // MARK: - Helpers (used by processEvent)
+
+    private func updateSessionAgent(_ agent: String) {
+        guard currentSessionAgent != agent else { return }
+        Log.debug("Agent changed: \(currentSessionAgent) → \(agent)")
+        currentSessionAgent = agent
+        configManager.currentAgent = agent == "build" ? "agent" : agent
+    }
+
     private func resetEventState() {
         sessionTimeoutTask?.cancel()
         sessionTimeoutTask = nil
@@ -125,118 +372,6 @@ extension AppState {
         currentReasoningText = nil
     }
 
-    /// Transition the current session to a new status
-    private func transitionSession(to status: SessionStatus) {
-        currentSession?.sessionStatus = status
-    }
-
-    private func handleThoughtEvent(_ event: OpenCodeEvent) {
-        menuBarState = .reasoning
-        currentToolName = nil
-        currentToolInput = nil
-        reasoningDismissTask?.cancel()
-        reasoningDismissTask = nil
-        if !event.text.isEmpty {
-            currentReasoningText = (currentReasoningText ?? "") + event.text
-        }
-        nativePromptHandler.updateRemoteCommandStatus(toolName: "Thinking...")
-        logEvent(event)
-    }
-
-    /// Handle tool/call events. Returns true if the event was intercepted and should not flow to processEventContent.
-    private func handleToolEvent(_ event: OpenCodeEvent) -> Bool {
-        dismissReasoningAfterDelay()
-        menuBarState = .executing
-        currentToolName = event.toolName ?? "Processing"
-        currentToolInput = event.toolInput
-
-        // Intercept native question events from SSE
-        if let inputDict = event.toolInputDict,
-           inputDict["_isNativeQuestion"] as? Bool == true {
-            nativePromptHandler.handleNativeQuestion(inputDict: inputDict, event: event)
-            logEvent(event)
-            return true
-        }
-
-        // Intercept native permission events from SSE
-        if let inputDict = event.toolInputDict,
-           inputDict["_isNativePermission"] as? Bool == true {
-            nativePromptHandler.handleNativePermission(inputDict: inputDict, event: event)
-            logEvent(event)
-            return true
-        }
-
-        nativePromptHandler.updateRemoteCommandStatus(toolName: event.toolName)
-        return false
-    }
-
-    private func handleDiffEvent(_ event: OpenCodeEvent) {
-        dismissReasoningAfterDelay()
-        menuBarState = .executing
-        currentToolName = "Editing file"
-        nativePromptHandler.updateRemoteCommandStatus(toolName: "Editing file")
-    }
-
-    private func handleFinishEvent(_ event: OpenCodeEvent) {
-        resetEventState()
-
-        // Finish deduplication
-        if event.isSecondaryFinish && sessionStatus == .completed {
-            Log.debug("Ignoring secondary finish event (already completed)")
-            return
-        }
-
-        menuBarState = .idle
-        sessionStatus = .completed
-        currentToolName = nil
-        currentToolInput = nil
-
-        messageStore.finalizeRunningMessages()
-
-        if let session = currentSession {
-            transitionSession(to: .completed)
-            session.messagesData = ConversationMessage.serializeMessages(messages)
-        }
-        statusBarController?.showCompleted()
-        if let commandId = currentRemoteCommandId {
-            let resultMessage = messages.last(where: { $0.type == .assistant })?.content ?? "Task completed"
-            cloudKitManager.completeCommand(commandId: commandId, result: resultMessage)
-            currentRemoteCommandId = nil
-        }
-    }
-
-    private func handleAssistantEvent(_ event: OpenCodeEvent) {
-        dismissReasoningAfterDelay()
-        menuBarState = .responding
-        currentToolName = nil
-    }
-
-    private func handleErrorEvent(_ event: OpenCodeEvent) {
-        resetEventState()
-        lastErrorMessage = event.text
-        sessionStatus = .failed
-        menuBarState = .idle
-        currentToolName = nil
-        currentToolInput = nil
-        messageStore.finalizeRunningMessages()
-        transitionSession(to: .failed)
-        statusBarController?.showError()
-        if let commandId = currentRemoteCommandId {
-            cloudKitManager.failCommand(commandId: commandId, error: event.text)
-            currentRemoteCommandId = nil
-        }
-    }
-
-    private func handleUnknownEvent(_ event: OpenCodeEvent) {
-        if !event.text.isEmpty {
-            Log.debug("Unknown event: \(event.text.prefix(200))")
-        }
-    }
-
-    // MARK: - Reasoning Lifecycle
-
-    /// Dismiss transient reasoning text after a short delay, giving the user time to see it.
-    /// If new reasoning arrives before the delay, the task is cancelled and reasoning stays.
     private func dismissReasoningAfterDelay() {
         guard currentReasoningText != nil else { return }
         reasoningDismissTask?.cancel()
@@ -247,155 +382,69 @@ extension AppState {
         }
     }
 
-    // MARK: - Event Content Processing
+    private func applyUsageUpdate(_ event: OpenCodeEvent, session: Session, isCurrentSession: Bool) {
+        guard let usage = event.usage else { return }
 
-    private func processEventContent(_ event: OpenCodeEvent) {
-        if event.kind == .usage {
-            return
-        }
-        // Save OpenCode session ID to our session for resume capability
-        if let sessionId = event.sessionId, let session = currentSession, session.openCodeSessionId == nil {
-            session.openCodeSessionId = sessionId
-            Log.debug("Saved OpenCode session ID to session: \(sessionId)")
+        Log.debug("[Usage] model=\(event.model ?? "nil") in=\(usage.input) out=\(usage.output) reason=\(usage.reasoning)")
+
+        if let messageId = event.messageId, let sessionId = event.sessionId {
+            if !recordUsageMessageId(sessionId: sessionId, messageId: messageId) { return }
         }
 
-        // --- Tool event lifecycle logging ---
-        if event.kind == .tool || event.kind == .call {
-            let hasOutput = event.toolOutput != nil
-            let phase = hasOutput ? "result" : "call"
-            Log.debug("Tool event [\(phase)]: \(event.toolName ?? "?") callId=\(event.toolCallId ?? "nil") hasOutput=\(hasOutput)")
-        }
-
-        // --- Question / Permission result interception ---
-        // The call events are intercepted in handle(event:) via _isNativeQuestion/_isNativePermission.
-        // The result events (with toolOutput) arrive separately without those flags.
-        // Skip them here — the Question/Permission message lifecycle is fully managed
-        // by handleNativeQuestion/handleNativePermission and updateQuestionMessage.
-        if event.kind == .tool || event.kind == .call,
-           let toolName = event.toolName?.lowercased(),
-           toolName == "question" || toolName == "permission" {
-            logEvent(event)
-            return
-        }
-
-        // --- TodoWrite interception (live has special UI handling) ---
-        // Intercept both .call (running) and .tool (completed) to avoid duplicate bubbles.
-        if (event.kind == .tool || event.kind == .call),
-           let toolName = event.toolName, toolName.isTodoWriteTool {
-            // Only process completed events; skip the running call event entirely
-            if event.kind == .tool {
-                messageStore.handleTodoWriteEvent(event)
-            }
-            logEvent(event)
-            return
-        }
-
-        // Insert into live messages array
-        messageStore.insertEventMessage(event)
-        logEvent(event)
-    }
-
-    private func applyUsageUpdate(_ event: OpenCodeEvent) {
-        guard let usage = event.usage else {
-            Log.debug("[Usage] applyUsageUpdate: no usage data in event")
-            return
-        }
-
-        Log.debug("[Usage] applyUsageUpdate: model=\(event.model ?? "nil") in=\(usage.input) out=\(usage.output) reason=\(usage.reasoning) msgId=\(event.messageId ?? "nil")")
-
-        if let messageId = event.messageId,
-           let sessionId = event.sessionId {
-            if !recordUsageMessageId(sessionId: sessionId, messageId: messageId) {
-                Log.debug("[Usage] Deduplicated messageId=\(messageId)")
-                return
-            }
-        }
-
-        // Model comes from the SSE event (message.updated has modelID).
-        // If model is nil, fall back to the currently selected model from settings
-        // so that usage is never silently dropped.
         let model: String
         if let m = event.model, !m.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             model = m
         } else if let fallback = configManager.getModelString() {
-            Log.debug("[Usage] Model nil in event, using settings fallback: \(fallback)")
             model = fallback
         } else {
-            Log.debug("[Usage] No model available, skipping usage recording")
             return
         }
 
         configManager.recordTokenUsage(model: model, usage: usage, cost: event.cost)
 
         if usage.input > 0 {
-            currentContextTokens = usage.input
-            currentSession?.contextTokens = usage.input
+            session.contextTokens = usage.input
+            if isCurrentSession { currentContextTokens = usage.input }
         }
     }
 
-    // MARK: - Background Session Events
-
-    /// Handle events belonging to a background session.
-    /// Routes question/permission to the native prompt handler so the user
-    /// can still approve actions. Accumulates assistant text for result display.
-    /// All other events are silently discarded to prevent foreground pollution.
-    private func handleBackgroundSessionEvent(_ event: OpenCodeEvent, sessionId: String) {
-        switch event.kind {
-        case .call, .tool:
-            // Route question/permission events to native handler — background tasks
-            // must still be able to ask the user for input, otherwise they hang.
-            if let inputDict = event.toolInputDict,
-               inputDict["_isNativeQuestion"] as? Bool == true {
-                nativePromptHandler.handleNativeQuestion(inputDict: inputDict, event: event)
-                return
-            }
-            if let inputDict = event.toolInputDict,
-               inputDict["_isNativePermission"] as? Bool == true {
-                nativePromptHandler.handleNativePermission(inputDict: inputDict, event: event)
-                return
-            }
-            Log.bridge("Discarding background tool event: \(event.toolName ?? "?") session=\(sessionId)")
-
-        case .assistant:
-            // Accumulate assistant text so we can show the result on completion
-            if !event.text.isEmpty,
-               let idx = backgroundSessions.firstIndex(where: { $0.id == sessionId }) {
-                let existing = backgroundSessions[idx].resultText ?? ""
-                backgroundSessions[idx].resultText = existing + event.text
-            }
-
-        case .usage:
-            // Token usage should still be tracked for billing accuracy
-            applyUsageUpdate(event)
-
-        case .finish:
-            Log.debug("Background session finished: \(sessionId)")
-            completeBackgroundSession(sessionId: sessionId)
-            updateStatusBar()
-
-        case .error:
-            Log.debug("Background session error: \(sessionId) — \(event.text.prefix(200))")
-            if let idx = backgroundSessions.firstIndex(where: { $0.id == sessionId }) {
-                backgroundSessions[idx].status = .failed
-                backgroundSessions[idx].errorText = event.text
-            }
-            updateStatusBar()
-
-        default:
-            Log.bridge("Discarding background event: kind=\(event.kind.rawValue) session=\(sessionId)")
-        }
+    private func sendSessionCompletionNotification(session: Session, result: [ConversationMessage]) {
+        let resultText = result.last(where: { $0.type == .assistant })?.content ?? ""
+        let content = UNMutableNotificationContent()
+        content.title = "Task Completed"
+        content.subtitle = String(session.intent.prefix(60))
+        content.body = resultText.isEmpty ? String(session.intent.prefix(80)) : String(resultText.prefix(200))
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "session-\(session.id.uuidString)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     // MARK: - Log Persistence
 
     func logEvent(_ event: OpenCodeEvent) {
-        if let session = currentSession {
-            // Use toReplayJSON() to ensure bridge-created events (which have empty rawJson)
-            // are serialized into parseable JSON for session replay.
-            let json = event.toReplayJSON()
-            let entry = LogEntry(rawJson: json, kind: event.kind.rawValue)
-            modelContext?.insert(entry)
-            session.logs.append(entry)
+        logEvent(event, session: currentSession)
+    }
+
+    func logEvent(_ event: OpenCodeEvent, session: Session?) {
+        guard let session else { return }
+        let json = event.toReplayJSON()
+        let entry = LogEntry(rawJson: json, kind: event.kind.rawValue)
+        modelContext?.insert(entry)
+        session.logs.append(entry)
+    }
+
+    /// Update question/permission message with user response.
+    func updateQuestionMessage(messageId: UUID, response: String, sessionId: String?) {
+        let isCurrentSession = sessionId == nil || sessionId == currentSession?.openCodeSessionId
+        if isCurrentSession {
+            messageStore.updateQuestionMessage(messageId: messageId, response: response)
+        } else if let sid = sessionId, var buffer = runningSessionMessages[sid] {
+            messageStore.updateQuestionMessage(messageId: messageId, response: response, in: &buffer)
+            runningSessionMessages[sid] = buffer
         }
     }
 }

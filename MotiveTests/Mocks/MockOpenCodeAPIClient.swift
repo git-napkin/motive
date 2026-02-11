@@ -110,7 +110,7 @@ actor MockOpenCodeAPIClient: OpenCodeAPIClientProtocol {
         }
     }
 
-    nonisolated func sendPromptAsync(sessionID: String, text: String, model: String?) async throws {
+    nonisolated func sendPromptAsync(sessionID: String, text: String, model: String?, agent: String?) async throws {
         try await _performSendPromptAsync(sessionID: sessionID, text: text, model: model)
     }
 

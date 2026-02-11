@@ -76,13 +76,14 @@ struct SessionPickerItem: View {
     @EnvironmentObject private var appState: AppState
 
     @State private var isHovering = false
+    @State private var isPulsing = false
+
+    private var isRunning: Bool { session.sessionStatus == .running }
 
     var body: some View {
         HStack(spacing: AuroraSpacing.space3) {
-            // Status dot
-            Circle()
-                .fill(statusColor)
-                .frame(width: 6, height: 6)
+            // Status indicator
+            statusIndicator
 
             // Session info
             VStack(alignment: .leading, spacing: 2) {
@@ -91,14 +92,14 @@ struct SessionPickerItem: View {
                     .foregroundColor(Color.Aurora.textPrimary)
                     .lineLimit(1)
 
-                Text(timeAgo)
+                Text(subtitle)
                     .font(.Aurora.caption)
-                    .foregroundColor(Color.Aurora.textMuted)
+                    .foregroundColor(isRunning ? Color.Aurora.success : Color.Aurora.textMuted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Delete button (separate hit target, only on hover)
-            if isHovering {
+            // Delete button (separate hit target, only on hover, not for running sessions)
+            if isHovering && !isRunning {
                 Button(action: {
                     showDeleteConfirmation()
                 }) {
@@ -116,7 +117,7 @@ struct SessionPickerItem: View {
         }
         .padding(.horizontal, AuroraSpacing.space3)
         .padding(.vertical, AuroraSpacing.space2)
-        .contentShape(Rectangle())  // Entire row is hit-testable
+        .contentShape(Rectangle())
         .background(
             RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
                 .fill(isHovering ? Color.Aurora.surfaceElevated : Color.clear)
@@ -126,10 +127,40 @@ struct SessionPickerItem: View {
         .animation(.auroraFast, value: isHovering)
     }
 
+    // MARK: - Status Indicator
+
+    @ViewBuilder
+    private var statusIndicator: some View {
+        if isRunning {
+            // Pulsing dot for running sessions
+            Circle()
+                .fill(Color.Aurora.success)
+                .frame(width: 6, height: 6)
+                .opacity(isPulsing ? 0.4 : 1.0)
+                .animation(
+                    .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+                    value: isPulsing
+                )
+                .onAppear { isPulsing = true }
+        } else {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 6, height: 6)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var subtitle: String {
+        if isRunning {
+            return "Running"
+        }
+        return timeAgo
+    }
+
     private func showDeleteConfirmation() {
         guard let window = appState.drawerWindowRef else { return }
 
-        // Suppress auto-hide while alert is shown
         appState.setDrawerAutoHideSuppressed(true)
 
         let alert = NSAlert()
@@ -140,22 +171,21 @@ struct SessionPickerItem: View {
         alert.addButton(withTitle: L10n.CommandBar.delete)
         alert.addButton(withTitle: L10n.CommandBar.cancel)
 
-        // Show as sheet attached to Drawer window
         alert.beginSheetModal(for: window) { [onDelete] response in
             if response == .alertFirstButtonReturn {
                 onDelete()
             }
-            // Re-enable auto-hide and refocus
             appState.setDrawerAutoHideSuppressed(false)
             window.makeKeyAndOrderFront(nil)
         }
     }
 
     private var statusColor: Color {
-        switch session.status {
-        case "running": return Color.Aurora.primary
-        case "completed": return Color.Aurora.accent
-        case "failed": return Color.Aurora.error
+        switch session.sessionStatus {
+        case .running: return Color.Aurora.success
+        case .completed: return Color.Aurora.accent
+        case .failed: return Color.Aurora.error
+        case .interrupted: return Color.Aurora.warning
         default: return Color.Aurora.textMuted
         }
     }

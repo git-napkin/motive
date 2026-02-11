@@ -22,7 +22,7 @@ struct DrawerChatInput: View {
         let isRunning = appState.sessionStatus == .running
 
         VStack(spacing: 0) {
-            // Project directory + context size
+            // Project directory + agent toggle + context size
             HStack(spacing: AuroraSpacing.space2) {
                 Image(systemName: "folder")
                     .font(.system(size: 10, weight: .medium))
@@ -34,6 +34,18 @@ struct DrawerChatInput: View {
                     .lineLimit(1)
 
                 Spacer()
+
+                // Agent mode toggle
+                AgentModeToggle(
+                    currentAgent: configManager.currentAgent,
+                    isRunning: isRunning,
+                    onChange: { newAgent in
+                        configManager.currentAgent = newAgent
+                        appState.currentSessionAgent = newAgent
+                        configManager.generateOpenCodeConfig()
+                        appState.reconfigureBridge()
+                    }
+                )
 
                 if let contextTokens = appState.currentContextTokens {
                     ContextSizeBadge(tokens: contextTokens)

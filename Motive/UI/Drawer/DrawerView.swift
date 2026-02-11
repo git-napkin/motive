@@ -45,14 +45,6 @@ struct DrawerView: View {
                     .fill(Color.Aurora.glassOverlay.opacity(isDark ? 0.06 : 0.12))
                     .frame(height: 0.5)
 
-                // Background sessions indicator
-                if !appState.backgroundSessions.isEmpty {
-                    BackgroundSessionsBar(
-                        sessions: appState.backgroundSessions,
-                        onDismiss: { id in appState.dismissBackgroundSession(id: id) }
-                    )
-                }
-
                 // Content
                 if appState.messages.isEmpty {
                     emptyState
@@ -105,6 +97,9 @@ struct DrawerView: View {
             }
             loadSessions()
         }
+        .onChange(of: appState.sessionListRefreshTrigger) {
+            loadSessions()
+        }
         .onKeyPress(.upArrow) {
             if showFileCompletion && !fileCompletion.items.isEmpty {
                 if selectedFileIndex > 0 {
@@ -142,7 +137,13 @@ struct DrawerView: View {
     }
 
     private func loadSessions() {
-        sessions = appState.getAllSessions()
+        let all = appState.getAllSessions()
+        sessions = all.sorted { s1, s2 in
+            let r1 = s1.sessionStatus == .running
+            let r2 = s2.sessionStatus == .running
+            if r1 != r2 { return r1 }
+            return s1.createdAt > s2.createdAt
+        }
     }
 
     // MARK: - Background
@@ -335,123 +336,3 @@ struct DrawerView: View {
     }
 }
 
-// MARK: - Background Sessions Bar
-
-private struct BackgroundSessionsBar: View {
-    let sessions: [BackgroundSession]
-    let onDismiss: (String) -> Void
-
-    @State private var expandedSessionId: String?
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ForEach(sessions) { session in
-                VStack(spacing: 0) {
-                    // Header row — always visible
-                    HStack(spacing: 8) {
-                        // Status icon
-                        Group {
-                            switch session.status {
-                            case .running:
-                                ProgressView()
-                                    .scaleEffect(0.5)
-                                    .frame(width: 12, height: 12)
-                            case .completed:
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.Aurora.success)
-                            case .failed:
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.Aurora.error)
-                            default:
-                                Image(systemName: "circle")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.Aurora.textMuted)
-                            }
-                        }
-
-                        // Intent text
-                        Text(session.intent)
-                            .font(.system(size: 11))
-                            .foregroundColor(Color.Aurora.textSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-
-                        Spacer()
-
-                        // Expand/collapse chevron (only for completed/failed with content)
-                        if session.status != .running, hasContent(session) {
-                            Image(systemName: expandedSessionId == session.id ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(Color.Aurora.textMuted)
-                        }
-
-                        // Dismiss button (only for completed/failed)
-                        if session.status != .running {
-                            Button {
-                                withAnimation(.auroraFast) {
-                                    onDismiss(session.id)
-                                }
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(Color.Aurora.textMuted)
-                                    .frame(width: 16, height: 16)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        guard session.status != .running, hasContent(session) else { return }
-                        withAnimation(.auroraFast) {
-                            expandedSessionId = expandedSessionId == session.id ? nil : session.id
-                        }
-                    }
-
-                    // Expanded result/error content
-                    if expandedSessionId == session.id {
-                        expandedContent(for: session)
-                    }
-
-                    // Separator between sessions
-                    Rectangle()
-                        .fill(Color.Aurora.glassOverlay.opacity(0.06))
-                        .frame(height: 0.5)
-                }
-            }
-        }
-        .background(Color.Aurora.info.opacity(0.05))
-    }
-
-    private func hasContent(_ session: BackgroundSession) -> Bool {
-        (session.resultText != nil && !session.resultText!.isEmpty)
-            || (session.errorText != nil && !session.errorText!.isEmpty)
-    }
-
-    @ViewBuilder
-    private func expandedContent(for session: BackgroundSession) -> some View {
-        let text = session.status == .failed
-            ? (session.errorText ?? "Unknown error")
-            : (session.resultText ?? "")
-
-        ScrollView {
-            Text(text)
-                .font(.system(size: 11))
-                .foregroundColor(
-                    session.status == .failed
-                        ? Color.Aurora.error
-                        : Color.Aurora.textPrimary
-                )
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-        }
-        .frame(maxHeight: 160)
-        .transition(.opacity.combined(with: .move(edge: .top)))
-    }
-}

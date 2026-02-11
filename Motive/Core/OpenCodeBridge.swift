@@ -37,15 +37,21 @@ actor OpenCodeBridge {
     /// OpenCode instance that handles prompts.
     private var sseDirectory: String?
 
-    /// Text delta accumulation buffer (per session)
-    private var textBuffer: [String: String] = [:]
+    /// Last reported agent per session (deduplication for message.updated floods)
+    private var lastReportedAgent: [String: String] = [:]
 
-    private let eventHandler: @Sendable (OpenCodeEvent) async -> Void
+    /// Health check task: after SSE reconnects, checks if running sessions receive events.
+    private var reconnectHealthTask: Task<Void, Never>?
+
+    /// Non-blocking event channel to AppState.
+    /// `yield()` never blocks the bridge actor; AppState consumes on MainActor.
+    /// AsyncStream preserves FIFO ordering, so events arrive in correct sequence.
+    private let eventContinuation: AsyncStream<OpenCodeEvent>.Continuation
 
     // MARK: - Init
 
-    init(eventHandler: @escaping @Sendable (OpenCodeEvent) async -> Void) {
-        self.eventHandler = eventHandler
+    init(eventContinuation: AsyncStream<OpenCodeEvent>.Continuation) {
+        self.eventContinuation = eventContinuation
     }
 
     // MARK: - Configuration
@@ -93,7 +99,7 @@ actor OpenCodeBridge {
             Log.bridge("Bridge started with server at \(url.absoluteString)")
         } catch {
             Log.error("Failed to start server: \(error.localizedDescription)")
-            await eventHandler(OpenCodeEvent(
+            eventContinuation.yield(OpenCodeEvent(
                 kind: .error,
                 rawJson: "",
                 text: "Failed to start OpenCode: \(error.localizedDescription)"
@@ -123,7 +129,6 @@ actor OpenCodeBridge {
         await sseClient.disconnect()
         await server.stop()
         activeSessions.removeAll()
-        textBuffer.removeAll()
         Log.bridge("Bridge stopped")
     }
 
@@ -140,24 +145,41 @@ actor OpenCodeBridge {
         return currentSessionId
     }
 
-    /// Set the session ID (for switching sessions).
+    /// Set the current session ID (for switching sessions / interrupt targeting).
+    /// Does NOT remove the old session from activeSessions — background sessions
+    /// must remain tracked so their SSE events continue to flow through isTrackedSession.
     func setSessionId(_ sessionId: String?) {
-        if let old = currentSessionId {
-            activeSessions.remove(old)
-        }
         currentSessionId = sessionId
         if let sessionId {
             activeSessions.insert(sessionId)
         }
-        Log.bridge("Session ID set to: \(sessionId ?? "nil")")
+        Log.bridge("Session ID set to: \(sessionId ?? "nil"), active sessions: \(activeSessions.count)")
+    }
+
+    /// Remove a completed/failed session from active tracking.
+    /// Called by AppState when a session finishes or errors out.
+    /// This stops the bridge from forwarding further events for this session.
+    func removeActiveSession(_ sessionId: String) {
+        activeSessions.remove(sessionId)
+        lastReportedAgent.removeValue(forKey: sessionId)
+        if currentSessionId == sessionId {
+            currentSessionId = nil
+        }
+        Log.bridge("Removed active session: \(sessionId), remaining: \(activeSessions.count)")
     }
 
     // MARK: - Intent Submission
 
     /// Submit a new intent (run a task).
-    func submitIntent(text: String, cwd: String) async {
+    /// - Parameter forceNewSession: If true, clears `currentSessionId` atomically before creating
+    ///   a new session. This prevents the race condition where multiple concurrent Tasks
+    ///   interleave their setSessionId(nil) + submitIntent calls on the bridge actor.
+    func submitIntent(text: String, cwd: String, agent: String? = nil, forceNewSession: Bool = false) async {
+        if forceNewSession {
+            currentSessionId = nil
+        }
         guard configuration != nil else {
-            await eventHandler(OpenCodeEvent(
+            eventContinuation.yield(OpenCodeEvent(
                 kind: .error,
                 rawJson: "",
                 text: "OpenCode not configured"
@@ -174,33 +196,37 @@ actor OpenCodeBridge {
         // Update working directory
         await apiClient.updateDirectory(cwd)
 
-        // Ensure SSE is connected. Reconnect if:
-        //  1. Working directory changed (different OpenCode instance)
-        //  2. SSE stream task died (connection lost, all retries exhausted)
-        //  3. SSE was never started (first intent after app launch)
+        // Ensure SSE is connected. Only reconnect if:
+        //  1. SSE stream task died (connection lost, all retries exhausted)
+        //  2. SSE was never started (first intent after app launch)
+        //
+        // We do NOT reconnect when only the directory changes. The OpenCode server
+        // is a single process, and the SSE stream delivers events for ALL sessions
+        // regardless of the directory header. The API client sends x-opencode-directory
+        // with each REST call (createSession, sendPrompt), so new sessions in new
+        // directories are correctly handled. Reconnecting SSE on directory change
+        // would briefly disconnect the stream, losing in-flight events for background
+        // sessions in the previous directory.
         if let url = await server.serverURL {
             let sseAlive = await sseClient.hasActiveStream
-            let needsReconnect = cwd != sseDirectory || !sseAlive
 
-            if needsReconnect {
-                if cwd != sseDirectory {
-                    Log.bridge("Directory changed to \(cwd), reconnecting SSE...")
-                } else if !sseAlive {
-                    Log.bridge("SSE stream dead, reconnecting for \(cwd)...")
-                } else {
-                    Log.bridge("Starting SSE for directory: \(cwd)")
-                }
+            if !sseAlive {
+                Log.bridge("SSE stream not alive, connecting for \(cwd)...")
                 sseDirectory = cwd
                 await sseClient.disconnect()
                 startEventLoop(baseURL: url, directory: cwd)
+            } else if cwd != sseDirectory {
+                // Track directory change but don't reconnect — SSE is global
+                Log.bridge("Directory changed to \(cwd) (SSE stays connected via \(sseDirectory ?? "nil"))")
+                sseDirectory = cwd
             }
         }
 
         do {
-            try await submitPrompt(text: text)
+            try await submitPrompt(text: text, agentOverride: agent)
         } catch {
             Log.error("Failed to submit intent: \(error.localizedDescription)")
-            await eventHandler(OpenCodeEvent(
+            eventContinuation.yield(OpenCodeEvent(
                 kind: .error,
                 rawJson: "",
                 text: "Failed to submit task: \(error.localizedDescription)"
@@ -209,54 +235,10 @@ actor OpenCodeBridge {
     }
 
     /// Resume an existing session with a new message.
-    func resumeSession(sessionId: String, text: String, cwd: String) async {
+    func resumeSession(sessionId: String, text: String, cwd: String, agent: String? = nil) async {
         currentSessionId = sessionId
         activeSessions.insert(sessionId)
-        await submitIntent(text: text, cwd: cwd)
-    }
-
-    // MARK: - Background Sessions
-
-    /// Create a new session in the background without switching focus.
-    /// Returns the session ID if successful.
-    func createBackgroundSession(text: String, cwd: String) async -> String? {
-        guard configuration != nil else { return nil }
-
-        // Ensure server is running
-        if await !server.isRunning {
-            await startIfNeeded()
-            guard await server.isRunning else { return nil }
-        }
-
-        await apiClient.updateDirectory(cwd)
-
-        // Ensure SSE is connected
-        if let url = await server.serverURL {
-            let sseAlive = await sseClient.hasActiveStream
-            if !sseAlive || cwd != sseDirectory {
-                sseDirectory = cwd
-                await sseClient.disconnect()
-                startEventLoop(baseURL: url, directory: cwd)
-            }
-        }
-
-        do {
-            let session = try await apiClient.createSession()
-            let sessionID = session.id
-            activeSessions.insert(sessionID)
-            Log.bridge("Created background session: \(sessionID)")
-
-            try await apiClient.sendPromptAsync(
-                sessionID: sessionID,
-                text: text,
-                model: configuration?.model,
-                agent: configuration?.agent
-            )
-            return sessionID
-        } catch {
-            Log.error("Failed to create background session: \(error.localizedDescription)")
-            return nil
-        }
+        await submitIntent(text: text, cwd: cwd, agent: agent)
     }
 
     // MARK: - Interruption
@@ -317,6 +299,8 @@ actor OpenCodeBridge {
 
             for await sseEvent in stream {
                 guard !Task.isCancelled else { break }
+                // await is for actor isolation hop only — handleSSEEvent itself
+                // returns instantly (non-blocking yield to AsyncStream).
                 await self.handleSSEEvent(sseEvent)
             }
 
@@ -325,59 +309,63 @@ actor OpenCodeBridge {
     }
 
     /// Route an SSE event to the appropriate handler.
-    private func handleSSEEvent(_ event: SSEClient.SSEEvent) async {
+    /// Most handlers are now synchronous (non-blocking yield to AsyncStream).
+    private func handleSSEEvent(_ event: SSEClient.SSEEvent) {
         switch event {
         case .connected:
             Log.bridge("SSE connected")
+            startReconnectHealthCheck()
 
         case .heartbeat:
             break
 
         case .textDelta(let info):
-            await handleTextDelta(info)
+            handleTextDelta(info)
 
         case .textComplete(let info):
             handleTextComplete(info)
 
         case .reasoningDelta(let info):
-            await handleReasoningDelta(info)
+            handleReasoningDelta(info)
 
         case .toolRunning(let info):
-            await handleToolRunning(info)
+            handleToolRunning(info)
 
         case .toolCompleted(let info):
-            await handleToolCompleted(info)
+            handleToolCompleted(info)
 
         case .toolError(let info):
-            await handleToolError(info)
+            handleToolError(info)
 
         case .usageUpdated(let info):
-            await handleUsageUpdate(info)
+            handleUsageUpdate(info)
 
         case .sessionIdle(let sessionID):
-            await handleSessionIdle(sessionID)
+            handleSessionIdle(sessionID)
 
         case .sessionStatus(let info):
             guard isTrackedSession(info.sessionID) else { return }
             break
 
         case .sessionError(let info):
-            await handleSessionError(info)
+            handleSessionError(info)
 
         case .questionAsked(let request):
-            await handleQuestionSSEEvent(request)
+            handleQuestionSSEEvent(request)
 
         case .permissionAsked(let request):
-            await handlePermissionSSEEvent(request)
+            handlePermissionSSEEvent(request)
+
+        case .agentChanged(let info):
+            handleAgentChanged(info)
         }
     }
 
     // MARK: - Text Event Handlers
 
-    private func handleTextDelta(_ info: SSEClient.TextDeltaInfo) async {
+    private func handleTextDelta(_ info: SSEClient.TextDeltaInfo) {
         guard isTrackedSession(info.sessionID) else { return }
-        textBuffer[info.sessionID, default: ""] += info.delta
-        await eventHandler(OpenCodeEvent(
+        eventContinuation.yield(OpenCodeEvent(
             kind: .assistant,
             rawJson: "",
             text: info.delta,
@@ -387,12 +375,12 @@ actor OpenCodeBridge {
 
     private func handleTextComplete(_ info: SSEClient.TextCompleteInfo) {
         guard isTrackedSession(info.sessionID) else { return }
-        textBuffer.removeValue(forKey: info.sessionID)
+        // Text completion is a lifecycle marker; no state to update.
     }
 
-    private func handleReasoningDelta(_ info: SSEClient.ReasoningDeltaInfo) async {
+    private func handleReasoningDelta(_ info: SSEClient.ReasoningDeltaInfo) {
         guard isTrackedSession(info.sessionID) else { return }
-        await eventHandler(OpenCodeEvent(
+        eventContinuation.yield(OpenCodeEvent(
             kind: .thought,
             rawJson: "",
             text: info.delta,
@@ -402,10 +390,10 @@ actor OpenCodeBridge {
 
     // MARK: - Tool Event Handlers
 
-    private func handleToolRunning(_ info: SSEClient.ToolInfo) async {
+    private func handleToolRunning(_ info: SSEClient.ToolInfo) {
         guard isTrackedSession(info.sessionID) else { return }
         let inputDict = deserializeInputJSON(info.inputJSON)
-        await eventHandler(OpenCodeEvent(
+        eventContinuation.yield(OpenCodeEvent(
             kind: .tool,
             rawJson: "",
             text: info.inputSummary ?? "",
@@ -417,10 +405,10 @@ actor OpenCodeBridge {
         ))
     }
 
-    private func handleToolCompleted(_ info: SSEClient.ToolCompletedInfo) async {
+    private func handleToolCompleted(_ info: SSEClient.ToolCompletedInfo) {
         guard isTrackedSession(info.sessionID) else { return }
         let inputDict = deserializeInputJSON(info.inputJSON)
-        await eventHandler(OpenCodeEvent(
+        eventContinuation.yield(OpenCodeEvent(
             kind: .tool,
             rawJson: "",
             text: info.inputSummary ?? "",
@@ -434,9 +422,9 @@ actor OpenCodeBridge {
         ))
     }
 
-    private func handleToolError(_ info: SSEClient.ToolErrorInfo) async {
+    private func handleToolError(_ info: SSEClient.ToolErrorInfo) {
         guard isTrackedSession(info.sessionID) else { return }
-        await eventHandler(OpenCodeEvent(
+        eventContinuation.yield(OpenCodeEvent(
             kind: .tool,
             rawJson: "",
             text: info.error,
@@ -449,9 +437,9 @@ actor OpenCodeBridge {
 
     // MARK: - Usage Event Handler
 
-    private func handleUsageUpdate(_ info: SSEClient.UsageInfo) async {
+    private func handleUsageUpdate(_ info: SSEClient.UsageInfo) {
         guard isTrackedSession(info.sessionID) else { return }
-        await eventHandler(OpenCodeEvent(
+        eventContinuation.yield(OpenCodeEvent(
             kind: .usage,
             rawJson: "",
             text: "",
@@ -465,10 +453,10 @@ actor OpenCodeBridge {
 
     // MARK: - Session Lifecycle Handlers
 
-    private func handleSessionIdle(_ sessionID: String) async {
+    private func handleSessionIdle(_ sessionID: String) {
         guard isTrackedSession(sessionID) else { return }
-        textBuffer.removeValue(forKey: sessionID)
-        await eventHandler(OpenCodeEvent(
+        lastReportedAgent.removeValue(forKey: sessionID)
+        eventContinuation.yield(OpenCodeEvent(
             kind: .finish,
             rawJson: "",
             text: "Completed",
@@ -476,10 +464,10 @@ actor OpenCodeBridge {
         ))
     }
 
-    private func handleSessionError(_ info: SSEClient.SessionErrorInfo) async {
+    private func handleSessionError(_ info: SSEClient.SessionErrorInfo) {
         guard isTrackedSession(info.sessionID) else { return }
-        textBuffer.removeValue(forKey: info.sessionID)
-        await eventHandler(OpenCodeEvent(
+        lastReportedAgent.removeValue(forKey: info.sessionID)
+        eventContinuation.yield(OpenCodeEvent(
             kind: .error,
             rawJson: "",
             text: info.error,
@@ -487,11 +475,30 @@ actor OpenCodeBridge {
         ))
     }
 
+    // MARK: - Agent Change Handler
+
+    private func handleAgentChanged(_ info: SSEClient.AgentChangeInfo) {
+        guard isTrackedSession(info.sessionID) else { return }
+
+        // Deduplicate: message.updated fires frequently with the same agent
+        let key = info.sessionID
+        if lastReportedAgent[key] == info.agent { return }
+        lastReportedAgent[key] = info.agent
+
+        eventContinuation.yield(OpenCodeEvent(
+            kind: .assistant,
+            rawJson: "",
+            text: "",
+            sessionId: info.sessionID,
+            agent: info.agent
+        ))
+    }
+
     // MARK: - Native Prompt Handlers
 
-    private func handleQuestionSSEEvent(_ request: SSEClient.QuestionRequest) async {
+    private func handleQuestionSSEEvent(_ request: SSEClient.QuestionRequest) {
         guard isTrackedSession(request.sessionID) else { return }
-        await eventHandler(OpenCodeEvent(
+        eventContinuation.yield(OpenCodeEvent(
             kind: .tool,
             rawJson: encodeQuestionAsJSON(request),
             text: request.questions.first?.question ?? "Question",
@@ -502,9 +509,9 @@ actor OpenCodeBridge {
         ))
     }
 
-    private func handlePermissionSSEEvent(_ request: SSEClient.NativePermissionRequest) async {
+    private func handlePermissionSSEEvent(_ request: SSEClient.NativePermissionRequest) {
         guard isTrackedSession(request.sessionID) else { return }
-        await eventHandler(OpenCodeEvent(
+        eventContinuation.yield(OpenCodeEvent(
             kind: .tool,
             rawJson: encodePermissionAsJSON(request),
             text: "Permission: \(request.permission) for \(request.patterns.joined(separator: ", "))",
@@ -513,6 +520,35 @@ actor OpenCodeBridge {
             toolInputDict: buildPermissionInputDict(request),
             sessionId: request.sessionID
         ))
+    }
+
+    // MARK: - Reconnection Health Check
+
+    /// After SSE reconnects, check that running sessions receive events within 15s.
+    /// If not, log a warning so operators / users are aware that events may have been lost.
+    private func startReconnectHealthCheck() {
+        reconnectHealthTask?.cancel()
+        guard !activeSessions.isEmpty else { return }
+
+        // Snapshot the set of active sessions at reconnection time
+        let sessionsAtReconnect = activeSessions
+
+        reconnectHealthTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard !Task.isCancelled, let self else { return }
+            // If any sessions from the snapshot are still tracked (not completed/removed),
+            // they're alive. If all were removed, nothing is stuck.
+            let currentActive = await self.getActiveSessions()
+            let stillTracked = sessionsAtReconnect.filter { currentActive.contains($0) }
+            if !stillTracked.isEmpty {
+                Log.warning("SSE reconnect health: \(stillTracked.count) session(s) still active after reconnect — events may have been lost during reconnection window")
+            }
+        }
+    }
+
+    /// Accessor for active sessions (used by reconnect health check Task).
+    private func getActiveSessions() -> Set<String> {
+        activeSessions
     }
 
     // MARK: - Helpers
@@ -531,7 +567,7 @@ actor OpenCodeBridge {
         return FileManager.default.homeDirectoryForCurrentUser.path
     }
 
-    private func submitPrompt(text: String) async throws {
+    private func submitPrompt(text: String, agentOverride: String? = nil) async throws {
         // Create or reuse session
         let sessionID: String
         if let existing = currentSessionId {
@@ -543,6 +579,16 @@ actor OpenCodeBridge {
             currentSessionId = sessionID
             activeSessions.insert(sessionID)
             Log.bridge("Created new session: \(sessionID)")
+
+            // Notify AppState of the new session ID BEFORE sending the prompt.
+            // The `await` ensures the MainActor processes this binding before any
+            // SSE events can arrive, preventing stale events from corrupting the ID.
+            eventContinuation.yield(OpenCodeEvent(
+                kind: .unknown,
+                rawJson: "__session_bind__",
+                text: "",
+                sessionId: sessionID
+            ))
         }
 
         let sessionCount = activeSessions.count
@@ -551,11 +597,13 @@ actor OpenCodeBridge {
         Log.bridge("Active sessions: \(sessionCount), SSE alive: \(sseAlive), SSE connected: \(sseConnected)")
 
         // Send prompt asynchronously (results via SSE)
+        // Use explicit agent override if provided, otherwise fall back to configuration
+        let agent = agentOverride ?? configuration?.agent
         try await apiClient.sendPromptAsync(
             sessionID: sessionID,
             text: text,
             model: configuration?.model,
-            agent: configuration?.agent
+            agent: agent
         )
         Log.bridge("Submitted intent to session \(sessionID)")
     }
@@ -628,6 +676,11 @@ actor OpenCodeBridge {
                 }
                 return d
             }
+        }
+
+        // Pass tool context for plan_exit detection
+        if let toolContext = request.toolContext {
+            dict["_toolContext"] = toolContext
         }
 
         return dict

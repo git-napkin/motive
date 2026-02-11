@@ -135,12 +135,4 @@ extension CommandBarView {
         appState.resumeSession(with: text)
         // CommandBar stays visible - mode will change to .running via sessionStatus observer
     }
-
-    /// Submit the current input as a background task (Cmd+Enter)
-    func submitBackground() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        inputText = ""
-        appState.submitBackgroundIntent(text)
-    }
 }

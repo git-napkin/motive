@@ -54,7 +54,13 @@ final class Session {
     
     /// Type-safe accessor for session status
     var sessionStatus: SessionStatus {
-        get { SessionStatus(rawValue: status) ?? .completed }
+        get {
+            guard let parsed = SessionStatus(rawValue: status) else {
+                Log.warning("Invalid session status '\(status)' for session \(id), falling back to .completed")
+                return .completed
+            }
+            return parsed
+        }
         set { status = newValue.rawValue }
     }
 

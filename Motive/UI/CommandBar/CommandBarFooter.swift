@@ -94,7 +94,6 @@ extension CommandBarView {
             case .idle, .input:
                 InlineShortcutHint(items: [
                     (L10n.CommandBar.run, "↵"),
-                    ("Background", "⌘↵"),
                     (L10n.CommandBar.commands, "/"),
                     (L10n.CommandBar.close, "esc"),
                 ])

@@ -51,11 +51,22 @@ struct DrawerHeader: View {
 
                 Spacer()
 
+                // Running count badge (other sessions still running)
+                if runningOtherCount > 0 {
+                    RunningCountBadge(count: runningOtherCount) {
+                        onLoadSessions()
+                        withAnimation(.auroraFast) {
+                            showSessionPicker = true
+                        }
+                    }
+                }
+
                 // Status badge
                 SessionStatusBadge(
                     status: appState.sessionStatus,
                     currentTool: appState.currentToolName,
-                    isThinking: appState.menuBarState == .reasoning
+                    isThinking: appState.menuBarState == .reasoning,
+                    agent: appState.currentSessionAgent
                 )
 
                 // New chat button
@@ -87,13 +98,14 @@ struct DrawerHeader: View {
                 .help(L10n.Drawer.close)
                 .accessibilityLabel(L10n.Drawer.close)
             }
-
-            // Context usage progress bar
-            if let tokens = appState.currentContextTokens, tokens > 0 {
-                ContextProgressBar(currentTokens: tokens)
-                    .padding(.top, 6)
-            }
         }
+    }
+
+    /// Count of running sessions that are NOT the current session
+    private var runningOtherCount: Int {
+        let running = appState.getRunningSessions()
+        let currentId = appState.currentSession?.id
+        return running.filter { $0.id != currentId }.count
     }
 
     private var currentSessionTitle: String {
@@ -108,57 +120,45 @@ struct DrawerHeader: View {
     }
 }
 
-// MARK: - Context Progress Bar
+// MARK: - Running Count Badge
 
-private struct ContextProgressBar: View {
-    let currentTokens: Int
+/// Compact pill showing the count of other running sessions with a pulsing dot.
+private struct RunningCountBadge: View {
+    let count: Int
+    let onTap: () -> Void
 
-    // Common model context limits (approximate)
-    private var estimatedLimit: Int {
-        if currentTokens > 150_000 { return 200_000 }  // 200k models
-        if currentTokens > 100_000 { return 128_000 }  // 128k models
-        return 128_000  // Default assumption
-    }
-
-    private var progress: Double {
-        min(1.0, Double(currentTokens) / Double(estimatedLimit))
-    }
-
-    private var progressColor: Color {
-        if progress > 0.85 { return Color.Aurora.error }
-        if progress > 0.65 { return Color.Aurora.warning }
-        return Color.Aurora.primary
-    }
-
-    private var tokenLabel: String {
-        if currentTokens >= 1000 {
-            return "\(currentTokens / 1000)k"
-        }
-        return "\(currentTokens)"
-    }
+    @State private var isPulsing = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            // Progress bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Color.Aurora.glassOverlay.opacity(0.08))
-                        .frame(height: 3)
+        Button(action: onTap) {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color.Aurora.success)
+                    .frame(width: 6, height: 6)
+                    .opacity(isPulsing ? 0.4 : 1.0)
+                    .animation(
+                        .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+                        value: isPulsing
+                    )
 
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(progressColor.opacity(0.7))
-                        .frame(width: geometry.size.width * progress, height: 3)
-                        .animation(.easeInOut(duration: 0.3), value: progress)
-                }
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundColor(Color.Aurora.success)
             }
-            .frame(height: 3)
-
-            // Token count label
-            Text(tokenLabel)
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.Aurora.textMuted)
-                .frame(width: 28, alignment: .trailing)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.Aurora.success.opacity(0.12))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.Aurora.success.opacity(0.25), lineWidth: 0.5)
+            )
         }
+        .buttonStyle(.plain)
+        .help("\(count) other session\(count == 1 ? "" : "s") running")
+        .accessibilityLabel("\(count) other session\(count == 1 ? "" : "s") running. Tap to view.")
+        .onAppear { isPulsing = true }
     }
 }

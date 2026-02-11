@@ -10,8 +10,28 @@ import AppKit
 final class NativePromptHandler {
     weak var appState: AppState?
 
+    /// Queue for prompts that arrive while one is already showing
+    private var promptQueue: [() -> Void] = []
+
     init(appState: AppState) {
         self.appState = appState
+    }
+
+    /// Show immediately or enqueue if another prompt is visible
+    private func showOrEnqueue(_ showBlock: @escaping () -> Void) {
+        guard let appState else { return }
+        if appState.quickConfirmController?.isVisible == true {
+            promptQueue.append(showBlock)
+            return
+        }
+        showBlock()
+    }
+
+    /// Show next prompt from queue after current completes
+    private func showNextFromQueue() {
+        guard !promptQueue.isEmpty else { return }
+        let next = promptQueue.removeFirst()
+        next()
     }
 
     // MARK: - Native Question Handling
@@ -51,21 +71,30 @@ final class NativePromptHandler {
             optionLabels = ["Yes", "No", "Other"]
         }
 
-        Log.debug("Native question: \(questionText) options=\(optionLabels)")
+        // Detect plan_exit tool context
+        let toolContext = inputDict["_toolContext"] as? String
+        let isPlanExit = toolContext == "plan_exit"
+
+        Log.debug("Native question: \(questionText) options=\(optionLabels) isPlanExit=\(isPlanExit)")
 
         // Add question to conversation as a tool message (waiting for user response)
         let questionMessageId = UUID()
         appState?.pendingQuestionMessageId = questionMessageId
         let optionsSummary = " [\(optionLabels.joined(separator: " / "))]"
-        appState?.messageStore.messages.append(ConversationMessage(
+        let questionMsg = ConversationMessage(
             id: questionMessageId,
             type: .tool,
-            content: questionText,
-            toolName: "Question",
+            content: isPlanExit ? "Plan is ready. Execute?" : questionText,
+            toolName: isPlanExit ? "Plan Ready" : "Question",
             toolInput: questionText + optionsSummary,
             toolCallId: event.toolCallId,
             status: .running
-        ))
+        )
+        if let sid = event.sessionId, let appState, appState.currentSession?.openCodeSessionId != sid {
+            appState.messageStore.appendMessageIfNeeded(questionMsg, to: &appState.runningSessionMessages[sid, default: []])
+        } else {
+            appState?.messageStore.appendMessageIfNeeded(questionMsg)
+        }
 
         // If this is a remote command, send question to iOS via CloudKit
         if let commandId = appState?.currentRemoteCommandId {
@@ -73,27 +102,48 @@ final class NativePromptHandler {
             return
         }
 
-        // Show local QuickConfirm
-        showNativeQuestionPrompt(
-            questionID: questionID,
-            question: questionText,
-            options: options,
-            multiSelect: multiple
-        )
+        // Show local QuickConfirm (or enqueue if one is already showing)
+        let sessionId = event.sessionId
+        let sessionIntent = sessionId.flatMap { appState?.runningSessions[$0]?.intent }
+            ?? appState?.currentSession?.intent
+        showOrEnqueue { [weak self] in
+            self?.showNativeQuestionPrompt(
+                questionID: questionID,
+                question: isPlanExit ? "Plan is ready. Would you like to execute it?" : questionText,
+                options: isPlanExit
+                    ? [
+                        PermissionRequest.QuestionOption(label: "Execute Plan", description: "Start executing the plan"),
+                        PermissionRequest.QuestionOption(label: "Refine", description: "Continue refining the plan"),
+                    ]
+                    : options,
+                multiSelect: multiple,
+                messageId: questionMessageId,
+                sessionId: sessionId,
+                sessionIntent: sessionIntent,
+                isPlanExit: isPlanExit
+            )
+        }
     }
 
     /// Show a local QuickConfirm prompt for a native question.
-    func showNativeQuestionPrompt(
+    private func showNativeQuestionPrompt(
         questionID: String,
         question: String,
         options: [PermissionRequest.QuestionOption],
-        multiSelect: Bool
+        multiSelect: Bool,
+        messageId: UUID,
+        sessionId: String? = nil,
+        sessionIntent: String? = nil,
+        isPlanExit: Bool = false
     ) {
-        let request = PermissionRequest(
+        var request = PermissionRequest(
             id: questionID, taskId: questionID, type: .question,
-            question: question, header: "Question",
+            question: question,
+            header: isPlanExit ? "Plan Complete" : "Question",
             options: options, multiSelect: multiSelect
         )
+        request.sessionIntent = sessionIntent
+        request.isPlanExitConfirmation = isPlanExit
 
         if appState?.quickConfirmController == nil {
             appState?.quickConfirmController = QuickConfirmWindowController()
@@ -104,24 +154,35 @@ final class NativePromptHandler {
             anchorFrame: appState?.statusBarController?.buttonFrame,
             onResponse: { [weak self] (response: String) in
                 Log.debug("Native question response: \(response)")
-                self?.appState?.messageStore.updateQuestionMessage(messageId: self?.appState?.pendingQuestionMessageId, response: response)
+
+                // Map plan_exit UI labels to what OpenCode expects
+                let apiResponse: String
+                if isPlanExit {
+                    apiResponse = response == "Execute Plan" ? "Yes" : "No"
+                } else {
+                    apiResponse = response
+                }
+
+                self?.appState?.updateQuestionMessage(messageId: messageId, response: response, sessionId: sessionId)
                 self?.appState?.pendingQuestionMessageId = nil
                 Task { [weak self] in
                     await self?.appState?.bridge.replyToQuestion(
                         requestID: questionID,
-                        answers: [[response]]
+                        answers: [[apiResponse]]
                     )
                 }
                 self?.appState?.updateStatusBar()
+                self?.showNextFromQueue()
             },
             onCancel: { [weak self] in
                 Log.debug("Native question cancelled")
-                self?.appState?.messageStore.updateQuestionMessage(messageId: self?.appState?.pendingQuestionMessageId, response: "User declined to answer.")
+                self?.appState?.updateQuestionMessage(messageId: messageId, response: "User declined to answer.", sessionId: sessionId)
                 self?.appState?.pendingQuestionMessageId = nil
                 Task { [weak self] in
                     await self?.appState?.bridge.rejectQuestion(requestID: questionID)
                 }
                 self?.appState?.updateStatusBar()
+                self?.showNextFromQueue()
             }
         )
     }
@@ -142,7 +203,7 @@ final class NativePromptHandler {
         let permMessageId = UUID()
         appState?.pendingQuestionMessageId = permMessageId
         let patternsStr = patterns.joined(separator: ", ")
-        appState?.messageStore.messages.append(ConversationMessage(
+        let permMsg = ConversationMessage(
             id: permMessageId,
             type: .tool,
             content: "\(permission): \(patternsStr)",
@@ -150,7 +211,12 @@ final class NativePromptHandler {
             toolInput: patternsStr,
             toolCallId: event.toolCallId,
             status: .running
-        ))
+        )
+        if let sid = event.sessionId, let appState, appState.currentSession?.openCodeSessionId != sid {
+            appState.messageStore.appendMessageIfNeeded(permMsg, to: &appState.runningSessionMessages[sid, default: []])
+        } else {
+            appState?.messageStore.appendMessageIfNeeded(permMsg)
+        }
 
         // Build options for the permission dialog
         var options: [PermissionRequest.QuestionOption] = [
@@ -171,16 +237,44 @@ final class NativePromptHandler {
             return
         }
 
-        // Show local QuickConfirm
+        let sessionId = event.sessionId
+        let sessionIntent = sessionId.flatMap { appState?.runningSessions[$0]?.intent }
+            ?? appState?.currentSession?.intent
+        showOrEnqueue { [weak self] in
+            self?.showNativePermissionPrompt(
+                permissionID: permissionID,
+                questionText: questionText,
+                options: options,
+                patterns: patterns,
+                diff: diff,
+                permission: permission,
+                messageId: permMessageId,
+                sessionId: sessionId,
+                sessionIntent: sessionIntent
+            )
+        }
+    }
+
+    private func showNativePermissionPrompt(
+        permissionID: String,
+        questionText: String,
+        options: [PermissionRequest.QuestionOption],
+        patterns: [String],
+        diff: String?,
+        permission: String,
+        messageId: UUID,
+        sessionId: String? = nil,
+        sessionIntent: String? = nil
+    ) {
         var request = PermissionRequest(
             id: permissionID, taskId: permissionID, type: .permission,
             question: questionText, header: "Permission Request",
             options: options, multiSelect: false
         )
-        // Set permission-specific fields for permissionContent view
         request.permissionType = permission
         request.patterns = patterns
         request.diff = diff
+        request.sessionIntent = sessionIntent
 
         if appState?.quickConfirmController == nil {
             appState?.quickConfirmController = QuickConfirmWindowController()
@@ -191,7 +285,7 @@ final class NativePromptHandler {
             anchorFrame: appState?.statusBarController?.buttonFrame,
             onResponse: { [weak self] (response: String) in
                 Log.debug("Native permission response: \(response)")
-                self?.appState?.messageStore.updateQuestionMessage(messageId: self?.appState?.pendingQuestionMessageId, response: response)
+                self?.appState?.updateQuestionMessage(messageId: messageId, response: response, sessionId: sessionId)
                 self?.appState?.pendingQuestionMessageId = nil
 
                 let reply: OpenCodeAPIClient.PermissionReply
@@ -208,15 +302,17 @@ final class NativePromptHandler {
                     await self?.appState?.bridge.replyToPermission(requestID: permissionID, reply: reply)
                 }
                 self?.appState?.updateStatusBar()
+                self?.showNextFromQueue()
             },
             onCancel: { [weak self] in
                 Log.debug("Native permission rejected")
-                self?.appState?.messageStore.updateQuestionMessage(messageId: self?.appState?.pendingQuestionMessageId, response: "Rejected")
+                self?.appState?.updateQuestionMessage(messageId: messageId, response: "Rejected", sessionId: sessionId)
                 self?.appState?.pendingQuestionMessageId = nil
                 Task { [weak self] in
                     await self?.appState?.bridge.replyToPermission(requestID: permissionID, reply: .reject("User rejected"))
                 }
                 self?.appState?.updateStatusBar()
+                self?.showNextFromQueue()
             }
         )
     }

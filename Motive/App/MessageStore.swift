@@ -16,36 +16,43 @@ final class MessageStore: ObservableObject {
     /// Insert an event into the live messages array.
     /// Handles streaming merge for assistant deltas, tool lifecycle, and finish deduplication.
     func insertEventMessage(_ event: OpenCodeEvent) {
+        insertEventIntoBuffer(event, buffer: &messages)
+    }
+
+    /// Insert an event into an arbitrary message buffer.
+    /// Same logic as insertEventMessage but targets a passed-in array (for parallel sessions).
+    func insertEventIntoBuffer(_ event: OpenCodeEvent, buffer: inout [ConversationMessage]) {
         // Skip empty/unparseable events
         if event.kind == .unknown && event.text.isEmpty { return }
         guard let message = event.toMessage() else { return }
 
         // --- System / Finish deduplication ---
         if message.type == .system {
-            if event.isSecondaryFinish { return }
             if isCompletionText(message.content) {
-                let alreadyHas = messages.contains { $0.type == .system && isCompletionText($0.content) }
-                if alreadyHas { return }
+                // Allow one "Completed" per turn: deduplicate only if no user message
+                // has been sent since the last "Completed" (same turn).
+                if let lastCompletedIdx = buffer.lastIndex(where: { $0.type == .system && isCompletionText($0.content) }) {
+                    let hasUserMessageAfter = buffer[lastCompletedIdx...].contains { $0.type == .user }
+                    if !hasUserMessageAfter { return }
+                }
             }
         }
 
         // --- User messages ---
         if message.type == .user {
-            messages.append(message)
+            buffer.append(message)
             return
         }
 
         // --- Assistant message streaming merge ---
-        // Only merge CONSECUTIVE assistant messages (last message in array must be assistant).
-        // Preserves correct visual order: text-before-tools -> tools -> text-after-tools.
         if message.type == .assistant {
-            if let lastIndex = messages.lastIndex(where: { $0.type == .assistant }),
-               lastIndex == messages.count - 1 {
-                messages[lastIndex] = messages[lastIndex].withContent(
-                    messages[lastIndex].content + message.content
+            if let lastIndex = buffer.lastIndex(where: { $0.type == .assistant }),
+               lastIndex == buffer.count - 1 {
+                buffer[lastIndex] = buffer[lastIndex].withContent(
+                    buffer[lastIndex].content + message.content
                 )
             } else {
-                messages.append(message)
+                buffer.append(message)
             }
             return
         }
@@ -57,35 +64,40 @@ final class MessageStore: ObservableObject {
 
         // --- Tool message merge ---
         if message.type == .tool {
-            processToolMessage(message)
+            processToolMessage(message, into: &buffer)
             return
         }
 
         // --- Everything else: append ---
-        messages.append(message)
+        buffer.append(message)
     }
 
     /// Process tool messages with proper lifecycle: running -> completed
     func processToolMessage(_ message: ConversationMessage) {
+        processToolMessage(message, into: &messages)
+    }
+
+    /// Process tool messages into a given buffer.
+    func processToolMessage(_ message: ConversationMessage, into buffer: inout [ConversationMessage]) {
         // Strategy 1: Merge by toolCallId (most reliable)
         if let toolCallId = message.toolCallId,
-           let idx = messages.lastIndex(where: { $0.type == .tool && $0.toolCallId == toolCallId }) {
-            Log.debug("Tool merge [callId]: \(messages[idx].toolName ?? "?") \(messages[idx].status.rawValue) -> \(message.toolOutput != nil ? "completed" : messages[idx].status.rawValue)")
-            messages[idx] = messages[idx].mergingToolData(from: message)
+           let idx = buffer.lastIndex(where: { $0.type == .tool && $0.toolCallId == toolCallId }) {
+            Log.debug("Tool merge [callId]: \(buffer[idx].toolName ?? "?") \(buffer[idx].status.rawValue) -> \(message.toolOutput != nil ? "completed" : buffer[idx].status.rawValue)")
+            buffer[idx] = buffer[idx].mergingToolData(from: message)
         }
         // Strategy 2: Merge consecutive tool messages (fallback for missing toolCallId)
-        else if let lastIdx = messages.lastIndex(where: { $0.type == .tool }),
-                lastIdx == messages.count - 1,
-                messages[lastIdx].toolOutput == nil,
+        else if let lastIdx = buffer.lastIndex(where: { $0.type == .tool }),
+                lastIdx == buffer.count - 1,
+                buffer[lastIdx].toolOutput == nil,
                 message.toolOutput != nil,
-                (message.toolName == "Result" || message.toolName == messages[lastIdx].toolName) {
-            Log.debug("Tool merge [consecutive]: \(messages[lastIdx].toolName ?? "?") -> completed")
-            messages[lastIdx] = messages[lastIdx].mergingToolData(from: message)
+                (message.toolName == "Result" || message.toolName == buffer[lastIdx].toolName) {
+            Log.debug("Tool merge [consecutive]: \(buffer[lastIdx].toolName ?? "?") -> completed")
+            buffer[lastIdx] = buffer[lastIdx].mergingToolData(from: message)
         }
         // No merge target — append as new message
         else {
             Log.debug("Tool append [new]: \(message.toolName ?? "?") status=\(message.status.rawValue) hasOutput=\(message.toolOutput != nil)")
-            messages.append(message)
+            buffer.append(message)
         }
     }
 
@@ -101,11 +113,15 @@ final class MessageStore: ObservableObject {
     // MARK: - TodoWrite Handling
 
     func handleTodoWriteEvent(_ event: OpenCodeEvent) {
+        handleTodoWriteEvent(event, buffer: &messages)
+    }
+
+    func handleTodoWriteEvent(_ event: OpenCodeEvent, buffer: inout [ConversationMessage]) {
         let todoItems = parseTodoItems(from: event)
         guard !todoItems.isEmpty else {
             Log.debug("TodoWrite: no items parsed from event")
             if let message = event.toMessage() {
-                processToolMessage(message)
+                processToolMessage(message, into: &buffer)
             }
             return
         }
@@ -116,8 +132,8 @@ final class MessageStore: ObservableObject {
             Log.debug("  todo[\(item.id)]: status=\(item.status.rawValue), content=\"\(item.content.prefix(40))\"")
         }
 
-        if let existingIndex = messages.lastIndex(where: { $0.type == .todo }) {
-            let existing = messages[existingIndex]
+        if let existingIndex = buffer.lastIndex(where: { $0.type == .todo }) {
+            let existing = buffer[existingIndex]
             let finalItems: [TodoItem]
             if merge, let existingItems = existing.todoItems {
                 var itemMap = Dictionary(uniqueKeysWithValues: existingItems.map { ($0.id, $0) })
@@ -132,30 +148,30 @@ final class MessageStore: ObservableObject {
             } else {
                 finalItems = todoItems
             }
-            messages[existingIndex] = existing.withTodos(finalItems, summary: todoSummary(finalItems))
+            buffer[existingIndex] = existing.withTodos(finalItems, summary: todoSummary(finalItems))
         } else {
-            messages.append(ConversationMessage(
+            buffer.append(ConversationMessage(
                 type: .todo, content: todoSummary(todoItems),
                 status: .completed, todoItems: todoItems
             ))
         }
 
-        // Mark any stale .tool messages for TodoWrite as completed so they don't
-        // stay stuck in "Processing..." state now that we have the .todo bubble.
-        finalizeTodoWriteToolMessages(event: event)
+        finalizeTodoWriteToolMessages(event: event, buffer: &buffer)
     }
 
     /// Mark any `.tool` messages belonging to TodoWrite as `.completed`.
-    /// These messages are created as `.running` when the first TodoWrite event arrives
-    /// but are superseded by the `.todo` bubble once items are parsed.
     func finalizeTodoWriteToolMessages(event: OpenCodeEvent) {
-        for i in messages.indices where messages[i].type == .tool && messages[i].status == .running {
+        finalizeTodoWriteToolMessages(event: event, buffer: &messages)
+    }
+
+    func finalizeTodoWriteToolMessages(event: OpenCodeEvent, buffer: inout [ConversationMessage]) {
+        for i in buffer.indices where buffer[i].type == .tool && buffer[i].status == .running {
             let matchesByCallId = event.toolCallId != nil
-                && messages[i].toolCallId == event.toolCallId
-            let matchesByName = messages[i].toolName?.isTodoWriteTool == true
+                && buffer[i].toolCallId == event.toolCallId
+            let matchesByName = buffer[i].toolName?.isTodoWriteTool == true
             if matchesByCallId || matchesByName {
                 Log.debug("TodoWrite: finalizing stale .tool message at index \(i)")
-                messages[i] = messages[i].withStatus(.completed)
+                buffer[i] = buffer[i].withStatus(.completed)
             }
         }
     }
@@ -230,15 +246,38 @@ final class MessageStore: ObservableObject {
         return "\(completed)/\(total) tasks completed"
     }
 
+    // MARK: - Dedup-Safe Append (for NativePromptHandler)
+
+    /// Append a message to the live messages array, guarded by toolCallId dedup.
+    /// If a message with the same toolCallId already exists, the append is skipped.
+    func appendMessageIfNeeded(_ message: ConversationMessage) {
+        appendMessageIfNeeded(message, to: &messages)
+    }
+
+    /// Append a message to a given buffer, guarded by toolCallId dedup.
+    func appendMessageIfNeeded(_ message: ConversationMessage, to buffer: inout [ConversationMessage]) {
+        if let callId = message.toolCallId, !callId.isEmpty {
+            if buffer.contains(where: { $0.toolCallId == callId }) {
+                Log.debug("Dedup: skipping duplicate message for toolCallId=\(callId)")
+                return
+            }
+        }
+        buffer.append(message)
+    }
+
     // MARK: - Question/Permission Message Updates
 
     /// Update the pending question/permission message with the user's response.
     func updateQuestionMessage(messageId: UUID?, response: String) {
+        updateQuestionMessage(messageId: messageId, response: response, in: &messages)
+    }
+
+    func updateQuestionMessage(messageId: UUID?, response: String, in buffer: inout [ConversationMessage]) {
         guard let messageId,
-              let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
-        let existing = messages[index]
+              let index = buffer.firstIndex(where: { $0.id == messageId }) else { return }
+        let existing = buffer[index]
         let displayResponse = response.isEmpty ? "User declined to answer." : response
-        messages[index] = ConversationMessage(
+        buffer[index] = ConversationMessage(
             id: existing.id,
             type: .tool,
             content: existing.content,
@@ -255,8 +294,12 @@ final class MessageStore: ObservableObject {
 
     /// When a step/task finishes, mark any still-running tool messages as completed.
     func finalizeRunningMessages() {
-        for i in messages.indices where messages[i].type == .tool && messages[i].status == .running {
-            messages[i] = messages[i].withStatus(.completed)
+        finalizeRunningMessages(in: &messages)
+    }
+
+    func finalizeRunningMessages(in buffer: inout [ConversationMessage]) {
+        for i in buffer.indices where buffer[i].type == .tool && buffer[i].status == .running {
+            buffer[i] = buffer[i].withStatus(.completed)
         }
     }
 }

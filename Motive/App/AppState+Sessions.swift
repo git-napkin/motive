@@ -34,7 +34,7 @@ extension AppState {
         lastErrorMessage = nil
         // Immediately update status bar so user sees feedback
         menuBarState = .executing
-        sessionStatus = .running
+        transitionSessionStatus(.running)
         updateStatusBar()
         // Start UI-level session timeout
         resetSessionTimeout()
@@ -52,7 +52,19 @@ extension AppState {
 
         // Use provided working directory or configured project directory
         let cwd = workingDirectory ?? configManager.currentProjectURL.path
-        Task { await bridge.submitIntent(text: trimmed, cwd: cwd) }
+        let agent = configManager.currentAgent
+        // Enqueue this Session to receive the __session_bind__ from the bridge
+        if let session = currentSession {
+            enqueuePendingBind(session)
+        }
+        // forceNewSession: true makes the bridge clear currentSessionId and create a new session
+        // ATOMICALLY within a single actor method call. This prevents the race condition where
+        // multiple Tasks interleave their calls on the bridge actor:
+        //   Task1.setSessionId(nil) → Task2.setSessionId(nil) → Task1.submitIntent(reuses!) → BUG
+        bridgeTask?.cancel()
+        bridgeTask = Task {
+            await bridge.submitIntent(text: trimmed, cwd: cwd, agent: agent, forceNewSession: true)
+        }
     }
 
     func sendFollowUp(_ text: String) {
@@ -64,17 +76,12 @@ extension AppState {
     func interruptSession() {
         guard sessionStatus == .running else { return }
 
-        Task {
-            await bridge.interrupt()
-        }
+        bridgeTask?.cancel()
+        bridgeTask = Task { await bridge.interrupt() }
 
-        sessionTimeoutTask?.cancel()
-        sessionTimeoutTask = nil
-        sessionStatus = .interrupted
+        resetTransientState()
+        transitionSessionStatus(.interrupted, for: currentSession)
         menuBarState = .idle
-        currentToolName = nil
-        currentToolInput = nil
-        lastErrorMessage = nil  // Clear any previous error — this is a user-initiated stop
 
         // Mark all running tool messages as completed (user stopped, not a failure)
         for i in messages.indices where messages[i].type == .tool && messages[i].status == .running {
@@ -88,9 +95,13 @@ extension AppState {
         )
         messages.append(systemMessage)
 
-        // Snapshot messages for history replay
+        // Persist interrupted status and snapshot messages
         if let session = currentSession {
             session.messagesData = ConversationMessage.serializeMessages(messages)
+            if let ocId = session.openCodeSessionId {
+                removeSessionFromTracking(ocId)
+            }
+            trySaveContext()
         }
 
         // Immediately sync menu bar to idle (before any trailing SSE events arrive)
@@ -115,25 +126,47 @@ extension AppState {
     }
 
     /// Switch to a different session.
-    /// Loads the saved messages snapshot directly — no event reconstruction needed.
+    /// Saves current session messages if running; loads target from buffer or messagesData.
     func switchToSession(_ session: Session) {
-        currentSession = session
-        sessionStatus = SessionStatus(rawValue: session.status) ?? .completed
-        currentContextTokens = session.contextTokens
-         resetUsageDeduplication()
+        // Save current session's messages if running (for background event processing)
+        saveCurrentSessionToBuffer()
 
-        // Sync OpenCodeBridge session ID
-        Task { await bridge.setSessionId(session.openCodeSessionId) }
+        // Also persist non-running session's messages (they may have changed in UI)
+        if let current = currentSession,
+           current.sessionStatus != .running {
+            current.messagesData = ConversationMessage.serializeMessages(messages)
+        }
+
+        resetTransientState()
+        currentSession = session
+        transitionSessionStatus(session.sessionStatus)
+        currentContextTokens = session.contextTokens
+        resetUsageDeduplication()
+
+        // Sync menuBarState to match the target session's status.
+        // Without this, menubar stays stuck on the previous session's state (e.g. tool name "glob").
+        if session.sessionStatus == .running {
+            menuBarState = .executing
+        } else {
+            menuBarState = .idle
+        }
+        updateStatusBar()
+
+        // Sync OpenCodeBridge session ID for interrupt target
+        bridgeTask?.cancel()
+        bridgeTask = Task { await bridge.setSessionId(session.openCodeSessionId) }
 
         // Restore project directory for this session
         restoreProjectDirectory(for: session)
 
-        // Load the saved messages snapshot (identical to what was displayed live)
-        if let data = session.messagesData,
-           let saved = ConversationMessage.deserializeMessages(data) {
+        // Load messages: running buffer first, or persisted snapshot
+        let ocId = session.openCodeSessionId
+        if let ocId, let running = runningSessionMessages[ocId] {
+            messages = running
+        } else if let data = session.messagesData,
+                  let saved = ConversationMessage.deserializeMessages(data) {
             messages = saved
         } else {
-            // No snapshot — show empty (old sessions before this feature)
             messages = [ConversationMessage(type: .user, content: session.intent, timestamp: session.createdAt)]
         }
     }
@@ -145,42 +178,54 @@ extension AppState {
         if session.projectPath == defaultPath {
             _ = configManager.setProjectDirectory(nil)
         } else {
-            _ = configManager.setProjectDirectory(session.projectPath)
+             _ = configManager.setProjectDirectory(session.projectPath)
         }
     }
 
     /// Start a new empty session (for "New Chat" button)
     func startNewEmptySession() {
+        // Save current session's messages if still running (background continues)
+        saveCurrentSessionToBuffer()
+
+        resetTransientState()
         currentSession = nil
         messages = []
-        sessionStatus = .idle
+        transitionSessionStatus(.idle)
         menuBarState = .idle
-        currentToolName = nil
         currentContextTokens = nil
+        currentSessionAgent = configManager.currentAgent
         resetUsageDeduplication()
 
-        // Clear OpenCodeBridge session ID for fresh start 、 h
-        Task { await bridge.setSessionId(nil) }
-        // @Observable handles change tracking automatically 
+        bridgeTask?.cancel()
+        bridgeTask = Task { await bridge.setSessionId(nil) }
     }
 
     /// Clear current session messages without deleting
     func clearCurrentSession() {
+        // Save current session's messages if still running (background continues)
+        saveCurrentSessionToBuffer()
+
+        resetTransientState()
         messages = []
         currentSession = nil
-        sessionStatus = .idle
+        transitionSessionStatus(.idle)
         menuBarState = .idle
-        currentToolName = nil
         currentContextTokens = nil
+        currentSessionAgent = configManager.currentAgent
         resetUsageDeduplication()
 
-        Task { await bridge.setSessionId(nil) }
-        // @Observable handles change tracking automatically
+        bridgeTask?.cancel()
+        bridgeTask = Task { await bridge.setSessionId(nil) }
     }
 
     /// Delete a session from storage
     func deleteSession(_ session: Session) {
         guard let modelContext else { return }
+
+        // Clean up tracking dicts if the session is still running
+        if let ocId = session.openCodeSessionId {
+            removeSessionFromTracking(ocId)
+        }
 
         // If deleting current session, clear it first
         if currentSession?.id == session.id {
@@ -196,7 +241,6 @@ extension AppState {
         
         // Trigger list refresh so CommandBarView updates
         sessionListRefreshTrigger += 1
-        // @Observable handles change tracking automatically
     }
 
     /// Delete a session by id (robust against stale references)
@@ -211,6 +255,10 @@ extension AppState {
             predicate: #Predicate { $0.id == id }
         )
         if let session = try? modelContext.fetch(descriptor).first {
+            // Clean up tracking dicts
+            if let ocId = session.openCodeSessionId {
+                removeSessionFromTracking(ocId)
+            }
             modelContext.delete(session)
             do {
                 try modelContext.save()
@@ -220,7 +268,6 @@ extension AppState {
             
             // Trigger list refresh so CommandBarView updates
             sessionListRefreshTrigger += 1
-            // @Observable handles change tracking automatically
         }
     }
 
@@ -238,7 +285,6 @@ extension AppState {
 
         // Set the new directory
         let success = configManager.setProjectDirectory(path)
-        // @Observable handles change tracking automatically
 
         return success
     }
@@ -280,11 +326,19 @@ extension AppState {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        sessionStatus = .running
-        menuBarState = .executing
-        session.sessionStatus = .running
+        // Guard against double-submission (rapid Enter key)
+        guard sessionStatus != .running else {
+            Log.debug("Ignoring duplicate resumeSession (already running)")
+            return
+        }
 
-        // Add user message and log it for replay
+        // Clear stale UI state from previous turn
+        resetTransientState()
+
+        transitionSessionStatus(.running, for: session)
+        menuBarState = .executing
+
+        // Add user message first — must be in the array before snapshotting
         let userMessage = ConversationMessage(
             type: .user,
             content: trimmed
@@ -292,21 +346,36 @@ extension AppState {
         messages.append(userMessage)
         logEvent(OpenCodeEvent(kind: .user, rawJson: "", text: trimmed))
 
+        // Re-register in runningSessions for event routing
+        // (finish event removes the session; we must re-add on resume)
+        // Snapshot taken AFTER user message so any code reading runningSessionMessages includes it.
+        runningSessions[openCodeSessionId] = session
+        runningSessionMessages[openCodeSessionId] = messages
+        startSnapshotTimerIfNeeded()
+
+        // Guard against stale finish events from the previous turn
+        awaitingFirstResponseAfterResume = true
+
         // Use the project directory that this session was created with
         let cwd = session.projectPath.isEmpty ? configManager.currentProjectURL.path : session.projectPath
-        Task { await bridge.resumeSession(sessionId: openCodeSessionId, text: trimmed, cwd: cwd) }
+        let agent = configManager.currentAgent
+        bridgeTask?.cancel()
+        bridgeTask = Task { await bridge.resumeSession(sessionId: openCodeSessionId, text: trimmed, cwd: cwd, agent: agent) }
     }
 
     private func startNewSession(intent: String) {
+        // Save current running session's messages before clearing (prevents data loss)
+        saveCurrentSessionToBuffer()
+        resetTransientState()
+
         messages = []
         menuBarState = .executing
-        sessionStatus = .running
-        currentToolName = nil
+        transitionSessionStatus(.running)
         currentContextTokens = nil
+        currentSessionAgent = configManager.currentAgent
         resetUsageDeduplication()
 
-        // Clear OpenCodeBridge session ID for fresh start
-        Task { await bridge.setSessionId(nil) }
+        // NOTE: bridge session clearing is handled atomically by forceNewSession: true in submitIntent
 
         let sessionProjectPath = configManager.currentProjectURL.path
         let session = Session(intent: intent, projectPath: sessionProjectPath)
@@ -314,64 +383,8 @@ extension AppState {
         modelContext?.insert(session)
     }
 
-    // MARK: - Background Sessions
-
-    /// Submit an intent as a background session (does not switch focus).
-    func submitBackgroundIntent(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        let cwd = configManager.currentProjectURL.path
-        let bgSession = BackgroundSession(id: UUID().uuidString, intent: trimmed, startedAt: Date())
-        backgroundSessions.append(bgSession)
-
-        Task {
-            if let sessionId = await bridge.createBackgroundSession(text: trimmed, cwd: cwd) {
-                // Update the background session with the real OpenCode session ID
-                if let idx = backgroundSessions.firstIndex(where: { $0.id == bgSession.id }) {
-                    backgroundSessions[idx] = BackgroundSession(
-                        id: sessionId,
-                        intent: trimmed,
-                        startedAt: bgSession.startedAt
-                    )
-                }
-            } else {
-                // Failed to create — remove from list
-                backgroundSessions.removeAll { $0.id == bgSession.id }
-            }
-        }
-    }
-
-    /// Called when a background session completes (from SSE event handler).
-    func completeBackgroundSession(sessionId: String) {
-        guard let idx = backgroundSessions.firstIndex(where: { $0.id == sessionId }) else { return }
-        let session = backgroundSessions[idx]
-        backgroundSessions[idx].status = .completed
-
-        // Send macOS notification with result summary
-        let content = UNMutableNotificationContent()
-        content.title = "Task Completed"
-        if let result = session.resultText, !result.isEmpty {
-            // Show result (truncated) with intent as subtitle for context
-            content.subtitle = String(session.intent.prefix(60))
-            content.body = String(result.prefix(200))
-        } else {
-            content.body = String(session.intent.prefix(80))
-        }
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: "bg-session-\(sessionId)",
-            content: content,
-            trigger: nil
-        )
-        UNUserNotificationCenter.current().add(request)
-        // Session stays in the list until user dismisses it
-    }
-
-    /// Dismiss a background session (user action from BackgroundSessionsBar).
-    func dismissBackgroundSession(id: String) {
-        backgroundSessions.removeAll { $0.id == id }
-        updateStatusBar()
+    /// Get running sessions (for RunningSessionsBar, status bar, etc.)
+    func getRunningSessions() -> [Session] {
+        getAllSessions().filter { $0.sessionStatus == .running }
     }
 }

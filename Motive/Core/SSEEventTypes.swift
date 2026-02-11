@@ -38,6 +38,9 @@ extension SSEClient {
         case questionAsked(QuestionRequest)
         case permissionAsked(NativePermissionRequest)
 
+        // Agent mode
+        case agentChanged(AgentChangeInfo)
+
         // Connection
         case connected
         case heartbeat
@@ -147,6 +150,9 @@ extension SSEClient {
         let id: String
         let sessionID: String
         let questions: [QuestionItem]
+        /// Tool context from the question event (e.g. tool name that triggered it).
+        /// Used to detect plan_exit questions.
+        let toolContext: String?
 
         struct QuestionItem: Sendable {
             let question: String
@@ -170,5 +176,9 @@ extension SSEClient {
         let metadata: [String: String] // "filepath", "diff", etc.
         let always: [String]     // Patterns to remember if "always" is chosen
     }
-// PLACEHOLDER_MORE_TYPES
+    /// Agent mode change detected from SSE events (e.g. plan → build).
+    struct AgentChangeInfo: Sendable {
+        let sessionID: String
+        let agent: String  // "plan", "build", etc.
+    }
 }

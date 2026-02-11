@@ -27,6 +27,12 @@ struct AppStateEventTests {
         let container = try ModelContainer(for: schema, configurations: [config])
         appState.attachModelContext(container.mainContext)
 
+        // Set up a session with a known openCodeSessionId so events can route correctly
+        let session = Session(intent: "test", openCodeSessionId: "test-session")
+        container.mainContext.insert(session)
+        appState.currentSession = session
+        appState.runningSessions["test-session"] = session
+
         return appState
     }
 

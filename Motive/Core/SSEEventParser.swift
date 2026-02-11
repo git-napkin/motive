@@ -76,8 +76,14 @@ extension SSEClient {
         let part = properties["part"] as? [String: Any] ?? properties
         let delta = properties["delta"] as? String
 
-        let sessionID = part["sessionID"] as? String ?? ""
-        let messageID = part["messageID"] as? String ?? ""
+        // sessionID may be in `part` or at the `properties` level — check both.
+        // The server puts sessionID in properties; some part types duplicate it inside part.
+        let sessionID = part["sessionID"] as? String
+            ?? properties["sessionID"] as? String
+            ?? ""
+        let messageID = part["messageID"] as? String
+            ?? properties["messageID"] as? String
+            ?? ""
         let partType = part["type"] as? String ?? ""
 
         logger.debug("parseMessagePartUpdated: partType=\(partType) hasDelta=\(delta != nil) deltaLen=\(delta?.count ?? 0) sessionID=\(sessionID.prefix(8))")
@@ -133,6 +139,14 @@ extension SSEClient {
     }
 
     func parseMessageUpdated(_ properties: [String: Any]) -> SSEEvent? {
+        // Extract agent from message info (e.g. "plan", "build")
+        let info = properties["info"] as? [String: Any]
+        let agent = info?["agent"] as? String
+        let sessionID = properties["sessionID"] as? String ?? ""
+
+        if let agent, !agent.isEmpty {
+            return .agentChanged(AgentChangeInfo(sessionID: sessionID, agent: agent))
+        }
         return nil
     }
 
@@ -208,6 +222,17 @@ extension SSEClient {
             let inputSummary = extractPrimaryInput(from: inputDict)
             let metadata = state["metadata"] as? [String: Any]
             let diff = metadata?["diff"] as? String
+
+            // Detect plan_exit completion → agent switches to "build"
+            if toolName == "plan_exit" {
+                return .agentChanged(AgentChangeInfo(sessionID: sessionID, agent: "build"))
+            }
+
+            // Detect plan_enter completion → agent switches to "plan"
+            if toolName == "plan_enter" {
+                return .agentChanged(AgentChangeInfo(sessionID: sessionID, agent: "plan"))
+            }
+
             return .toolCompleted(ToolCompletedInfo(
                 sessionID: sessionID,
                 toolName: toolName,
@@ -283,6 +308,10 @@ extension SSEClient {
         let sessionID = properties["sessionID"] as? String ?? ""
         let rawQuestions = properties["questions"] as? [[String: Any]] ?? []
 
+        // Extract tool context (e.g. plan_exit triggers question.asked with tool info)
+        let toolDict = properties["tool"] as? [String: Any]
+        let toolContext = toolDict?["tool"] as? String
+
         let questions = rawQuestions.map { q -> QuestionRequest.QuestionItem in
             let question = q["question"] as? String ?? ""
             let multiple = q["multiple"] as? Bool ?? false
@@ -309,7 +338,8 @@ extension SSEClient {
         return .questionAsked(QuestionRequest(
             id: id,
             sessionID: sessionID,
-            questions: questions
+            questions: questions,
+            toolContext: toolContext
         ))
     }
 
