@@ -227,6 +227,9 @@ extension AppState {
             // Native question interception (all sessions)
             if let inputDict = event.toolInputDict,
                inputDict["_isNativeQuestion"] as? Bool == true {
+                if let planFilePath = inputDict["_planFilePath"] as? String {
+                    updatePlanFilePath(planFilePath, for: event.sessionId)
+                }
                 nativePromptHandler.handleNativeQuestion(inputDict: inputDict, event: event)
                 logEvent(event, session: session)
                 return
@@ -246,6 +249,8 @@ extension AppState {
             }
             // TodoWrite
             if let toolName = event.toolName, toolName.isTodoWriteTool {
+                // OpenCode-compatible todo source-of-truth is the `todowrite` tool stream.
+                // Plan markdown frontmatter todos are not consumed by the runtime UI.
                 if event.kind == .tool {
                     messageStore.handleTodoWriteEvent(event, buffer: &buffer)
                 }

@@ -27,6 +27,11 @@ actor SSEClient {
 
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.velvet.motive", category: "SSE")
 
+    struct ScopedEvent: Sendable {
+        let directory: String?
+        let event: SSEEvent
+    }
+
     // MARK: - Public API
 
     /// Connect to the SSE endpoint and return an async stream of events.
@@ -70,6 +75,50 @@ actor SSEClient {
                 guard !Task.isCancelled else { break }
 
                 // Exponential backoff
+                try? await Task.sleep(nanoseconds: UInt64(reconnectDelay * 1_000_000_000))
+                reconnectDelay = min(reconnectDelay * 2, Self.reconnectMaxDelay)
+            }
+
+            continuation.finish()
+        }
+
+        return stream
+    }
+
+    /// Connect to the global SSE endpoint and return scoped events.
+    ///
+    /// `/global/event` emits payloads in the form:
+    /// `{ "directory": "...", "payload": { "type": "...", "properties": ... } }`.
+    func connectGlobal(to baseURL: URL) -> AsyncStream<ScopedEvent> {
+        disconnect()
+
+        let (stream, continuation) = AsyncStream.makeStream(of: ScopedEvent.self)
+
+        streamTask = Task { [weak self] in
+            guard let self else {
+                continuation.finish()
+                return
+            }
+
+            var reconnectDelay: TimeInterval = 1.0
+
+            while !Task.isCancelled {
+                do {
+                    await self.logger.info("Global SSE connecting to \(baseURL.absoluteString)...")
+                    try await self.consumeGlobalEventStream(
+                        baseURL: baseURL,
+                        continuation: continuation
+                    )
+                    if !Task.isCancelled {
+                        await self.logger.info("Global SSE stream ended normally, reconnecting in \(reconnectDelay)s...")
+                    }
+                } catch {
+                    if !Task.isCancelled {
+                        await self.logger.error("Global SSE stream error: \(error.localizedDescription), reconnecting in \(reconnectDelay)s...")
+                    }
+                }
+
+                guard !Task.isCancelled else { break }
                 try? await Task.sleep(nanoseconds: UInt64(reconnectDelay * 1_000_000_000))
                 reconnectDelay = min(reconnectDelay * 2, Self.reconnectMaxDelay)
             }
@@ -166,6 +215,69 @@ actor SSEClient {
         isConnected = false
     }
 
+    private func consumeGlobalEventStream(
+        baseURL: URL,
+        continuation: AsyncStream<ScopedEvent>.Continuation
+    ) async throws {
+        let eventURL = baseURL.appendingPathComponent("global/event")
+        var request = URLRequest(url: eventURL)
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.timeoutInterval = .infinity
+
+        let delegate = SSESessionDelegate()
+        let session = URLSession(
+            configuration: .default,
+            delegate: delegate,
+            delegateQueue: nil
+        )
+        defer { session.invalidateAndCancel() }
+
+        let task = session.dataTask(with: request)
+        task.resume()
+
+        let httpResponse = try await delegate.waitForResponse()
+        guard httpResponse.statusCode == 200 else {
+            throw SSEError.badStatus(httpResponse.statusCode)
+        }
+
+        isConnected = true
+        logger.info("Connected to global SSE endpoint (delegate): \(eventURL.absoluteString)")
+
+        var lineBuffer = ""
+        var dataBuffer = ""
+        var eventCounter = 0
+
+        for await chunk in delegate.dataStream {
+            guard !Task.isCancelled else { break }
+
+            lineBuffer += chunk
+            while let newlineRange = lineBuffer.range(of: "\n") {
+                let line = String(lineBuffer[lineBuffer.startIndex..<newlineRange.lowerBound])
+                lineBuffer = String(lineBuffer[newlineRange.upperBound...])
+
+                if line.hasPrefix("data: ") {
+                    if !dataBuffer.isEmpty {
+                        flushGlobalEvent(dataBuffer, continuation: continuation)
+                        dataBuffer = ""
+                    }
+                    dataBuffer = String(line.dropFirst(6))
+                    eventCounter += 1
+                    logger.info("📡 GLOBAL-SSE[\(eventCounter)] RAW: \(dataBuffer, privacy: .public)")
+                } else if line.isEmpty && !dataBuffer.isEmpty {
+                    flushGlobalEvent(dataBuffer, continuation: continuation)
+                    dataBuffer = ""
+                }
+            }
+        }
+
+        if !dataBuffer.isEmpty {
+            flushGlobalEvent(dataBuffer, continuation: continuation)
+        }
+
+        isConnected = false
+    }
+
     // MARK: - Event Flushing
 
     /// Parse a buffered SSE data string and yield the result to the stream.
@@ -175,6 +287,14 @@ actor SSEClient {
     ) {
         guard let event = parseSSEData(dataBuffer) else { return }
         continuation.yield(event)
+    }
+
+    private func flushGlobalEvent(
+        _ dataBuffer: String,
+        continuation: AsyncStream<ScopedEvent>.Continuation
+    ) {
+        guard let scoped = parseGlobalSSEData(dataBuffer) else { return }
+        continuation.yield(scoped)
     }
 
     // MARK: - Errors

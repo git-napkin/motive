@@ -66,6 +66,22 @@ extension SSEClient {
             return nil
         }
     }
+
+    /// Parse payload from `/global/event` stream:
+    /// `{ "directory": "...", "payload": { "type": "...", "properties": ... } }`
+    func parseGlobalSSEData(_ dataString: String) -> ScopedEvent? {
+        guard let data = dataString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let payload = json["payload"] as? [String: Any],
+              JSONSerialization.isValidJSONObject(payload),
+              let payloadData = try? JSONSerialization.data(withJSONObject: payload),
+              let payloadString = String(data: payloadData, encoding: .utf8),
+              let event = parseSSEData(payloadString) else {
+            return nil
+        }
+        let directory = json["directory"] as? String
+        return ScopedEvent(directory: directory, event: event)
+    }
 }
 
 // MARK: - Event Parsers
@@ -139,14 +155,32 @@ extension SSEClient {
     }
 
     func parseMessageUpdated(_ properties: [String: Any]) -> SSEEvent? {
-        // Extract agent from message info (e.g. "plan", "build")
         let info = properties["info"] as? [String: Any]
-        let agent = info?["agent"] as? String
-        let sessionID = properties["sessionID"] as? String ?? ""
+        let fallbackSessionID = properties["sessionID"] as? String ?? ""
+        let sessionID = parseString(from: info ?? [:], keys: ["sessionID", "sessionId"]) ?? fallbackSessionID
 
+        // Agent switches (plan <-> build) should stay highest priority.
+        let agent = info?["agent"] as? String
         if let agent, !agent.isEmpty {
             return .agentChanged(AgentChangeInfo(sessionID: sessionID, agent: agent))
         }
+
+        // Usage update emitted in message.info (tokens/cost/model).
+        if let info,
+           let usage = parseTokenUsage(from: info),
+           usage.total > 0 {
+            let model = parseModelName(from: info) ?? "unknown"
+            let cost = parseDouble(from: info["cost"]) ?? 0
+            let messageID = parseString(from: info, keys: ["id", "messageID", "messageId"])
+            return .usageUpdated(UsageInfo(
+                sessionID: sessionID,
+                messageID: messageID,
+                model: model,
+                usage: usage,
+                cost: cost
+            ))
+        }
+
         return nil
     }
 
@@ -308,9 +342,13 @@ extension SSEClient {
         let sessionID = properties["sessionID"] as? String ?? ""
         let rawQuestions = properties["questions"] as? [[String: Any]] ?? []
 
-        // Extract tool context (e.g. plan_exit triggers question.asked with tool info)
+        // Extract tool context when server provides it explicitly.
         let toolDict = properties["tool"] as? [String: Any]
-        let toolContext = toolDict?["tool"] as? String
+        var toolContext = toolDict?["tool"] as? String
+
+        // OpenCode commonly sends tool metadata as {messageID, callID} without tool name.
+        // Detect plan transitions from question content as a robust fallback.
+        var planFilePath: String?
 
         let questions = rawQuestions.map { q -> QuestionRequest.QuestionItem in
             let question = q["question"] as? String ?? ""
@@ -327,6 +365,18 @@ extension SSEClient {
                 }
             }
 
+            if toolContext == nil {
+                if isPlanExitQuestion(question: question, options: options) {
+                    toolContext = "plan_exit"
+                } else if isPlanEnterQuestion(question: question, options: options) {
+                    toolContext = "plan_enter"
+                }
+            }
+
+            if planFilePath == nil {
+                planFilePath = extractPlanFilePath(from: question)
+            }
+
             return QuestionRequest.QuestionItem(
                 question: question,
                 options: options,
@@ -339,7 +389,8 @@ extension SSEClient {
             id: id,
             sessionID: sessionID,
             questions: questions,
-            toolContext: toolContext
+            toolContext: toolContext,
+            planFilePath: planFilePath
         ))
     }
 
@@ -431,6 +482,52 @@ extension SSEClient {
         for key in keys {
             if let value = dict[key] as? String, !value.isEmpty {
                 return value
+            }
+        }
+        return nil
+    }
+
+    func isPlanExitQuestion(
+        question: String,
+        options: [QuestionRequest.QuestionOption]
+    ) -> Bool {
+        let normalizedQuestion = question.lowercased()
+        let labels = Set(options.map { $0.label.lowercased() })
+        let hasYesNo = labels.contains("yes") && labels.contains("no")
+        return normalizedQuestion.contains("switch to the build agent")
+            || (normalizedQuestion.contains("plan at") && normalizedQuestion.contains("is complete") && hasYesNo)
+    }
+
+    func isPlanEnterQuestion(
+        question: String,
+        options: [QuestionRequest.QuestionOption]
+    ) -> Bool {
+        let normalizedQuestion = question.lowercased()
+        let labels = Set(options.map { $0.label.lowercased() })
+        let hasYesNo = labels.contains("yes") && labels.contains("no")
+        return normalizedQuestion.contains("switch to the plan agent")
+            || (normalizedQuestion.contains("create a plan saved to") && hasYesNo)
+    }
+
+    func extractPlanFilePath(from question: String) -> String? {
+        let patterns = [
+            #"Plan at (.+?) is complete\."#,
+            #"create a plan saved to (.+?)\?"#,
+        ]
+
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+            let nsRange = NSRange(question.startIndex..<question.endIndex, in: question)
+            guard let match = regex.firstMatch(in: question, options: [], range: nsRange),
+                  match.numberOfRanges > 1,
+                  let range = Range(match.range(at: 1), in: question) else {
+                continue
+            }
+            let path = question[range].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !path.isEmpty {
+                return path
             }
         }
         return nil

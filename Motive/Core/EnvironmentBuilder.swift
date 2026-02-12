@@ -50,9 +50,11 @@ struct EnvironmentBuilder {
         environment["NO_COLOR"] = "1"
         environment["FORCE_COLOR"] = "0"
         environment["CI"] = "1"
-        // Register as desktop client so OpenCode enables the built-in `question` tool.
-        // Without this, the AI cannot show native question popups and falls back to text.
-        environment["OPENCODE_CLIENT"] = "desktop"
+        // Register as CLI client so OpenCode exposes plan_enter/plan_exit.
+        // We still use the HTTP API + SSE flow from Motive; this value controls
+        // feature gating in OpenCode's tool registry.
+        environment["OPENCODE_CLIENT"] = "cli"
+        environment["OPENCODE_EXPERIMENTAL_PLAN_MODE"] = "1"
 
         if inputs.provider.requiresAPIKey {
             if !apiKeyValue.isEmpty {

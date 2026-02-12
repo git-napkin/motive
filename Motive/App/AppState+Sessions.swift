@@ -160,7 +160,12 @@ extension AppState {
         restoreProjectDirectory(for: session)
 
         // Load messages: running buffer first, or persisted snapshot
-        let ocId = session.openCodeSessionId
+        let ocId = session.openCodeSessionId 
+        if let ocId {
+            currentPlanFilePath = sessionPlanFilePaths[ocId]
+        } else {
+            currentPlanFilePath = nil
+        }
         if let ocId, let running = runningSessionMessages[ocId] {
             messages = running
         } else if let data = session.messagesData,
@@ -194,6 +199,7 @@ extension AppState {
         menuBarState = .idle
         currentContextTokens = nil
         currentSessionAgent = configManager.currentAgent
+        currentPlanFilePath = nil
         resetUsageDeduplication()
 
         bridgeTask?.cancel()
@@ -212,6 +218,7 @@ extension AppState {
         menuBarState = .idle
         currentContextTokens = nil
         currentSessionAgent = configManager.currentAgent
+        currentPlanFilePath = nil
         resetUsageDeduplication()
 
         bridgeTask?.cancel()
@@ -373,6 +380,7 @@ extension AppState {
         transitionSessionStatus(.running)
         currentContextTokens = nil
         currentSessionAgent = configManager.currentAgent
+        currentPlanFilePath = nil
         resetUsageDeduplication()
 
         // NOTE: bridge session clearing is handled atomically by forceNewSession: true in submitIntent

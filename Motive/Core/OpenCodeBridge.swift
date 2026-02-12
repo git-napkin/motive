@@ -27,20 +27,21 @@ actor OpenCodeBridge {
     private let server = OpenCodeServer()
     private let sseClient = SSEClient()
     private let apiClient = OpenCodeAPIClient()
-
     private var eventTask: Task<Void, Never>?
+
     private var currentSessionId: String?
     private var activeSessions: Set<String> = []  // Multi-session ready
 
-    /// The directory currently used for SSE and API calls.
-    /// Must be kept in sync so that SSE subscribes to the same
-    /// OpenCode instance that handles prompts.
-    private var sseDirectory: String?
+    /// SessionID -> directory mapping for deterministic routing.
+    private var sessionDirectory: [String: String] = [:]
+    /// Request ID -> directory for question/permission reply routing.
+    private var questionDirectory: [String: String] = [:]
+    private var permissionDirectory: [String: String] = [:]
 
     /// Last reported agent per session (deduplication for message.updated floods)
     private var lastReportedAgent: [String: String] = [:]
 
-    /// Health check task: after SSE reconnects, checks if running sessions receive events.
+    /// Health check task: after global SSE reconnects, checks active sessions.
     private var reconnectHealthTask: Task<Void, Never>?
 
     /// Non-blocking event channel to AppState.
@@ -91,10 +92,7 @@ actor OpenCodeBridge {
             await apiClient.updateBaseURL(url)
             await apiClient.updateDirectory(currentWorkingDirectory())
 
-            // Don't start SSE here — submitIntent will start it with the
-            // correct working directory. Starting without a directory causes
-            // a wasted connection that gets cancelled immediately when
-            // submitIntent detects the directory mismatch and reconnects.
+            // Don't start SSE here — submitIntent will lazily start global SSE.
 
             Log.bridge("Bridge started with server at \(url.absoluteString)")
         } catch {
@@ -110,16 +108,13 @@ actor OpenCodeBridge {
     /// Called by OpenCodeServer when the server auto-restarts on a new URL.
     /// Reconnects SSE and updates the API client to point at the new port.
     private func handleServerRestart(_ newURL: URL) async {
-        Log.bridge("Server restarted at \(newURL.absoluteString), reconnecting SSE...")
+        Log.bridge("Server restarted at \(newURL.absoluteString), reconnecting global SSE...")
 
         // Update API client to the new URL
         await apiClient.updateBaseURL(newURL)
-
-        // Disconnect old SSE and reconnect to new URL with the same directory
         await sseClient.disconnect()
-        startEventLoop(baseURL: newURL, directory: sseDirectory)
-
-        Log.bridge("Reconnected to restarted server at \(newURL.absoluteString)")
+        startGlobalEventLoop(baseURL: newURL)
+        Log.bridge("Reconnected global SSE at \(newURL.absoluteString)")
     }
 
     /// Stop the server and SSE.
@@ -129,6 +124,11 @@ actor OpenCodeBridge {
         await sseClient.disconnect()
         await server.stop()
         activeSessions.removeAll()
+        sessionDirectory.removeAll()
+        questionDirectory.removeAll()
+        permissionDirectory.removeAll()
+        reconnectHealthTask?.cancel()
+        reconnectHealthTask = nil
         Log.bridge("Bridge stopped")
     }
 
@@ -161,6 +161,7 @@ actor OpenCodeBridge {
     /// This stops the bridge from forwarding further events for this session.
     func removeActiveSession(_ sessionId: String) {
         activeSessions.remove(sessionId)
+        sessionDirectory.removeValue(forKey: sessionId)
         lastReportedAgent.removeValue(forKey: sessionId)
         if currentSessionId == sessionId {
             currentSessionId = nil
@@ -193,37 +194,12 @@ actor OpenCodeBridge {
             guard await server.isRunning else { return }
         }
 
-        // Update working directory
-        await apiClient.updateDirectory(cwd)
-
-        // Ensure SSE is connected. Only reconnect if:
-        //  1. SSE stream task died (connection lost, all retries exhausted)
-        //  2. SSE was never started (first intent after app launch)
-        //
-        // We do NOT reconnect when only the directory changes. The OpenCode server
-        // is a single process, and the SSE stream delivers events for ALL sessions
-        // regardless of the directory header. The API client sends x-opencode-directory
-        // with each REST call (createSession, sendPrompt), so new sessions in new
-        // directories are correctly handled. Reconnecting SSE on directory change
-        // would briefly disconnect the stream, losing in-flight events for background
-        // sessions in the previous directory.
         if let url = await server.serverURL {
-            let sseAlive = await sseClient.hasActiveStream
-
-            if !sseAlive {
-                Log.bridge("SSE stream not alive, connecting for \(cwd)...")
-                sseDirectory = cwd
-                await sseClient.disconnect()
-                startEventLoop(baseURL: url, directory: cwd)
-            } else if cwd != sseDirectory {
-                // Track directory change but don't reconnect — SSE is global
-                Log.bridge("Directory changed to \(cwd) (SSE stays connected via \(sseDirectory ?? "nil"))")
-                sseDirectory = cwd
-            }
+            await ensureGlobalEventLoop(baseURL: url)
         }
 
         do {
-            try await submitPrompt(text: text, agentOverride: agent)
+            try await submitPrompt(text: text, cwd: cwd, agentOverride: agent)
         } catch {
             Log.error("Failed to submit intent: \(error.localizedDescription)")
             eventContinuation.yield(OpenCodeEvent(
@@ -238,6 +214,7 @@ actor OpenCodeBridge {
     func resumeSession(sessionId: String, text: String, cwd: String, agent: String? = nil) async {
         currentSessionId = sessionId
         activeSessions.insert(sessionId)
+        sessionDirectory[sessionId] = cwd
         await submitIntent(text: text, cwd: cwd, agent: agent)
     }
 
@@ -251,6 +228,7 @@ actor OpenCodeBridge {
         }
 
         do {
+            await apiClient.updateDirectory(resolveDirectory(forSessionID: sessionId))
             try await apiClient.abortSession(id: sessionId)
             Log.bridge("Aborted session: \(sessionId)")
         } catch {
@@ -261,27 +239,37 @@ actor OpenCodeBridge {
     // MARK: - Native Question/Permission Replies
 
     /// Reply to a native question from OpenCode.
-    func replyToQuestion(requestID: String, answers: [[String]]) async {
+    func replyToQuestion(requestID: String, answers: [[String]], sessionID: String? = nil) async {
         do {
+            await apiClient.updateDirectory(resolveDirectory(forQuestionID: requestID, sessionID: sessionID))
             try await apiClient.replyToQuestion(requestID: requestID, answers: answers)
+            questionDirectory.removeValue(forKey: requestID)
         } catch {
             Log.error("Failed to reply to question \(requestID): \(error.localizedDescription)")
         }
     }
 
     /// Reject a native question (user cancelled).
-    func rejectQuestion(requestID: String) async {
+    func rejectQuestion(requestID: String, sessionID: String? = nil) async {
         do {
+            await apiClient.updateDirectory(resolveDirectory(forQuestionID: requestID, sessionID: sessionID))
             try await apiClient.rejectQuestion(requestID: requestID)
+            questionDirectory.removeValue(forKey: requestID)
         } catch {
             Log.error("Failed to reject question \(requestID): \(error.localizedDescription)")
         }
     }
 
     /// Reply to a native permission request.
-    func replyToPermission(requestID: String, reply: OpenCodeAPIClient.PermissionReply) async {
+    func replyToPermission(
+        requestID: String,
+        reply: OpenCodeAPIClient.PermissionReply,
+        sessionID: String? = nil
+    ) async {
         do {
+            await apiClient.updateDirectory(resolveDirectory(forPermissionID: requestID, sessionID: sessionID))
             try await apiClient.replyToPermission(requestID: requestID, reply: reply)
+            permissionDirectory.removeValue(forKey: requestID)
         } catch {
             Log.error("Failed to reply to permission \(requestID): \(error.localizedDescription)")
         }
@@ -289,74 +277,85 @@ actor OpenCodeBridge {
 
     // MARK: - SSE Event Loop
 
-    private func startEventLoop(baseURL: URL, directory: String? = nil) {
-        eventTask?.cancel()
+    private func ensureGlobalEventLoop(baseURL: URL) async {
+        let sseAlive = await sseClient.hasActiveStream
+        if sseAlive { return }
+        startGlobalEventLoop(baseURL: baseURL)
+    }
 
+    private func startGlobalEventLoop(baseURL: URL) {
+        eventTask?.cancel()
         eventTask = Task { [weak self] in
             guard let self else { return }
-
-            let stream = await self.sseClient.connect(to: baseURL, directory: directory)
-
-            for await sseEvent in stream {
+            let stream = await self.sseClient.connectGlobal(to: baseURL)
+            for await scopedEvent in stream {
                 guard !Task.isCancelled else { break }
-                // await is for actor isolation hop only — handleSSEEvent itself
-                // returns instantly (non-blocking yield to AsyncStream).
-                await self.handleSSEEvent(sseEvent)
+                await self.handleSSEEvent(scopedEvent.event, sourceDirectory: scopedEvent.directory)
             }
-
-            Log.bridge("SSE event loop ended")
+            Log.bridge("Global SSE event loop ended")
         }
     }
 
     /// Route an SSE event to the appropriate handler.
     /// Most handlers are now synchronous (non-blocking yield to AsyncStream).
-    private func handleSSEEvent(_ event: SSEClient.SSEEvent) {
+    private func handleSSEEvent(_ event: SSEClient.SSEEvent, sourceDirectory: String?) {
         switch event {
         case .connected:
-            Log.bridge("SSE connected")
+            Log.bridge("Global SSE connected")
             startReconnectHealthCheck()
 
         case .heartbeat:
             break
 
         case .textDelta(let info):
+            observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleTextDelta(info)
 
         case .textComplete(let info):
+            observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleTextComplete(info)
 
         case .reasoningDelta(let info):
+            observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleReasoningDelta(info)
 
         case .toolRunning(let info):
+            observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleToolRunning(info)
 
         case .toolCompleted(let info):
+            observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleToolCompleted(info)
 
         case .toolError(let info):
+            observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleToolError(info)
 
         case .usageUpdated(let info):
+            observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleUsageUpdate(info)
 
         case .sessionIdle(let sessionID):
+            observeSessionDirectory(sessionID: sessionID, sourceDirectory: sourceDirectory)
             handleSessionIdle(sessionID)
 
         case .sessionStatus(let info):
+            observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             guard isTrackedSession(info.sessionID) else { return }
             break
 
         case .sessionError(let info):
+            observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleSessionError(info)
 
         case .questionAsked(let request):
-            handleQuestionSSEEvent(request)
+            handleQuestionSSEEvent(request, sourceDirectory: sourceDirectory)
 
         case .permissionAsked(let request):
-            handlePermissionSSEEvent(request)
+            handlePermissionSSEEvent(request, sourceDirectory: sourceDirectory)
 
         case .agentChanged(let info):
+            observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleAgentChanged(info)
         }
     }
@@ -496,8 +495,13 @@ actor OpenCodeBridge {
 
     // MARK: - Native Prompt Handlers
 
-    private func handleQuestionSSEEvent(_ request: SSEClient.QuestionRequest) {
+    private func handleQuestionSSEEvent(_ request: SSEClient.QuestionRequest, sourceDirectory: String?) {
         guard isTrackedSession(request.sessionID) else { return }
+        let resolvedDirectory = sourceDirectory ?? resolveDirectory(forSessionID: request.sessionID)
+        questionDirectory[request.id] = resolvedDirectory
+        if sessionDirectory[request.sessionID] == nil {
+            sessionDirectory[request.sessionID] = resolvedDirectory
+        }
         eventContinuation.yield(OpenCodeEvent(
             kind: .tool,
             rawJson: encodeQuestionAsJSON(request),
@@ -509,8 +513,13 @@ actor OpenCodeBridge {
         ))
     }
 
-    private func handlePermissionSSEEvent(_ request: SSEClient.NativePermissionRequest) {
+    private func handlePermissionSSEEvent(_ request: SSEClient.NativePermissionRequest, sourceDirectory: String?) {
         guard isTrackedSession(request.sessionID) else { return }
+        let resolvedDirectory = sourceDirectory ?? resolveDirectory(forSessionID: request.sessionID)
+        permissionDirectory[request.id] = resolvedDirectory
+        if sessionDirectory[request.sessionID] == nil {
+            sessionDirectory[request.sessionID] = resolvedDirectory
+        }
         eventContinuation.yield(OpenCodeEvent(
             kind: .tool,
             rawJson: encodePermissionAsJSON(request),
@@ -524,31 +533,32 @@ actor OpenCodeBridge {
 
     // MARK: - Reconnection Health Check
 
-    /// After SSE reconnects, check that running sessions receive events within 15s.
-    /// If not, log a warning so operators / users are aware that events may have been lost.
+    /// After global SSE reconnects, check whether active sessions keep progressing.
     private func startReconnectHealthCheck() {
         reconnectHealthTask?.cancel()
         guard !activeSessions.isEmpty else { return }
-
-        // Snapshot the set of active sessions at reconnection time
         let sessionsAtReconnect = activeSessions
 
         reconnectHealthTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(15))
             guard !Task.isCancelled, let self else { return }
-            // If any sessions from the snapshot are still tracked (not completed/removed),
-            // they're alive. If all were removed, nothing is stuck.
             let currentActive = await self.getActiveSessions()
             let stillTracked = sessionsAtReconnect.filter { currentActive.contains($0) }
             if !stillTracked.isEmpty {
-                Log.warning("SSE reconnect health: \(stillTracked.count) session(s) still active after reconnect — events may have been lost during reconnection window")
+                Log.warning("Global SSE reconnect health: \(stillTracked.count) session(s) still active after reconnect")
             }
         }
     }
 
-    /// Accessor for active sessions (used by reconnect health check Task).
     private func getActiveSessions() -> Set<String> {
         activeSessions
+    }
+
+    private func observeSessionDirectory(sessionID: String, sourceDirectory: String?) {
+        guard let sourceDirectory, !sourceDirectory.isEmpty else { return }
+        if sessionDirectory[sessionID] == nil {
+            sessionDirectory[sessionID] = sourceDirectory
+        }
     }
 
     // MARK: - Helpers
@@ -567,17 +577,44 @@ actor OpenCodeBridge {
         return FileManager.default.homeDirectoryForCurrentUser.path
     }
 
-    private func submitPrompt(text: String, agentOverride: String? = nil) async throws {
+    private func resolveDirectory(forSessionID sessionID: String?) -> String {
+        guard let sessionID else { return currentWorkingDirectory() }
+        return sessionDirectory[sessionID] ?? currentWorkingDirectory()
+    }
+
+    private func resolveDirectory(forQuestionID requestID: String, sessionID: String?) -> String {
+        if let sessionID {
+            return resolveDirectory(forSessionID: sessionID)
+        }
+        if let directory = questionDirectory[requestID] {
+            return directory
+        }
+        return currentWorkingDirectory()
+    }
+
+    private func resolveDirectory(forPermissionID requestID: String, sessionID: String?) -> String {
+        if let sessionID {
+            return resolveDirectory(forSessionID: sessionID)
+        }
+        if let directory = permissionDirectory[requestID] {
+            return directory
+        }
+        return currentWorkingDirectory()
+    }
+
+    private func submitPrompt(text: String, cwd: String, agentOverride: String? = nil) async throws {
         // Create or reuse session
         let sessionID: String
         if let existing = currentSessionId {
             sessionID = existing
             Log.bridge("Reusing existing session: \(sessionID)")
         } else {
+            await apiClient.updateDirectory(cwd)
             let session = try await apiClient.createSession()
             sessionID = session.id
             currentSessionId = sessionID
             activeSessions.insert(sessionID)
+            sessionDirectory[sessionID] = cwd
             Log.bridge("Created new session: \(sessionID)")
 
             // Notify AppState of the new session ID BEFORE sending the prompt.
@@ -591,14 +628,24 @@ actor OpenCodeBridge {
             ))
         }
 
+        // Ensure directory mapping exists for reused sessions as well.
+        if sessionDirectory[sessionID] == nil {
+            sessionDirectory[sessionID] = cwd
+        }
+        let directory = resolveDirectory(forSessionID: sessionID)
+        if let url = await server.serverURL {
+            await ensureGlobalEventLoop(baseURL: url)
+        }
+
         let sessionCount = activeSessions.count
         let sseAlive = await sseClient.hasActiveStream
         let sseConnected = await sseClient.connected
-        Log.bridge("Active sessions: \(sessionCount), SSE alive: \(sseAlive), SSE connected: \(sseConnected)")
+        Log.bridge("Active sessions: \(sessionCount), global SSE alive: \(sseAlive), connected: \(sseConnected)")
 
         // Send prompt asynchronously (results via SSE)
         // Use explicit agent override if provided, otherwise fall back to configuration
         let agent = agentOverride ?? configuration?.agent
+        await apiClient.updateDirectory(directory)
         try await apiClient.sendPromptAsync(
             sessionID: sessionID,
             text: text,
@@ -681,6 +728,9 @@ actor OpenCodeBridge {
         // Pass tool context for plan_exit detection
         if let toolContext = request.toolContext {
             dict["_toolContext"] = toolContext
+        }
+        if let planFilePath = request.planFilePath, !planFilePath.isEmpty {
+            dict["_planFilePath"] = planFilePath
         }
 
         return dict

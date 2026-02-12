@@ -178,11 +178,7 @@ actor OpenCodeAPIClient {
 
     /// Reject a question (user cancelled).
     func rejectQuestion(requestID: String) async throws {
-        let body: [String: Any] = [
-            "answers": [] as [[String]]
-        ]
-
-        _ = try await post(path: "/question/\(requestID)/reply", body: body)
+        _ = try await post(path: "/question/\(requestID)/reject", body: [:])
         logger.info("Rejected question \(requestID)")
     }
 

@@ -74,6 +74,7 @@ final class NativePromptHandler {
         // Detect plan_exit tool context
         let toolContext = inputDict["_toolContext"] as? String
         let isPlanExit = toolContext == "plan_exit"
+        let planFilePath = inputDict["_planFilePath"] as? String
 
         Log.debug("Native question: \(questionText) options=\(optionLabels) isPlanExit=\(isPlanExit)")
 
@@ -84,7 +85,7 @@ final class NativePromptHandler {
         let questionMsg = ConversationMessage(
             id: questionMessageId,
             type: .tool,
-            content: isPlanExit ? "Plan is ready. Execute?" : questionText,
+            content: isPlanExit ? planReadyContent(planFilePath: planFilePath) : questionText,
             toolName: isPlanExit ? "Plan Ready" : "Question",
             toolInput: questionText + optionsSummary,
             toolCallId: event.toolCallId,
@@ -98,7 +99,13 @@ final class NativePromptHandler {
 
         // If this is a remote command, send question to iOS via CloudKit
         if let commandId = appState?.currentRemoteCommandId {
-            sendQuestionToRemote(commandId: commandId, questionID: questionID, question: questionText, options: optionLabels)
+            sendQuestionToRemote(
+                commandId: commandId,
+                questionID: questionID,
+                question: questionText,
+                options: optionLabels,
+                sessionID: event.sessionId
+            )
             return
         }
 
@@ -120,7 +127,8 @@ final class NativePromptHandler {
                 messageId: questionMessageId,
                 sessionId: sessionId,
                 sessionIntent: sessionIntent,
-                isPlanExit: isPlanExit
+                isPlanExit: isPlanExit,
+                planFilePath: planFilePath
             )
         }
     }
@@ -134,7 +142,8 @@ final class NativePromptHandler {
         messageId: UUID,
         sessionId: String? = nil,
         sessionIntent: String? = nil,
-        isPlanExit: Bool = false
+        isPlanExit: Bool = false,
+        planFilePath: String? = nil
     ) {
         var request = PermissionRequest(
             id: questionID, taskId: questionID, type: .question,
@@ -165,10 +174,20 @@ final class NativePromptHandler {
 
                 self?.appState?.updateQuestionMessage(messageId: messageId, response: response, sessionId: sessionId)
                 self?.appState?.pendingQuestionMessageId = nil
+
+                if isPlanExit {
+                    self?.appendPlanTransitionMessage(
+                        response: response,
+                        sessionId: sessionId,
+                        planFilePath: planFilePath
+                    )
+                }
+
                 Task { [weak self] in
                     await self?.appState?.bridge.replyToQuestion(
                         requestID: questionID,
-                        answers: [[apiResponse]]
+                        answers: [[apiResponse]],
+                        sessionID: sessionId
                     )
                 }
                 self?.appState?.updateStatusBar()
@@ -179,12 +198,53 @@ final class NativePromptHandler {
                 self?.appState?.updateQuestionMessage(messageId: messageId, response: "User declined to answer.", sessionId: sessionId)
                 self?.appState?.pendingQuestionMessageId = nil
                 Task { [weak self] in
-                    await self?.appState?.bridge.rejectQuestion(requestID: questionID)
+                    await self?.appState?.bridge.rejectQuestion(requestID: questionID, sessionID: sessionId)
                 }
                 self?.appState?.updateStatusBar()
                 self?.showNextFromQueue()
             }
         )
+    }
+
+    private func planReadyContent(planFilePath: String?) -> String {
+        guard let planFilePath, !planFilePath.isEmpty else {
+            return "Plan is ready. Execute?"
+        }
+        return "Plan is ready at \(planFilePath). Execute?"
+    }
+
+    private func appendPlanTransitionMessage(
+        response: String,
+        sessionId: String?,
+        planFilePath: String?
+    ) {
+        let content: String
+        if response == "Execute Plan" {
+            if let planFilePath, !planFilePath.isEmpty, !resolvedPlanFileExists(path: planFilePath) {
+                content = "Approved. Switching to build mode, but plan file was not found at \(planFilePath)."
+            } else {
+                content = "Approved. Switching to build mode and executing the plan."
+            }
+        } else {
+            content = "Plan execution postponed. Continuing in plan mode to refine the plan."
+        }
+
+        let notice = ConversationMessage(type: .system, content: content)
+        if let sid = sessionId, let appState, appState.currentSession?.openCodeSessionId != sid {
+            appState.messageStore.appendMessageIfNeeded(notice, to: &appState.runningSessionMessages[sid, default: []])
+        } else {
+            appState?.messageStore.appendMessageIfNeeded(notice)
+        }
+    }
+
+    private func resolvedPlanFileExists(path: String) -> Bool {
+        if path.hasPrefix("/") {
+            return FileManager.default.fileExists(atPath: path)
+        }
+        guard let appState else { return false }
+        let cwdPath = appState.configManager.currentProjectURL.path
+        let absolute = URL(fileURLWithPath: cwdPath).appendingPathComponent(path).path
+        return FileManager.default.fileExists(atPath: absolute)
     }
 
     // MARK: - Native Permission Handling
@@ -233,7 +293,13 @@ final class NativePromptHandler {
 
         // If remote command, handle via CloudKit
         if let commandId = appState?.currentRemoteCommandId {
-            sendPermissionToRemote(commandId: commandId, permissionID: permissionID, question: questionText, options: options.map(\.label))
+            sendPermissionToRemote(
+                commandId: commandId,
+                permissionID: permissionID,
+                question: questionText,
+                options: options.map(\.label),
+                sessionID: event.sessionId
+            )
             return
         }
 
@@ -299,7 +365,7 @@ final class NativePromptHandler {
                 }
 
                 Task { [weak self] in
-                    await self?.appState?.bridge.replyToPermission(requestID: permissionID, reply: reply)
+                    await self?.appState?.bridge.replyToPermission(requestID: permissionID, reply: reply, sessionID: sessionId)
                 }
                 self?.appState?.updateStatusBar()
                 self?.showNextFromQueue()
@@ -309,7 +375,11 @@ final class NativePromptHandler {
                 self?.appState?.updateQuestionMessage(messageId: messageId, response: "Rejected", sessionId: sessionId)
                 self?.appState?.pendingQuestionMessageId = nil
                 Task { [weak self] in
-                    await self?.appState?.bridge.replyToPermission(requestID: permissionID, reply: .reject("User rejected"))
+                    await self?.appState?.bridge.replyToPermission(
+                        requestID: permissionID,
+                        reply: .reject("User rejected"),
+                        sessionID: sessionId
+                    )
                 }
                 self?.appState?.updateStatusBar()
                 self?.showNextFromQueue()
@@ -320,7 +390,7 @@ final class NativePromptHandler {
     // MARK: - Remote (CloudKit) Helpers
 
     /// Forward a native question to iOS via CloudKit (for remote commands).
-    func sendQuestionToRemote(commandId: String, questionID: String, question: String, options: [String]) {
+    func sendQuestionToRemote(commandId: String, questionID: String, question: String, options: [String], sessionID: String?) {
         Log.debug("Sending question to iOS via CloudKit for remote command: \(commandId)")
         Task { [weak self] in
             let response = await self?.appState?.cloudKitManager.sendPermissionRequest(
@@ -331,13 +401,17 @@ final class NativePromptHandler {
             Log.debug(response != nil ? "Got response from iOS: \(response!)" : "No response from iOS, sending empty response")
             self?.appState?.messageStore.updateQuestionMessage(messageId: self?.appState?.pendingQuestionMessageId, response: response ?? "User declined to answer.")
             self?.appState?.pendingQuestionMessageId = nil
-            await self?.appState?.bridge.replyToQuestion(requestID: questionID, answers: [[response ?? ""]])
+            await self?.appState?.bridge.replyToQuestion(
+                requestID: questionID,
+                answers: [[response ?? ""]],
+                sessionID: sessionID
+            )
             self?.appState?.updateStatusBar()
         }
     }
 
     /// Forward a native permission to iOS via CloudKit (for remote commands).
-    func sendPermissionToRemote(commandId: String, permissionID: String, question: String, options: [String]) {
+    func sendPermissionToRemote(commandId: String, permissionID: String, question: String, options: [String], sessionID: String?) {
         Log.debug("Sending permission to iOS via CloudKit for remote command: \(commandId)")
         Task { [weak self] in
             let response = await self?.appState?.cloudKitManager.sendPermissionRequest(
@@ -355,7 +429,7 @@ final class NativePromptHandler {
             }
             self?.appState?.messageStore.updateQuestionMessage(messageId: self?.appState?.pendingQuestionMessageId, response: response ?? "Rejected")
             self?.appState?.pendingQuestionMessageId = nil
-            await self?.appState?.bridge.replyToPermission(requestID: permissionID, reply: reply)
+            await self?.appState?.bridge.replyToPermission(requestID: permissionID, reply: reply, sessionID: sessionID)
             self?.appState?.updateStatusBar()
         }
     }

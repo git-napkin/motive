@@ -214,7 +214,8 @@ final class EnvironmentBuilderTests: XCTestCase {
         XCTAssertEqual(env["NO_COLOR"], "1")
         XCTAssertEqual(env["FORCE_COLOR"], "0")
         XCTAssertEqual(env["CI"], "1")
-        XCTAssertEqual(env["OPENCODE_CLIENT"], "desktop")
+        XCTAssertEqual(env["OPENCODE_CLIENT"], "cli")
+        XCTAssertEqual(env["OPENCODE_EXPERIMENTAL_PLAN_MODE"], "1")
     }
 
     func testPATHIsSet() {

@@ -153,6 +153,8 @@ extension SSEClient {
         /// Tool context from the question event (e.g. tool name that triggered it).
         /// Used to detect plan_exit questions.
         let toolContext: String?
+        /// Plan file path parsed from plan_enter / plan_exit question text.
+        let planFilePath: String?
 
         struct QuestionItem: Sendable {
             let question: String

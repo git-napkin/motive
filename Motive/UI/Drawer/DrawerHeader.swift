@@ -98,6 +98,21 @@ struct DrawerHeader: View {
                 .help(L10n.Drawer.close)
                 .accessibilityLabel(L10n.Drawer.close)
             }
+
+            if let planPath = appState.currentPlanFilePath, !planPath.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Color.Aurora.textMuted)
+                    Text("Plan file: \(displayPlanPath(planPath))")
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundColor(Color.Aurora.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                }
+                .padding(.top, 6)
+            }
         }
     }
 
@@ -117,6 +132,16 @@ struct DrawerHeader: View {
             return String(text.prefix(24)) + (text.count > 24 ? "..." : "")
         }
         return L10n.Drawer.conversation
+    }
+
+    private func displayPlanPath(_ path: String) -> String {
+        if path.hasPrefix("/") {
+            let cwd = appState.configManager.currentProjectURL.path
+            if path.hasPrefix(cwd + "/") {
+                return String(path.dropFirst(cwd.count + 1))
+            }
+        }
+        return path
     }
 }
 

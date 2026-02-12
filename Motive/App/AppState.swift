@@ -24,6 +24,8 @@ final class AppState: ObservableObject {
     /// The active agent for the current session as reported by the server (e.g. "plan", "build").
     /// Distinct from `configManager.currentAgent` which is the user's selected default.
     @Published var currentSessionAgent: String = "agent"
+    /// Plan file path for the currently selected session (when available).
+    @Published var currentPlanFilePath: String?
     let messageStore = MessageStore()
     var messages: [ConversationMessage] {
         get { messageStore.messages }
@@ -38,6 +40,8 @@ final class AppState: ObservableObject {
     var runningSessionMessages: [String: [ConversationMessage]] = [:]
     /// OpenCode sessionId → Session for event routing and logging
     var runningSessions: [String: Session] = [:]
+    /// OpenCode sessionId → plan file path observed from plan_enter/plan_exit prompts.
+    var sessionPlanFilePaths: [String: String] = [:]
     /// Transient reasoning text — shown live during thinking, cleared when thinking ends.
     /// Not stored in the messages array.
     @Published var currentReasoningText: String?
@@ -202,10 +206,25 @@ final class AppState: ObservableObject {
     func removeSessionFromTracking(_ openCodeId: String) {
         runningSessions.removeValue(forKey: openCodeId)
         runningSessionMessages.removeValue(forKey: openCodeId)
+        sessionPlanFilePaths.removeValue(forKey: openCodeId)
+        if currentSession?.openCodeSessionId == openCodeId {
+            currentPlanFilePath = nil
+        }
         // Tell the bridge to stop tracking this session (stops SSE event forwarding)
         Task { await bridge.removeActiveSession(openCodeId) }
         // Stop the snapshot timer if no more running sessions
         stopSnapshotTimerIfNeeded()
+    }
+
+    /// Update the plan file path for an OpenCode session and sync current-session UI.
+    func updatePlanFilePath(_ path: String, for openCodeSessionID: String?) {
+        guard let openCodeSessionID,
+              !openCodeSessionID.isEmpty,
+              !path.isEmpty else { return }
+        sessionPlanFilePaths[openCodeSessionID] = path
+        if currentSession?.openCodeSessionId == openCodeSessionID {
+            currentPlanFilePath = path
+        }
     }
 
     /// Persist current session's messages to SwiftData and clean up tracking.
