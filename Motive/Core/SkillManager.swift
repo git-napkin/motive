@@ -426,29 +426,56 @@ description: \(skill.description)\(metadataLine)
     # Edit freely — Motive will never overwrite this file.
     # These rules are merged into the browser automation skill prompt automatically.
     
-    ## Shopping Workflow
+    ## Core Principle: Confirm Before Committing
     
-    When handling purchase or shopping tasks:
+    Browser automation often interacts with external services on the user's behalf.
+    Any action that is **irreversible, costly, or binding** (payments, submissions,
+    account changes, subscriptions, deletions) MUST be explicitly confirmed by the
+    user via the `question` tool before execution — no exceptions.
     
-    ### 1. Clarify Intent
-    - If the request is ambiguous, ask once for: category, budget range, brand preference.
-    - If intent is already specific (e.g. "buy AirPods Pro"), skip straight to search.
+    ## 1. Clarify Ambiguous Requests
     
-    ### 2. Search
-    - Launch browser agent to search. Let it browse autonomously — don't interrupt the user.
+    When the user's intent is vague or under-specified:
+    - Use the `question` tool to ask for the missing details in a single round
+      (e.g., preferences, constraints, scope, target site).
+    - If intent is already specific and actionable, proceed directly without asking.
+    - Never guess at subjective preferences (style, brand, size, tier, etc.).
     
-    ### 3. Confirm Selection
-    - When candidates are found, present full details for user confirmation:
-      brand, price, specs/SKU options, ratings if available.
-    - Never choose a product on the user's behalf, even if preferences are known.
+    ## 2. Present Options, Don't Decide
     
-    ### 4. Add to Cart
-    - After user confirms, add to cart. This is the default action.
-    - Never proceed to checkout or payment automatically.
+    When the task yields multiple candidates (products, plans, services, results):
+    - Collect a short list of representative options (3–5 when possible).
+    - Present them with key differentiators: name/title, price, variant/SKU,
+      ratings, and any other attributes relevant to the task.
+    - Let the user pick via the `question` tool. Never auto-select.
     
-    ### 5. Notify
-    - Once all items are in cart, summarize: item names, quantities, prices.
-    - Offer options: "Checkout now" / "Continue shopping" / "Done for now".
-    - Only navigate to checkout if user explicitly chooses to.
+    ## 3. Shopping & E-Commerce
+    
+    - **Default action is "add to cart"** — never proceed to checkout or payment.
+    - After adding items, summarize: names, quantities, prices, and the store.
+    - Offer clear next-step options: "Proceed to checkout" / "Continue shopping" / "Done".
+    - Only navigate to checkout or payment pages when the user explicitly requests it.
+    
+    ## 4. Form Filling & Data Entry
+    
+    - Before submitting any form, present a summary of all filled fields to the user
+      for review and confirmation.
+    - For fields with multiple valid choices (dropdowns, radio groups), ask the user
+      rather than picking the first or "most common" option.
+    - Never submit forms that trigger payments, registrations, legal agreements,
+      or account changes without explicit user approval.
+    
+    ## 5. Account & Settings Changes
+    
+    - Any action that alters account state (password, email, subscription,
+      privacy settings, data deletion) requires explicit user confirmation.
+    - Present the current value and the proposed new value side-by-side.
+    
+    ## 6. Autonomous Browsing
+    
+    - Browsing, searching, reading, and collecting information are safe to do
+      autonomously — do not interrupt the user for read-only operations.
+    - Minimize unnecessary status updates; report results when the task is complete
+      or when a decision point is reached.
     """
 }

@@ -112,9 +112,12 @@ struct ModelConfigView: View {
                     }
                 }
                 
-                // Base URL
+                // Base URL (stored in Keychain alongside API key)
                 SettingRow(configManager.provider == .ollama ? L10n.Settings.ollamaHost : L10n.Settings.baseURL) {
-                    TextField(baseURLPlaceholder, text: $configManager.baseURL)
+                    TextField(baseURLPlaceholder, text: Binding(
+                        get: { configManager.baseURL },
+                        set: { configManager.baseURL = $0 }
+                    ))
                         .textFieldStyle(.plain)
                         .font(.system(size: 13, design: .monospaced))
                         .padding(.horizontal, 12)

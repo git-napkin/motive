@@ -10,10 +10,27 @@ import Foundation
 extension ConfigManager {
     // MARK: - Per-Provider Configuration Accessors
     
-    /// Base URL for current provider
+    /// Base URL for current provider (stored in Keychain per-provider)
     var baseURL: String {
-        get { providerConfigStore.baseURL(for: provider) }
-        set { providerConfigStore.setBaseURL(newValue, for: provider) }
+        get {
+            if let cached = cachedBaseURLs[provider] {
+                return cached
+            }
+            let account = "opencode.base.url.\(provider.rawValue)"
+            let value = KeychainStore.read(service: keychainService, account: account)
+                ?? providerConfigStore.defaultBaseURL(for: provider)
+            cachedBaseURLs[provider] = value
+            return value
+        }
+        set {
+            cachedBaseURLs[provider] = newValue
+            let account = "opencode.base.url.\(provider.rawValue)"
+            if newValue.isEmpty {
+                KeychainStore.delete(service: keychainService, account: account)
+            } else {
+                KeychainStore.write(service: keychainService, account: account, value: newValue)
+            }
+        }
     }
 
     /// Model name for current provider

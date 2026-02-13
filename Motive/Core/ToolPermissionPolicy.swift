@@ -366,8 +366,8 @@ final class ToolPermissionPolicy {
 
     /// Default configurations using the persisted trust level.
     static func defaultConfigs() -> [ToolPermission: ToolPermissionConfig] {
-        let rawValue = UserDefaults.standard.string(forKey: "trustLevel") ?? TrustLevel.careful.rawValue
-        let level = TrustLevel(rawValue: rawValue) ?? .careful
+        let rawValue = UserDefaults.standard.string(forKey: "trustLevel") ?? TrustLevel.balanced.rawValue
+        let level = TrustLevel(rawValue: rawValue) ?? .balanced
         return configsForTrustLevel(level)
     }
 

@@ -243,13 +243,13 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
     @AppStorage("currentAgent") var currentAgent: String = "agent"
 
     // Trust level — controls how aggressively the AI operates
-    @AppStorage("trustLevel") var trustLevelRawValue: String = TrustLevel.careful.rawValue
+    @AppStorage("trustLevel") var trustLevelRawValue: String = TrustLevel.balanced.rawValue
 
     // Token usage totals (per model)
     @AppStorage("tokenUsageTotalsJSON") var tokenUsageTotalsJSON: String = "{}"
 
     var trustLevel: TrustLevel {
-        get { TrustLevel(rawValue: trustLevelRawValue) ?? .careful }
+        get { TrustLevel(rawValue: trustLevelRawValue) ?? .balanced }
         set {
             trustLevelRawValue = newValue.rawValue
             ToolPermissionPolicy.shared.applyTrustLevel(newValue)
@@ -315,8 +315,9 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
 
     let keychainService = "com.velvet.motive"
     
-    // Cache API keys per provider
+    // Cache API keys and base URLs per provider
     var cachedAPIKeys: [Provider: String] = [:]
+    var cachedBaseURLs: [Provider: String] = [:]
     
     /// Migrate legacy per-account keychain items to unified storage
     /// This ensures only ONE authorization prompt for all API keys
@@ -337,17 +338,26 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
         KeychainStore.migrateToUnifiedStorage(service: keychainService, accounts: legacyAccounts)
     }
     
-    /// Preload current provider's API key into cache
-    /// Call this once at startup to trigger Keychain prompt early
-    /// Now triggers only ONE prompt thanks to unified storage
+    /// Preload current provider's API key and base URL into cache.
+    /// Call this once at startup to trigger Keychain prompt early.
+    /// Now triggers only ONE prompt thanks to unified storage.
     func preloadAPIKeys() {
         // First, migrate any legacy keychain items (one-time)
         migrateKeychainIfNeeded()
+        
+        // Migrate base URLs from UserDefaults to Keychain (one-time)
+        migrateBaseURLsIfNeeded()
         
         // Read current provider's key (single unified Keychain read)
         let account = "opencode.api.key.\(provider.rawValue)"
         let value = KeychainStore.read(service: keychainService, account: account) ?? ""
         cachedAPIKeys[provider] = value
+        
+        // Preload base URL
+        let baseURLAccount = "opencode.base.url.\(provider.rawValue)"
+        let baseURLValue = KeychainStore.read(service: keychainService, account: baseURLAccount)
+            ?? providerConfigStore.defaultBaseURL(for: provider)
+        cachedBaseURLs[provider] = baseURLValue
         
         // Read browser agent key from the same unified storage (no additional prompt)
         if browserUseEnabled {
@@ -355,6 +365,24 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             let browserValue = KeychainStore.read(service: keychainService, account: browserAccount) ?? ""
             cachedBrowserAgentAPIKey = browserValue
         }
+    }
+    
+    /// One-time migration of base URLs from UserDefaults to Keychain.
+    private func migrateBaseURLsIfNeeded() {
+        let migrationKey = "baseURLMigratedToKeychain"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        
+        for p in Provider.allCases {
+            let legacyValue = providerConfigStore.baseURL(for: p)
+            let defaultValue = providerConfigStore.defaultBaseURL(for: p)
+            // Only migrate non-default, non-empty values
+            if !legacyValue.isEmpty && legacyValue != defaultValue {
+                let account = "opencode.base.url.\(p.rawValue)"
+                KeychainStore.write(service: keychainService, account: account, value: legacyValue)
+            }
+        }
+        
+        UserDefaults.standard.set(true, forKey: migrationKey)
     }
     
     // Status for UI

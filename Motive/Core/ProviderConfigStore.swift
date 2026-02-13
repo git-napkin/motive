@@ -31,6 +31,12 @@ final class ProviderConfigStore {
 
     // MARK: - Base URL
 
+    /// Default base URL for a provider (empty for most, localhost for Ollama).
+    func defaultBaseURL(for provider: ConfigManager.Provider) -> String {
+        Self.defaultBaseURLs[provider, default: ""]
+    }
+
+    /// Read base URL from UserDefaults (legacy path, used during migration).
     func baseURL(for provider: ConfigManager.Provider) -> String {
         defaults.string(forKey: baseURLKey(for: provider))
             ?? Self.defaultBaseURLs[provider, default: ""]

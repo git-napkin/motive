@@ -126,12 +126,12 @@ struct AgentModeToggle: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: iconForMode(currentAgent))
-                    .font(.system(size: 9, weight: .semibold))
-                    .frame(width: 10, height: 10)
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 12, height: 12)
                 Text(modeDisplayName(currentAgent))
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.system(size: 7, weight: .bold))
                     .foregroundColor(Color.Aurora.textMuted)
             }
             .foregroundColor(activeColor(for: currentAgent))

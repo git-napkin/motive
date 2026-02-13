@@ -219,7 +219,11 @@ final class SkillRegistry: ObservableObject {
         }
         let bundledNames = Set(entries.map { $0.name })
 
-        let builtIns = SkillManager.shared.skills.filter { !bundledNames.contains($0.id) }
+        // Exclude bundled duplicates and capability skills (e.g. browser-automation)
+        // which have their own dedicated section in Advanced settings.
+        let builtIns = SkillManager.shared.skills.filter {
+            !bundledNames.contains($0.id) && $0.type != .capability
+        }
         let skillEntries = builtIns.map { skill in
             let skillPath: String
             if let managedDir {
