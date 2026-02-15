@@ -24,6 +24,9 @@ actor SSEClient {
     private var streamTask: Task<Void, Never>?
     private var isConnected = false
     private static let reconnectMaxDelay: TimeInterval = 30
+    /// Tracks message part type by partID so `message.part.delta` can be classified correctly.
+    /// OpenCode deltas only include `partID` + `field`, not the part `type`.
+    var partTypeByPartID: [String: String] = [:]
 
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.velvet.motive", category: "SSE")
 
@@ -140,6 +143,7 @@ actor SSEClient {
         streamTask?.cancel()
         streamTask = nil
         isConnected = false
+        partTypeByPartID.removeAll()
     }
 
     // MARK: - Stream Consumption

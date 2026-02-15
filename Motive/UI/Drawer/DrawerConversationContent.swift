@@ -12,13 +12,54 @@ struct DrawerConversationContent: View {
     let showContent: Bool
     @Binding var streamingScrollTask: Task<Void, Never>?
 
+    private struct DisplayEntry: Identifiable {
+        let id: UUID
+        let message: ConversationMessage
+    }
+
+    private var displayEntries: [DisplayEntry] {
+        let allMessages = appState.messages
+        return allMessages.enumerated().map { index, message in
+            if shouldDemoteAssistantToProcessThought(index: index, in: allMessages) {
+                let synthetic = ConversationMessage(
+                    id: message.id,
+                    type: .reasoning,
+                    content: message.content,
+                    timestamp: message.timestamp,
+                    status: .completed
+                )
+                return DisplayEntry(id: message.id, message: synthetic)
+            }
+            return DisplayEntry(id: message.id, message: message)
+        }
+    }
+
+    private func shouldDemoteAssistantToProcessThought(index: Int, in messages: [ConversationMessage]) -> Bool {
+        guard messages[index].type == .assistant else { return false }
+        var cursor = index + 1
+        var hasToolBetween = false
+        while cursor < messages.count {
+            let next = messages[cursor]
+            if next.type == .tool {
+                hasToolBetween = true
+                cursor += 1
+                continue
+            }
+            if next.type == .assistant {
+                return hasToolBetween
+            }
+            return false
+        }
+        return false
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: AuroraSpacing.space3) {
-                    ForEach(Array(appState.messages.enumerated()), id: \.element.id) { index, message in
-                        MessageBubble(message: message)
-                            .id(message.id)
+                    ForEach(Array(displayEntries.enumerated()), id: \.element.id) { index, entry in
+                        MessageBubble(message: entry.message)
+                            .id(entry.id)
                             .opacity(showContent ? 1 : 0)
                             .offset(y: showContent ? 0 : 8)
                             .animation(

@@ -41,6 +41,7 @@ struct SystemErrorBubble: View {
     @ViewBuilder
     private var errorBubble: some View {
         let (title, detail) = Self.parseErrorMessage(message.content)
+        let fullDetail = (detail ?? message.content).trimmingCharacters(in: .whitespacesAndNewlines)
 
         VStack(alignment: .leading, spacing: 0) {
             // Header row: icon + title + Show button
@@ -56,7 +57,7 @@ struct SystemErrorBubble: View {
 
                 Spacer()
 
-                if detail != nil {
+                if !fullDetail.isEmpty {
                     Button {
                         withAnimation(.auroraFast) { isDetailExpanded.toggle() }
                     } label: {
@@ -71,11 +72,11 @@ struct SystemErrorBubble: View {
             .padding(.vertical, AuroraSpacing.space2)
 
             // Expandable detail
-            if isDetailExpanded, let detail {
+            if isDetailExpanded, !fullDetail.isEmpty {
                 Divider()
                     .background(Color.Aurora.error.opacity(0.15))
 
-                Text(detail)
+                Text(fullDetail)
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundColor(Color.Aurora.textSecondary)
                     .textSelection(.enabled)

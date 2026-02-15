@@ -31,6 +31,12 @@ extension ConfigManager {
             ]
             Log.config(" Synced \(providerName) API key to auth.json")
         }
+
+        // Legacy provider ID cleanup (provider removed from UI/config).
+        if auth["openai-compatible"] != nil {
+            auth.removeValue(forKey: "openai-compatible")
+            Log.config(" Removed legacy 'openai-compatible' entry from auth.json")
+        }
         
         // Write back
         if let jsonData = try? JSONSerialization.data(withJSONObject: auth, options: .prettyPrinted) {
@@ -77,7 +83,9 @@ extension ConfigManager {
 
         let inputs = OpenCodeConfigGenerator.Inputs(
             providerName: provider.openCodeProviderName,
+            provider: provider,
             baseURL: baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            modelName: modelName.trimmingCharacters(in: .whitespacesAndNewlines),
             workspaceDirectory: workspaceDirectory,
             skillsSystemEnabled: skillsSystemEnabled,
             compactionEnabled: compactionEnabled,

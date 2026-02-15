@@ -27,6 +27,9 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
         case cohere
         case deepinfra
         case togetherai
+        case alibaba
+        case moonshotai
+        case zhipuai
         case perplexity
         case cerebras
         
@@ -35,8 +38,8 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
         case bedrock
         case googleVertex
         
-        // OpenAI-compatible endpoints
-        case openaiCompatible
+        // Local OpenAI-compatible endpoint
+        case lmstudio
 
         var id: String { rawValue }
 
@@ -53,12 +56,15 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .cohere: return "Cohere"
             case .deepinfra: return "DeepInfra"
             case .togetherai: return "Together"
+            case .alibaba: return "Alibaba"
+            case .moonshotai: return "Moonshot"
+            case .zhipuai: return "Zhipu"
             case .perplexity: return "Perplexity"
             case .cerebras: return "Cerebras"
             case .azure: return "Azure"
             case .bedrock: return "Bedrock"
             case .googleVertex: return "Vertex AI"
-            case .openaiCompatible: return "OpenAI Compatible"
+            case .lmstudio: return "LM Studio"
             }
         }
         
@@ -76,19 +82,49 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .cohere: return "cohere"
             case .deepinfra: return "deepinfra"
             case .togetherai: return "togetherai"
+            case .alibaba: return "alibaba"
+            case .moonshotai: return "moonshotai"
+            case .zhipuai: return "zhipuai"
             case .perplexity: return "perplexity"
             case .cerebras: return "cerebras"
             case .azure: return "azure"
             case .bedrock: return "amazon-bedrock"
             case .googleVertex: return "google-vertex"
-            case .openaiCompatible: return "openai-compatible"
+            case .lmstudio: return "lmstudio"
+            }
+        }
+
+        /// Candidate provider IDs used to match OpenCode `/provider` registry entries.
+        /// Includes aliases because upstream IDs can vary across versions.
+        var modelRegistryProviderIDs: [String] {
+            switch self {
+            case .claude: return ["anthropic", "claude"]
+            case .openai: return ["openai"]
+            case .gemini: return ["google", "gemini"]
+            case .ollama: return ["ollama"]
+            case .openrouter: return ["openrouter"]
+            case .mistral: return ["mistral"]
+            case .groq: return ["groq"]
+            case .xai: return ["xai"]
+            case .cohere: return ["cohere"]
+            case .deepinfra: return ["deepinfra"]
+            case .togetherai: return ["togetherai", "together"]
+            case .alibaba: return ["alibaba", "dashscope"]
+            case .moonshotai: return ["moonshotai", "moonshotai-cn", "kimi-for-coding"]
+            case .zhipuai: return ["zhipuai", "zai", "zai-coding-plan", "zhipuai-coding-plan"]
+            case .perplexity: return ["perplexity"]
+            case .cerebras: return ["cerebras"]
+            case .azure: return ["azure", "azure-openai"]
+            case .bedrock: return ["amazon-bedrock", "bedrock"]
+            case .googleVertex: return ["google-vertex", "vertex", "googlevertex"]
+            case .lmstudio: return ["lmstudio", "openai-compatible", "openai"]
             }
         }
         
         /// Whether this provider requires an API key
         var requiresAPIKey: Bool {
             switch self {
-            case .ollama: return false
+            case .ollama, .lmstudio: return false
             default: return true
             }
         }
@@ -107,12 +143,15 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .cohere: return "COHERE_API_KEY"
             case .deepinfra: return "DEEPINFRA_API_KEY"
             case .togetherai: return "TOGETHER_API_KEY"
+            case .alibaba: return "DASHSCOPE_API_KEY"
+            case .moonshotai: return "MOONSHOT_API_KEY"
+            case .zhipuai: return "ZHIPU_API_KEY"
             case .perplexity: return "PERPLEXITY_API_KEY"
             case .cerebras: return "CEREBRAS_API_KEY"
             case .azure: return "AZURE_OPENAI_API_KEY"
             case .bedrock: return "AWS_ACCESS_KEY_ID"
             case .googleVertex: return "GOOGLE_CLOUD_PROJECT"
-            case .openaiCompatible: return "OPENAI_API_KEY"
+            case .lmstudio: return ""
             }
         }
         
@@ -126,16 +165,19 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .openrouter: return "anthropic/claude-sonnet-4"
             case .mistral: return "mistral-large-latest"
             case .groq: return "llama-3.3-70b-versatile"
-            case .xai: return "grok-2"
+            case .xai: return "grok-3-mini"
             case .cohere: return "command-r-plus"
             case .deepinfra: return "meta-llama/Llama-3.3-70B-Instruct"
             case .togetherai: return "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+            case .alibaba: return "qwen3-coder-480b-a35b-instruct"
+            case .moonshotai: return "kimi-k2.5"
+            case .zhipuai: return "glm-5"
             case .perplexity: return "llama-3.1-sonar-large-128k-online"
             case .cerebras: return "llama3.1-70b"
             case .azure: return "gpt-4o"
             case .bedrock: return "anthropic.claude-3-5-sonnet-20241022-v2:0"
             case .googleVertex: return "gemini-2.0-flash-001"
-            case .openaiCompatible: return "gpt-4o"
+            case .lmstudio: return "default"
             }
         }
     }
@@ -199,6 +241,12 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
     @AppStorage("deepinfra.modelName") var deepinfraModelName: String = ""
     @AppStorage("togetherai.baseURL") var togetheraiBaseURL: String = ""
     @AppStorage("togetherai.modelName") var togetheraiModelName: String = ""
+    @AppStorage("alibaba.baseURL") var alibabaBaseURL: String = ""
+    @AppStorage("alibaba.modelName") var alibabaModelName: String = ""
+    @AppStorage("moonshotai.baseURL") var moonshotaiBaseURL: String = ""
+    @AppStorage("moonshotai.modelName") var moonshotaiModelName: String = ""
+    @AppStorage("zhipuai.baseURL") var zhipuaiBaseURL: String = ""
+    @AppStorage("zhipuai.modelName") var zhipuaiModelName: String = ""
     @AppStorage("perplexity.baseURL") var perplexityBaseURL: String = ""
     @AppStorage("perplexity.modelName") var perplexityModelName: String = ""
     @AppStorage("cerebras.baseURL") var cerebrasBaseURL: String = ""
@@ -212,9 +260,9 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
     @AppStorage("googleVertex.baseURL") var googleVertexBaseURL: String = ""
     @AppStorage("googleVertex.modelName") var googleVertexModelName: String = ""
     
-    // Per-provider configurations - OpenAI-compatible
-    @AppStorage("openaiCompatible.baseURL") var openaiCompatibleBaseURL: String = ""
-    @AppStorage("openaiCompatible.modelName") var openaiCompatibleModelName: String = ""
+    // Per-provider configurations - Local OpenAI-compatible
+    @AppStorage("lmstudio.baseURL") var lmstudioBaseURL: String = "http://127.0.0.1:1234/v1"
+    @AppStorage("lmstudio.modelName") var lmstudioModelName: String = ""
     
     @AppStorage("openCodeBinarySourcePath") var openCodeBinarySourcePath: String = ""
     @AppStorage("debugMode") var debugMode: Bool = false

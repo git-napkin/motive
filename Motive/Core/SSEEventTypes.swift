@@ -138,6 +138,9 @@ extension SSEClient {
     struct SessionStatusInfo: Sendable {
         let sessionID: String
         let status: String // "idle", "busy", "retry"
+        let attempt: Int?
+        let message: String?
+        let nextRetryUnixMS: Int64?
     }
 
     struct SessionErrorInfo: Sendable {

@@ -33,6 +33,12 @@ extension SSEClient {
         case "message.part.updated":
             return parseMessagePartUpdated(properties)
 
+        case "message.part.delta":
+            return parseMessagePartDelta(properties)
+
+        case "message.part.removed":
+            return nil
+
         case "message.updated":
             return parseMessageUpdated(properties)
 
@@ -59,6 +65,12 @@ extension SSEClient {
             return parsePermissionAsked(properties)
 
         case "permission.replied":
+            return nil
+
+        case "question.replied", "question.rejected":
+            return nil
+
+        case "session.compacted":
             return nil
 
         default:
@@ -88,6 +100,33 @@ extension SSEClient {
 
 extension SSEClient {
 
+    func parseMessagePartDelta(_ properties: [String: Any]) -> SSEEvent? {
+        let sessionID = properties["sessionID"] as? String ?? ""
+        let messageID = properties["messageID"] as? String ?? ""
+        let partID = properties["partID"] as? String ?? ""
+        let field = (properties["field"] as? String ?? "").lowercased()
+        let delta = properties["delta"] as? String ?? ""
+
+        guard !delta.isEmpty else { return nil }
+        let inferredPartType = partTypeByPartID[partID]?.lowercased()
+
+        switch (field, inferredPartType) {
+        case ("reasoning", _), ("text", "reasoning"):
+            return .reasoningDelta(ReasoningDeltaInfo(
+                sessionID: sessionID,
+                delta: delta
+            ))
+        case ("text", _):
+            return .textDelta(TextDeltaInfo(
+                sessionID: sessionID,
+                messageID: messageID,
+                delta: delta
+            ))
+        default:
+            return nil
+        }
+    }
+
     func parseMessagePartUpdated(_ properties: [String: Any]) -> SSEEvent? {
         let part = properties["part"] as? [String: Any] ?? properties
         let delta = properties["delta"] as? String
@@ -101,6 +140,13 @@ extension SSEClient {
             ?? properties["messageID"] as? String
             ?? ""
         let partType = part["type"] as? String ?? ""
+        let partID = part["id"] as? String
+            ?? properties["partID"] as? String
+            ?? ""
+
+        if !partID.isEmpty, !partType.isEmpty {
+            partTypeByPartID[partID] = partType
+        }
 
         logger.debug("parseMessagePartUpdated: partType=\(partType) hasDelta=\(delta != nil) deltaLen=\(delta?.count ?? 0) sessionID=\(sessionID.prefix(8))")
 
@@ -295,6 +341,18 @@ extension SSEClient {
         let sessionID = properties["sessionID"] as? String ?? ""
         let status = properties["status"] as? [String: Any] ?? [:]
         let statusType = status["type"] as? String ?? ""
+        let attempt = parseInt(from: status["attempt"])
+        let message = parseString(from: status, keys: ["message", "error"])
+        let nextRetryUnixMS: Int64?
+        if let intValue = parseInt(from: status["next"]) {
+            nextRetryUnixMS = Int64(intValue)
+        } else if let number = status["next"] as? NSNumber {
+            nextRetryUnixMS = number.int64Value
+        } else if let string = status["next"] as? String, let int64 = Int64(string) {
+            nextRetryUnixMS = int64
+        } else {
+            nextRetryUnixMS = nil
+        }
 
         if statusType == "idle" {
             return .sessionIdle(sessionID: sessionID)
@@ -302,7 +360,10 @@ extension SSEClient {
 
         return .sessionStatus(SessionStatusInfo(
             sessionID: sessionID,
-            status: statusType
+            status: statusType,
+            attempt: attempt,
+            message: message,
+            nextRetryUnixMS: nextRetryUnixMS
         ))
     }
 

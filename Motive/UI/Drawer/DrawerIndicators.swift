@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import MarkdownUI
 
 // MARK: - Tool Running Indicator (small spinner for tool bubble)
 
@@ -102,17 +101,14 @@ struct ShimmerText: View {
 struct TransientReasoningBubble: View {
     let text: String
     @Environment(\.colorScheme) private var colorScheme
-    @State private var isExpanded = false
+    @State private var previewScrollTask: Task<Void, Never>?
 
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let lines = trimmed.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        let maxLines = 5
-        let isTruncated = lines.count > maxLines
-        let displayLines = isExpanded ? lines : Array(lines.suffix(maxLines))
-        let displayText = displayLines.joined(separator: "\n")
+        let lineCount = lines.count
 
         HStack {
             VStack(alignment: .leading, spacing: AuroraSpacing.space2) {
@@ -124,30 +120,43 @@ struct TransientReasoningBubble: View {
                         .font(.Aurora.micro.weight(.semibold))
                         .foregroundColor(Color.Aurora.textSecondary)
                         .auroraShimmer(isDark: isDark)
-                    Spacer()
-                    if isTruncated {
-                        Button(action: { withAnimation(.auroraFast) { isExpanded.toggle() } }) {
-                            Text(isExpanded ? L10n.collapse : L10n.expand)
-                                .font(.Aurora.micro.weight(.medium))
-                                .foregroundColor(Color.Aurora.textMuted)
-                        }
-                        .buttonStyle(.plain)
+                    if lineCount > 0 {
+                        Text("\(lineCount) lines")
+                            .font(.Aurora.micro)
+                            .foregroundColor(Color.Aurora.textMuted)
                     }
+                    Spacer()
                 }
 
                 if !trimmed.isEmpty {
-                    Markdown(displayText)
-                        .markdownTextStyle {
-                            FontSize(12)
-                            ForegroundColor(Color.Aurora.textPrimary)
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            Text(trimmed)
+                                .font(.Aurora.caption)
+                                .foregroundColor(Color.Aurora.textSecondary.opacity(isDark ? 0.78 : 0.72))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id("reasoning-preview-anchor")
+                                .textSelection(.enabled)
                         }
-                        .markdownBlockStyle(\.codeBlock) { configuration in
-                            configuration.label
-                                .padding(6)
-                                .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.05 : 0.04))
-                                .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xs))
+                        .frame(maxHeight: 58) // ~3 lines preview window
+                        .mask(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0.0),
+                                    .init(color: .black, location: 0.74),
+                                    .init(color: .clear, location: 1.0),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .onAppear {
+                            scrollPreviewToBottom(proxy: proxy, animated: false)
                         }
-                        .textSelection(.enabled)
+                        .onChange(of: text) { _, _ in
+                            schedulePreviewScroll(proxy: proxy)
+                        }
+                    }
                 }
             }
             .padding(AuroraSpacing.space3)
@@ -159,6 +168,25 @@ struct TransientReasoningBubble: View {
             )
 
             Spacer(minLength: 40)
+        }
+    }
+
+    private func schedulePreviewScroll(proxy: ScrollViewProxy) {
+        previewScrollTask?.cancel()
+        previewScrollTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            guard !Task.isCancelled else { return }
+            scrollPreviewToBottom(proxy: proxy)
+        }
+    }
+
+    private func scrollPreviewToBottom(proxy: ScrollViewProxy, animated: Bool = true) {
+        if animated {
+            withAnimation(.easeOut(duration: 0.12)) {
+                proxy.scrollTo("reasoning-preview-anchor", anchor: .bottom)
+            }
+        } else {
+            proxy.scrollTo("reasoning-preview-anchor", anchor: .bottom)
         }
     }
 }

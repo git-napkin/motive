@@ -169,6 +169,45 @@ extension CommandBarView {
 
             Spacer()
 
+            Button(action: { showErrorDetailsPopover.toggle() }) {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Color.Aurora.textSecondary)
+                    .padding(.horizontal, AuroraSpacing.space2)
+                    .padding(.vertical, AuroraSpacing.space2)
+                    .background(Color.Aurora.glassOverlay.opacity(0.1))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().strokeBorder(Color.Aurora.glassOverlay.opacity(0.06), lineWidth: 0.5))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Show error details")
+            .popover(isPresented: $showErrorDetailsPopover, arrowEdge: .top) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L10n.CommandBar.error)
+                        .font(.Aurora.body.weight(.semibold))
+                        .foregroundColor(Color.Aurora.textPrimary)
+                    ScrollView {
+                        Text(message)
+                            .font(.Aurora.caption)
+                            .foregroundColor(Color.Aurora.textSecondary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(width: 420, height: 180)
+
+                    HStack {
+                        Spacer()
+                        Button(L10n.CommandBar.dismiss) {
+                            showErrorDetailsPopover = false
+                        }
+                        .buttonStyle(.plain)
+                        .font(.Aurora.caption.weight(.semibold))
+                        .foregroundColor(Color.Aurora.textSecondary)
+                    }
+                }
+                .padding(12)
+            }
+
             Button(action: { mode = .idle }) {
                 Text(L10n.CommandBar.dismiss)
                     .font(.Aurora.caption)

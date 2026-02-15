@@ -130,6 +130,7 @@ struct CommandBarView: View {
     @State var historySessions: [Session] = []
     @State var selectedProjectIndex: Int = 0
     @State var selectedModeIndex: Int = 0
+    @State var showErrorDetailsPopover: Bool = false
     @State var showDeleteConfirmation: Bool = false
     @State var deleteCandidateIndex: Int? = nil
     @State var selectedHistoryId: UUID? = nil

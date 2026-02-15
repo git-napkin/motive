@@ -11,7 +11,9 @@ struct OpenCodeConfigGenerator {
 
     struct Inputs {
         let providerName: String
+        let provider: ConfigManager.Provider
         let baseURL: String
+        let modelName: String
         let workspaceDirectory: URL
         let skillsSystemEnabled: Bool
         let compactionEnabled: Bool
@@ -142,17 +144,57 @@ struct OpenCodeConfigGenerator {
         //     config["skills"] = ["paths": [skillsPath]]
         // }
 
-        // Add provider options (baseURL) if configured
-        // Per OpenCode docs: set options.baseURL on the provider directly
-        if !baseURLValue.isEmpty {
+        // Add provider options.
+        // Keep standard providers untouched (models.dev definitions stay authoritative).
+        switch inputs.provider {
+        case .lmstudio:
+            let lmBaseURL = baseURLValue.isEmpty ? "http://127.0.0.1:1234/v1" : baseURLValue
             config["provider"] = [
-                providerName: [
+                "lmstudio": [
+                    "models": [
+                        "default": [
+                            "name": "Default",
+                            "tool_call": true,
+                        ] as [String: Any],
+                    ],
                     "options": [
-                        "baseURL": baseURLValue
-                    ]
-                ]
+                        "baseURL": lmBaseURL,
+                    ],
+                ] as [String: Any],
             ]
-            Log.config(" Provider '\(providerName)' configured with baseURL: \(baseURLValue)")
+            Log.config(" Provider 'lmstudio' configured with baseURL: \(lmBaseURL)")
+
+        case .ollama:
+            let ollamaURL = baseURLValue.isEmpty ? "http://localhost:11434/v1" : baseURLValue
+            let modelID = inputs.modelName.isEmpty ? "llama3" : inputs.modelName
+            config["provider"] = [
+                "ollama": [
+                    "npm": "@ai-sdk/openai-compatible",
+                    "name": "Ollama",
+                    "models": [
+                        modelID: [
+                            "name": modelID,
+                            "tool_call": true,
+                        ] as [String: Any],
+                    ],
+                    "options": [
+                        "baseURL": ollamaURL,
+                    ],
+                ] as [String: Any],
+            ]
+            Log.config(" Provider 'ollama' configured with baseURL: \(ollamaURL), model: \(modelID)")
+
+        default:
+            if !baseURLValue.isEmpty {
+                config["provider"] = [
+                    providerName: [
+                        "options": [
+                            "baseURL": baseURLValue,
+                        ],
+                    ],
+                ]
+                Log.config(" Provider '\(providerName)' configured with baseURL: \(baseURLValue)")
+            }
         }
 
         // Merge MCP tools from skills (if enabled) — only skill-provided MCP tools, not built-in

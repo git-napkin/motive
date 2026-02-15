@@ -72,10 +72,13 @@ final class AppState: ObservableObject {
     // Native question/permission handler (extracted from AppState+Bridge)
     lazy var nativePromptHandler: NativePromptHandler = NativePromptHandler(appState: self)
     
-    /// UI-level session activity timeout
-    /// If sessionStatus stays .running with no events for this duration, show a warning
-    var sessionTimeoutTask: Task<Void, Never>?
-    static let sessionTimeoutSeconds: TimeInterval = MotiveConstants.Timeouts.sessionActivity
+    /// UI-level session inactivity timers.
+    /// - warning task: user-facing soft warning, does not fail the run.
+    /// - fail task: hard timeout that emits an error and terminates running state.
+    var sessionWarningTask: Task<Void, Never>?
+    var sessionFailTask: Task<Void, Never>?
+    static let sessionWarningSeconds: TimeInterval = MotiveConstants.Timeouts.sessionActivityWarning
+    static let sessionFailSeconds: TimeInterval = MotiveConstants.Timeouts.sessionActivityFail
     
     /// Tracks the message ID for the current question/permission so we can update it with the user's response
     var pendingQuestionMessageId: UUID?
@@ -177,8 +180,10 @@ final class AppState: ObservableObject {
         currentReasoningText = nil
         reasoningDismissTask?.cancel()
         reasoningDismissTask = nil
-        sessionTimeoutTask?.cancel()
-        sessionTimeoutTask = nil
+        sessionWarningTask?.cancel()
+        sessionWarningTask = nil
+        sessionFailTask?.cancel()
+        sessionFailTask = nil
         autoPromoteTask?.cancel()
         autoPromoteTask = nil
         currentToolName = nil

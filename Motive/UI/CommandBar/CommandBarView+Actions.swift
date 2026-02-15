@@ -120,6 +120,11 @@ extension CommandBarView {
 
     func handleModeChange(from oldMode: CommandBarMode, to newMode: CommandBarMode) {
         // Window height is auto-synced via onChange(of: currentHeight) — no manual call needed.
+        if case .error = newMode {
+            // keep current state
+        } else {
+            showErrorDetailsPopover = false
+        }
 
         // Load data when entering specific modes
         if newMode.isHistory {

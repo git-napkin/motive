@@ -40,7 +40,7 @@ struct MessageBubble: View {
                         case .todo:
                             TodoBubble(message: message, isDark: isDark)
                         case .reasoning:
-                            EmptyView() // Reasoning is transient, handled by TransientReasoningBubble
+                            TransientReasoningBubble(text: message.content)
                         }
                     }
 

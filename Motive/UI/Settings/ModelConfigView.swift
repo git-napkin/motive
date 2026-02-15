@@ -378,13 +378,13 @@ extension ConfigManager.Provider {
         case .gemini: return "gemini-ai"
         case .ollama: return "ollama"
         // Cloud providers (use SF Symbols)
-        case .openrouter, .mistral, .groq, .xai, .cohere, .deepinfra, .togetherai, .perplexity, .cerebras:
+        case .openrouter, .mistral, .groq, .xai, .cohere, .deepinfra, .togetherai, .alibaba, .moonshotai, .zhipuai, .perplexity, .cerebras:
             return ""  // Will use SF Symbol
         // Enterprise / Cloud (use SF Symbols)
         case .azure, .bedrock, .googleVertex:
             return ""  // Will use SF Symbol
         // OpenAI-compatible
-        case .openaiCompatible:
+        case .lmstudio:
             return ""  // Will use SF Symbol
         }
     }
@@ -400,12 +400,15 @@ extension ConfigManager.Provider {
         case .cohere: return "circle.hexagongrid.fill"
         case .deepinfra: return "server.rack"
         case .togetherai: return "person.2.fill"
+        case .alibaba: return "shippingbox.fill"
+        case .moonshotai: return "moon.stars.fill"
+        case .zhipuai: return "sparkles.rectangle.stack.fill"
         case .perplexity: return "sparkle.magnifyingglass"
         case .cerebras: return "brain.head.profile"
         case .azure: return "cloud.fill"
         case .bedrock: return "square.3.layers.3d.down.right"
         case .googleVertex: return "triangle.fill"
-        case .openaiCompatible: return "network"
+        case .lmstudio: return "desktopcomputer"
         }
     }
     
@@ -418,9 +421,9 @@ extension ConfigManager.Provider {
     var apiKeyPlaceholder: String {
         switch self {
         case .claude: return "sk-ant-..."
-        case .openai, .openaiCompatible: return "sk-..."
+        case .openai: return "sk-..."
         case .gemini: return "AIza..."
-        case .ollama: return ""
+        case .ollama, .lmstudio: return ""
         case .openrouter: return "sk-or-..."
         case .mistral: return "..."
         case .groq: return "gsk_..."
@@ -428,6 +431,9 @@ extension ConfigManager.Provider {
         case .cohere: return "..."
         case .deepinfra: return "..."
         case .togetherai: return "..."
+        case .alibaba: return "sk-..."
+        case .moonshotai: return "sk-..."
+        case .zhipuai: return "..."
         case .perplexity: return "pplx-..."
         case .cerebras: return "csk-..."
         case .azure: return "..."
@@ -450,12 +456,15 @@ extension ConfigManager.Provider {
         case .cohere: return "https://api.cohere.ai"
         case .deepinfra: return "https://api.deepinfra.com"
         case .togetherai: return "https://api.together.xyz"
+        case .alibaba: return "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+        case .moonshotai: return "https://api.moonshot.ai/v1"
+        case .zhipuai: return "https://open.bigmodel.cn/api/paas/v4"
         case .perplexity: return "https://api.perplexity.ai"
         case .cerebras: return "https://api.cerebras.ai"
         case .azure: return "https://<resource>.openai.azure.com"
         case .bedrock: return "https://bedrock-runtime.<region>.amazonaws.com"
         case .googleVertex: return "https://<region>-aiplatform.googleapis.com"
-        case .openaiCompatible: return "https://your-api.example.com"
+        case .lmstudio: return "http://127.0.0.1:1234/v1"
         }
     }
 }

@@ -36,6 +36,7 @@ extension AppState {
             binaryURL: binaryURL,
             environment: configManager.makeEnvironment(),
             model: configManager.getModelString(),
+            modelProviderID: configManager.provider.openCodeProviderName,
             agent: configManager.currentAgent,
             debugMode: configManager.debugMode,
             projectDirectory: configManager.currentProjectURL.path
@@ -53,19 +54,43 @@ extension AppState {
 
     /// Reset the UI-level session timeout whenever we receive an event
     func resetSessionTimeout() {
-        sessionTimeoutTask?.cancel()
+        sessionWarningTask?.cancel()
+        sessionFailTask?.cancel()
 
         guard sessionStatus == .running else { return }
 
-        sessionTimeoutTask = Task {
-            try? await Task.sleep(nanoseconds: UInt64(Self.sessionTimeoutSeconds * 1_000_000_000))
+        sessionWarningTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(Self.sessionWarningSeconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
 
-            // Still running after timeout — warn the user
+            // Soft warning: still running with no events. Do not terminate yet.
             if sessionStatus == .running {
-                Log.debug("Session timeout: no events for \(Int(Self.sessionTimeoutSeconds))s while still running")
-                lastErrorMessage = "No response from OpenCode for \(Int(Self.sessionTimeoutSeconds)) seconds. The process may be stalled. You can interrupt or wait."
-                statusBarController?.showError()
+                let warningSeconds = Int(Self.sessionWarningSeconds)
+                let message = "Still waiting for model response (\(warningSeconds)s). Request is still running."
+                Log.warning("Session warning: \(message)")
+                lastErrorMessage = message
+            }
+        }
+
+        sessionFailTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(Self.sessionFailSeconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+
+            // Hard timeout: terminate state machine if still running.
+            if sessionStatus == .running {
+                let failSeconds = Int(Self.sessionFailSeconds)
+                let sessionID = currentSession?.openCodeSessionId
+                let message = """
+                No response from OpenCode for \(failSeconds)s.
+                Request aborted. Check model/base URL/API key and retry.
+                """
+                Log.warning("Session hard-timeout: forcing error for session \(sessionID ?? "nil")")
+                handle(event: OpenCodeEvent(
+                    kind: .error,
+                    rawJson: "",
+                    text: message,
+                    sessionId: sessionID
+                ))
             }
         }
     }
@@ -216,7 +241,7 @@ extension AppState {
         case .call, .tool:
             // UI state (current session only)
             if isCurrentSession {
-                dismissReasoningAfterDelay()
+                clearReasoningOnStageTransition()
                 menuBarState = .executing
                 currentToolName = event.toolName ?? "Processing"
                 currentToolInput = event.toolInput
@@ -257,11 +282,18 @@ extension AppState {
             }
             // Regular tool — insert
             messageStore.insertEventIntoBuffer(event, buffer: &buffer)
+            // If tool has completed but assistant output hasn't started yet,
+            // switch back to "thinking" so UI doesn't look stalled.
+            if isCurrentSession, event.toolOutput != nil || event.diff != nil {
+                menuBarState = .reasoning
+                currentToolName = nil
+                currentToolInput = nil
+            }
 
         // ── Diff ───────────────────────────────────────────────
         case .diff:
             if isCurrentSession {
-                dismissReasoningAfterDelay()
+                clearReasoningOnStageTransition()
                 menuBarState = .executing
                 currentToolName = "Editing file"
             }
@@ -270,7 +302,7 @@ extension AppState {
         // ── Assistant text ─────────────────────────────────────
         case .assistant:
             if isCurrentSession {
-                dismissReasoningAfterDelay()
+                clearReasoningOnStageTransition()
                 menuBarState = .responding
                 currentToolName = nil
             }
@@ -278,8 +310,11 @@ extension AppState {
 
         // ── Finish ─────────────────────────────────────────────
         case .finish:
-            // Dedup: server may send both session.idle and session.status(idle)
-            if session.sessionStatus == .completed {
+            // Terminal-state guard:
+            // - OpenCode may emit `session.idle` after an error for the same session.
+            // - Once failed, the session must NOT transition to completed.
+            // - Also dedup repeated finish events.
+            if session.sessionStatus == .failed || session.sessionStatus == .completed {
                 logEvent(event, session: session)
                 return
             }
@@ -358,21 +393,23 @@ extension AppState {
     }
 
     private func resetEventState() {
-        sessionTimeoutTask?.cancel()
-        sessionTimeoutTask = nil
+        sessionWarningTask?.cancel()
+        sessionWarningTask = nil
+        sessionFailTask?.cancel()
+        sessionFailTask = nil
         reasoningDismissTask?.cancel()
         reasoningDismissTask = nil
         currentReasoningText = nil
     }
 
-    private func dismissReasoningAfterDelay() {
+    /// Clear reasoning only when we actually transition to a new stage
+    /// (tool execution or assistant response). This avoids timer-based gaps
+    /// where thinking disappears before the next event arrives.
+    private func clearReasoningOnStageTransition() {
         guard currentReasoningText != nil else { return }
         reasoningDismissTask?.cancel()
-        reasoningDismissTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(MotiveConstants.Timeouts.reasoningDismiss))
-            guard !Task.isCancelled else { return }
-            self?.currentReasoningText = nil
-        }
+        reasoningDismissTask = nil
+        currentReasoningText = nil
     }
 
     private func applyUsageUpdate(_ event: OpenCodeEvent, session: Session, isCurrentSession: Bool) {

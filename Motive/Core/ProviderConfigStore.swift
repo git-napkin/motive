@@ -24,9 +24,12 @@ final class ProviderConfigStore {
     // MARK: - Default Values
 
     /// Default base URL values that match the @AppStorage declarations.
-    /// Only ollama has a non-empty default; all others default to "".
     private static let defaultBaseURLs: [ConfigManager.Provider: String] = [
-        .ollama: "http://localhost:11434"
+        .ollama: "http://localhost:11434",
+        .lmstudio: "http://127.0.0.1:1234/v1",
+        .alibaba: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        .moonshotai: "https://api.moonshot.ai/v1",
+        .zhipuai: "https://open.bigmodel.cn/api/paas/v4",
     ]
 
     // MARK: - Base URL
