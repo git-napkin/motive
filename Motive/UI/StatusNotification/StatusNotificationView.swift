@@ -10,32 +10,32 @@ import SwiftUI
 enum StatusNotificationType {
     case success
     case error
-    
+
     var icon: String {
         switch self {
-        case .success: return "checkmark.circle.fill"
-        case .error: return "xmark.circle.fill"
+        case .success: "checkmark.circle.fill"
+        case .error: "xmark.circle.fill"
         }
     }
-    
+
     var color: Color {
         switch self {
-        case .success: return Color.Aurora.success
-        case .error: return Color.Aurora.error
+        case .success: Color.Aurora.success
+        case .error: Color.Aurora.error
         }
     }
-    
+
     var gradientColors: [Color] {
         switch self {
-        case .success: return [Color.Aurora.success, Color(hex: "059669")]
-        case .error: return [Color.Aurora.error, Color(hex: "DC2626")]
+        case .success: [Color.Aurora.success, Color(hex: "059669")]
+        case .error: [Color.Aurora.error, Color(hex: "DC2626")]
         }
     }
-    
+
     var title: String {
         switch self {
-        case .success: return L10n.Drawer.completed
-        case .error: return L10n.Drawer.failed
+        case .success: L10n.Drawer.completed
+        case .error: L10n.Drawer.failed
         }
     }
 }
@@ -43,12 +43,14 @@ enum StatusNotificationType {
 struct StatusNotificationView: View {
     let type: StatusNotificationType
     let onDismiss: () -> Void
-    
+
     @Environment(\.colorScheme) private var colorScheme
     @State private var showContent = false
-    
-    private var isDark: Bool { colorScheme == .dark }
-    
+
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     var body: some View {
         HStack(spacing: AuroraSpacing.space3) {
             // Icon with gradient background
@@ -62,7 +64,7 @@ struct StatusNotificationView: View {
                         ).opacity(0.15)
                     )
                     .frame(width: 28, height: 28)
-                
+
                 Image(systemName: type.icon)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(
@@ -73,7 +75,7 @@ struct StatusNotificationView: View {
                         )
                     )
             }
-            
+
             Text(type.title)
                 .font(.Aurora.bodySmall.weight(.medium))
                 .foregroundColor(Color.Aurora.textPrimary)
@@ -86,10 +88,10 @@ struct StatusNotificationView: View {
             ZStack {
                 // Blur effect
                 VisualEffectView(material: .hudWindow, blendingMode: .behindWindow, state: .active)
-                
+
                 // Base color
                 Color.Aurora.background.opacity(0.95)
-                
+
                 // Subtle gradient tint
                 if isDark {
                     LinearGradient(

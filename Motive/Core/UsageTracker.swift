@@ -101,7 +101,8 @@ final class UsageTracker {
 
     private func saveTokenUsageTotals(_ totals: [String: TokenUsageTotals]) {
         if let data = try? JSONEncoder().encode(totals),
-           let json = String(data: data, encoding: .utf8) {
+           let json = String(data: data, encoding: .utf8)
+        {
             setJSON(json)
         } else {
             setJSON("{}")

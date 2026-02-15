@@ -25,8 +25,8 @@ enum TokenUsageFormatter {
             let formatted = Double(value) / 1_000_000
             return String(format: "%.1fM", formatted)
         }
-        if value >= 1_000 {
-            let formatted = Double(value) / 1_000
+        if value >= 1000 {
+            let formatted = Double(value) / 1000
             return String(format: "%.1fk", formatted)
         }
         return "\(value)"

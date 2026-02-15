@@ -24,6 +24,9 @@ actor SSEClient {
     private var streamTask: Task<Void, Never>?
     private var isConnected = false
     private static let reconnectMaxDelay: TimeInterval = 30
+    /// Tracks message part type by partID so `message.part.delta` can be classified correctly.
+    /// OpenCode deltas only include `partID` + `field`, not the part `type`.
+    var partTypeByPartID: [String: String] = [:]
 
     let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.velvet.motive", category: "SSE")
 
@@ -130,16 +133,21 @@ actor SSEClient {
     }
 
     /// Whether the SSE stream is currently connected and receiving events.
-    var connected: Bool { isConnected }
+    var connected: Bool {
+        isConnected
+    }
 
     /// Whether the SSE event loop task is alive (may be in reconnect backoff).
-    var hasActiveStream: Bool { streamTask != nil && !streamTask!.isCancelled }
+    var hasActiveStream: Bool {
+        streamTask != nil && !streamTask!.isCancelled
+    }
 
     /// Disconnect from the SSE stream.
     func disconnect() {
         streamTask?.cancel()
         streamTask = nil
         isConnected = false
+        partTypeByPartID.removeAll()
     }
 
     // MARK: - Stream Consumption
@@ -190,7 +198,7 @@ actor SSEClient {
 
             lineBuffer += chunk
             while let newlineRange = lineBuffer.range(of: "\n") {
-                let line = String(lineBuffer[lineBuffer.startIndex..<newlineRange.lowerBound])
+                let line = String(lineBuffer[lineBuffer.startIndex ..< newlineRange.lowerBound])
                 lineBuffer = String(lineBuffer[newlineRange.upperBound...])
 
                 if line.hasPrefix("data: ") {
@@ -201,7 +209,7 @@ actor SSEClient {
                     dataBuffer = String(line.dropFirst(6))
                     eventCounter += 1
                     logger.info("📡 SSE[\(eventCounter)] RAW: \(dataBuffer, privacy: .public)")
-                } else if line.isEmpty && !dataBuffer.isEmpty {
+                } else if line.isEmpty, !dataBuffer.isEmpty {
                     flushEvent(dataBuffer, continuation: continuation)
                     dataBuffer = ""
                 }
@@ -253,7 +261,7 @@ actor SSEClient {
 
             lineBuffer += chunk
             while let newlineRange = lineBuffer.range(of: "\n") {
-                let line = String(lineBuffer[lineBuffer.startIndex..<newlineRange.lowerBound])
+                let line = String(lineBuffer[lineBuffer.startIndex ..< newlineRange.lowerBound])
                 lineBuffer = String(lineBuffer[newlineRange.upperBound...])
 
                 if line.hasPrefix("data: ") {
@@ -264,7 +272,7 @@ actor SSEClient {
                     dataBuffer = String(line.dropFirst(6))
                     eventCounter += 1
                     logger.info("📡 GLOBAL-SSE[\(eventCounter)] RAW: \(dataBuffer, privacy: .public)")
-                } else if line.isEmpty && !dataBuffer.isEmpty {
+                } else if line.isEmpty, !dataBuffer.isEmpty {
                     flushGlobalEvent(dataBuffer, continuation: continuation)
                     dataBuffer = ""
                 }
@@ -305,10 +313,10 @@ actor SSEClient {
 
         var errorDescription: String? {
             switch self {
-            case .badStatus(let code):
-                return "SSE endpoint returned HTTP \(code)"
+            case let .badStatus(code):
+                "SSE endpoint returned HTTP \(code)"
             case .noResponse:
-                return "SSE endpoint returned no HTTP response"
+                "SSE endpoint returned no HTTP response"
             }
         }
     }

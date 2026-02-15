@@ -9,15 +9,17 @@
 import SwiftUI
 
 struct CommandBarHistoriesView: View {
-    let sessions: [Session]  // Passed from parent
+    let sessions: [Session] // Passed from parent
     @Binding var selectedIndex: Int
     let onSelect: (Session) -> Void
-    let onRequestDelete: (Int) -> Void  // Request delete confirmation (don't delete directly)
-    
+    let onRequestDelete: (Int) -> Void // Request delete confirmation (don't delete directly)
+
     @Environment(\.colorScheme) private var colorScheme
-    
-    private var isDark: Bool { colorScheme == .dark }
-    
+
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if sessions.isEmpty {
@@ -28,9 +30,9 @@ struct CommandBarHistoriesView: View {
         }
         .frame(maxHeight: .infinity)
     }
-    
+
     // MARK: - Session List
-    
+
     private var sessionListView: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -56,20 +58,20 @@ struct CommandBarHistoriesView: View {
             }
         }
     }
-    
+
     // MARK: - Empty State
-    
+
     private var emptyStateView: some View {
         VStack(spacing: AuroraSpacing.space4) {
             Image(systemName: "clock")
                 .font(.system(size: 32, weight: .light))
                 .foregroundStyle(Color.Aurora.auroraGradient)
-            
+
             VStack(spacing: AuroraSpacing.space2) {
                 Text(L10n.CommandBar.noSessions)
                     .font(.Aurora.bodySmall.weight(.medium))
                     .foregroundColor(Color.Aurora.textPrimary)
-                
+
                 Text(L10n.CommandBar.noSessionsDesc)
                     .font(.Aurora.caption)
                     .foregroundColor(Color.Aurora.textMuted)
@@ -85,13 +87,15 @@ private struct HistoryListItem: View {
     let session: Session
     let isSelected: Bool
     let onSelect: () -> Void
-    let onRequestDelete: () -> Void  // Just request, don't show dialog here
-    
+    let onRequestDelete: () -> Void // Just request, don't show dialog here
+
     @State private var isHovering = false
     @Environment(\.colorScheme) private var colorScheme
-    
-    private var isDark: Bool { colorScheme == .dark }
-    
+
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: AuroraSpacing.space3) {
@@ -99,33 +103,33 @@ private struct HistoryListItem: View {
                 Circle()
                     .fill(statusColor)
                     .frame(width: 8, height: 8)
-                
+
                 // Content
                 VStack(alignment: .leading, spacing: AuroraSpacing.space1) {
                     Text(session.intent)
                         .font(.Aurora.bodySmall.weight(.medium))
                         .foregroundColor(Color.Aurora.textPrimary)
                         .lineLimit(1)
-                    
+
                     HStack(spacing: AuroraSpacing.space2) {
                         Text(timeAgo)
                             .font(.Aurora.caption)
                             .foregroundColor(Color.Aurora.textMuted)
-                        
-                        if session.logs.count > 0 {
+
+                        if !session.logs.isEmpty {
                             Text("•")
                                 .font(.Aurora.caption)
                                 .foregroundColor(Color.Aurora.textMuted)
-                            
+
                             Text("\(session.logs.count) events")
                                 .font(.Aurora.caption)
                                 .foregroundColor(Color.Aurora.textMuted)
                         }
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // Actions
                 HStack(spacing: AuroraSpacing.space2) {
                     if isHovering || isSelected {
@@ -141,7 +145,7 @@ private struct HistoryListItem: View {
                             }
                             .transition(.opacity)
                     }
-                    
+
                     if isSelected {
                         Image(systemName: "return")
                             .font(.system(size: 10, weight: .medium))
@@ -171,29 +175,29 @@ private struct HistoryListItem: View {
         .onHover { isHovering = $0 }
         .animation(.auroraFast, value: isHovering)
     }
-    
+
     private var statusColor: Color {
         switch session.status {
         case "running":
-            return Color.Aurora.accent
+            Color.Aurora.accent
         case "completed":
-            return Color.Aurora.accent  // Use accent for completed (monochrome theme)
+            Color.Aurora.accent // Use accent for completed (monochrome theme)
         case "failed":
-            return Color.Aurora.error
+            Color.Aurora.error
         default:
-            return Color.Aurora.textMuted
+            Color.Aurora.textMuted
         }
     }
-    
+
     private var timeAgo: String {
         let now = Date()
         let diff = now.timeIntervalSince(session.createdAt)
-        
+
         if diff < 60 { return L10n.Time.justNow }
         if diff < 3600 { return String(format: L10n.Time.minutesAgo, Int(diff / 60)) }
         if diff < 86400 { return String(format: L10n.Time.hoursAgo, Int(diff / 3600)) }
-        if diff < 604800 { return String(format: L10n.Time.daysAgo, Int(diff / 86400)) }
-        
+        if diff < 604_800 { return String(format: L10n.Time.daysAgo, Int(diff / 86400)) }
+
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         return formatter.string(from: session.createdAt)

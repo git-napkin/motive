@@ -201,9 +201,9 @@ struct AuroraActionPill: View {
 
         var gradientColors: [Color] {
             switch self {
-            case .primary: return [Color.Aurora.primary, Color.Aurora.primaryDark]
-            case .warning: return [Color.Aurora.warning, Color.Aurora.warning.opacity(0.9)]
-            case .error: return [Color.Aurora.error, Color.Aurora.error.opacity(0.9)]
+            case .primary: [Color.Aurora.primary, Color.Aurora.primaryDark]
+            case .warning: [Color.Aurora.warning, Color.Aurora.warning.opacity(0.9)]
+            case .error: [Color.Aurora.error, Color.Aurora.error.opacity(0.9)]
             }
         }
     }
@@ -282,7 +282,9 @@ struct AuroraShortcutBadge: View {
 struct InlineShortcutHint: View {
     let items: [(label: String, key: String)]
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         HStack(spacing: AuroraSpacing.space3) {

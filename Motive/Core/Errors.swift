@@ -17,34 +17,34 @@ enum BridgeError: Error, LocalizedError, Sendable {
     case sessionNotFound(id: String)
     case invalidResponse(message: String)
     case timeout
-    
+
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "OpenCode bridge is not configured"
-        case .processSpawnFailed(let underlying):
-            return "Failed to spawn OpenCode process: \(underlying.localizedDescription)"
-        case .sessionNotFound(let id):
-            return "Session not found: \(id)"
-        case .invalidResponse(let message):
-            return "Invalid response from OpenCode: \(message)"
+            "OpenCode bridge is not configured"
+        case let .processSpawnFailed(underlying):
+            "Failed to spawn OpenCode process: \(underlying.localizedDescription)"
+        case let .sessionNotFound(id):
+            "Session not found: \(id)"
+        case let .invalidResponse(message):
+            "Invalid response from OpenCode: \(message)"
         case .timeout:
-            return "OpenCode operation timed out"
+            "OpenCode operation timed out"
         }
     }
-    
+
     var recoverySuggestion: String? {
         switch self {
         case .notConfigured:
-            return "Please configure the OpenCode binary in Settings."
+            "Please configure the OpenCode binary in Settings."
         case .processSpawnFailed:
-            return "Check that the OpenCode binary is installed and accessible."
+            "Check that the OpenCode binary is installed and accessible."
         case .sessionNotFound:
-            return "The session may have been deleted. Try starting a new session."
+            "The session may have been deleted. Try starting a new session."
         case .invalidResponse:
-            return "Try restarting the agent."
+            "Try restarting the agent."
         case .timeout:
-            return "The operation took too long. Try again or check your network connection."
+            "The operation took too long. Try again or check your network connection."
         }
     }
 }
@@ -58,32 +58,32 @@ enum SessionError: Error, LocalizedError, Sendable {
     case saveFailed(underlying: Error)
     case loadFailed(underlying: Error)
     case contextNotAttached
-    
+
     var errorDescription: String? {
         switch self {
         case .invalidIntent:
-            return "Invalid session intent"
-        case .notFound(let id):
-            return "Session not found: \(id)"
-        case .saveFailed(let underlying):
-            return "Failed to save session: \(underlying.localizedDescription)"
-        case .loadFailed(let underlying):
-            return "Failed to load session: \(underlying.localizedDescription)"
+            "Invalid session intent"
+        case let .notFound(id):
+            "Session not found: \(id)"
+        case let .saveFailed(underlying):
+            "Failed to save session: \(underlying.localizedDescription)"
+        case let .loadFailed(underlying):
+            "Failed to load session: \(underlying.localizedDescription)"
         case .contextNotAttached:
-            return "Model context is not attached"
+            "Model context is not attached"
         }
     }
-    
+
     var recoverySuggestion: String? {
         switch self {
         case .invalidIntent:
-            return "Please enter a valid command or question."
+            "Please enter a valid command or question."
         case .notFound:
-            return "The session may have been deleted."
+            "The session may have been deleted."
         case .saveFailed, .loadFailed:
-            return "Try restarting the application."
+            "Try restarting the application."
         case .contextNotAttached:
-            return "The application is not fully initialized."
+            "The application is not fully initialized."
         }
     }
 }
@@ -96,30 +96,30 @@ enum SkillError: Error, LocalizedError, Sendable {
     case invalidFormat(reason: String)
     case installFailed(name: String, reason: String)
     case loadFailed(path: String, reason: String)
-    
+
     var errorDescription: String? {
         switch self {
-        case .notFound(let name):
-            return "Skill not found: \(name)"
-        case .invalidFormat(let reason):
-            return "Invalid skill format: \(reason)"
-        case .installFailed(let name, let reason):
-            return "Failed to install skill '\(name)': \(reason)"
-        case .loadFailed(let path, let reason):
-            return "Failed to load skill from \(path): \(reason)"
+        case let .notFound(name):
+            "Skill not found: \(name)"
+        case let .invalidFormat(reason):
+            "Invalid skill format: \(reason)"
+        case let .installFailed(name, reason):
+            "Failed to install skill '\(name)': \(reason)"
+        case let .loadFailed(path, reason):
+            "Failed to load skill from \(path): \(reason)"
         }
     }
-    
+
     var recoverySuggestion: String? {
         switch self {
         case .notFound:
-            return "Check the skill name and try again."
+            "Check the skill name and try again."
         case .invalidFormat:
-            return "Ensure the skill follows the correct SKILL.md format."
+            "Ensure the skill follows the correct SKILL.md format."
         case .installFailed:
-            return "Check your internet connection and try again."
+            "Check your internet connection and try again."
         case .loadFailed:
-            return "Verify the skill file exists and is readable."
+            "Verify the skill file exists and is readable."
         }
     }
 }
@@ -133,32 +133,32 @@ enum WorkspaceError: Error, LocalizedError, Sendable {
     case readFailed(path: String, reason: String)
     case writeFailed(path: String, reason: String)
     case migrationFailed(reason: String)
-    
+
     var errorDescription: String? {
         switch self {
-        case .directoryCreationFailed(let path, let reason):
-            return "Failed to create directory at \(path): \(reason)"
-        case .fileNotFound(let path):
-            return "File not found: \(path)"
-        case .readFailed(let path, let reason):
-            return "Failed to read \(path): \(reason)"
-        case .writeFailed(let path, let reason):
-            return "Failed to write \(path): \(reason)"
-        case .migrationFailed(let reason):
-            return "Workspace migration failed: \(reason)"
+        case let .directoryCreationFailed(path, reason):
+            "Failed to create directory at \(path): \(reason)"
+        case let .fileNotFound(path):
+            "File not found: \(path)"
+        case let .readFailed(path, reason):
+            "Failed to read \(path): \(reason)"
+        case let .writeFailed(path, reason):
+            "Failed to write \(path): \(reason)"
+        case let .migrationFailed(reason):
+            "Workspace migration failed: \(reason)"
         }
     }
-    
+
     var recoverySuggestion: String? {
         switch self {
         case .directoryCreationFailed:
-            return "Check that you have write permissions to the directory."
+            "Check that you have write permissions to the directory."
         case .fileNotFound:
-            return "The file may have been moved or deleted."
+            "The file may have been moved or deleted."
         case .readFailed, .writeFailed:
-            return "Check file permissions and available disk space."
+            "Check file permissions and available disk space."
         case .migrationFailed:
-            return "Try manually moving your files to ~/.motive/"
+            "Try manually moving your files to ~/.motive/"
         }
     }
 }
@@ -170,26 +170,26 @@ enum PermissionError: Error, LocalizedError, Sendable {
     case denied(operation: String, path: String)
     case timeout(operation: String)
     case serverError(message: String)
-    
+
     var errorDescription: String? {
         switch self {
-        case .denied(let operation, let path):
-            return "Permission denied for \(operation) on \(path)"
-        case .timeout(let operation):
-            return "Permission request timed out for \(operation)"
-        case .serverError(let message):
-            return "Permission server error: \(message)"
+        case let .denied(operation, path):
+            "Permission denied for \(operation) on \(path)"
+        case let .timeout(operation):
+            "Permission request timed out for \(operation)"
+        case let .serverError(message):
+            "Permission server error: \(message)"
         }
     }
-    
+
     var recoverySuggestion: String? {
         switch self {
         case .denied:
-            return "Grant the permission in the dialog or update your permission policy."
+            "Grant the permission in the dialog or update your permission policy."
         case .timeout:
-            return "Try the operation again."
+            "Try the operation again."
         case .serverError:
-            return "Restart the application and try again."
+            "Restart the application and try again."
         }
     }
 }

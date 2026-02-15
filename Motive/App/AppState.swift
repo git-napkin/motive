@@ -16,7 +16,7 @@ final class AppState: ObservableObject {
         case idle
         case reasoning
         case executing
-        case responding   // Model is outputting response text (not thinking)
+        case responding // Model is outputting response text (not thinking)
     }
 
     @Published var menuBarState: MenuBarState = .idle
@@ -30,10 +30,11 @@ final class AppState: ObservableObject {
         get { messageStore.messages }
         set { messageStore.messages = newValue }
     }
+
     @Published var sessionStatus: SessionStatus = .idle
     @Published var lastErrorMessage: String?
     @Published var currentToolName: String?
-    @Published var currentToolInput: String?  // Current tool's input (e.g., command, file path)
+    @Published var currentToolInput: String? // Current tool's input (e.g., command, file path)
     @Published var currentContextTokens: Int?
     /// OpenCode sessionId → messages for running sessions (persisted on completion)
     var runningSessionMessages: [String: [ConversationMessage]] = [:]
@@ -46,8 +47,8 @@ final class AppState: ObservableObject {
     @Published var currentReasoningText: String?
     /// Task to dismiss reasoning after a short delay
     var reasoningDismissTask: Task<Void, Never>?
-    @Published var commandBarResetTrigger: Int = 0  // Increment to trigger reset
-    @Published var sessionListRefreshTrigger: Int = 0  // Increment to refresh session list
+    @Published var commandBarResetTrigger: Int = 0 // Increment to trigger reset
+    @Published var sessionListRefreshTrigger: Int = 0 // Increment to refresh session list
 
     let configManager: ConfigManager
     let bridge: OpenCodeBridge
@@ -69,17 +70,20 @@ final class AppState: ObservableObject {
     var hasStarted = false
     private var seenUsageMessageIds = Set<String>()
 
-    // Native question/permission handler (extracted from AppState+Bridge)
-    lazy var nativePromptHandler: NativePromptHandler = NativePromptHandler(appState: self)
-    
-    /// UI-level session activity timeout
-    /// If sessionStatus stays .running with no events for this duration, show a warning
-    var sessionTimeoutTask: Task<Void, Never>?
-    static let sessionTimeoutSeconds: TimeInterval = MotiveConstants.Timeouts.sessionActivity
-    
+    /// Native question/permission handler (extracted from AppState+Bridge)
+    lazy var nativePromptHandler: NativePromptHandler = .init(appState: self)
+
+    /// UI-level session inactivity timers.
+    /// - warning task: user-facing soft warning, does not fail the run.
+    /// - fail task: hard timeout that emits an error and terminates running state.
+    var sessionWarningTask: Task<Void, Never>?
+    var sessionFailTask: Task<Void, Never>?
+    static let sessionWarningSeconds: TimeInterval = MotiveConstants.Timeouts.sessionActivityWarning
+    static let sessionFailSeconds: TimeInterval = MotiveConstants.Timeouts.sessionActivityFail
+
     /// Tracks the message ID for the current question/permission so we can update it with the user's response
     var pendingQuestionMessageId: UUID?
-    
+
     var cancellables = Set<AnyCancellable>()
 
     /// Set to `true` when `resumeSession` sends a new prompt.
@@ -100,13 +104,21 @@ final class AppState: ObservableObject {
     /// When true, the agent will auto-restart as soon as the current task finishes.
     @Published var pendingAgentRestart = false
     private var restartObserver: AnyCancellable?
-    
+
     /// Task for auto-promoting the next running session after the foreground task finishes.
     var autoPromoteTask: Task<Void, Never>?
 
-    var configManagerRef: ConfigManager { configManager }
-    var commandBarWindowRef: NSWindow? { commandBarController?.getWindow() }
-    var currentSessionRef: Session? { currentSession }
+    var configManagerRef: ConfigManager {
+        configManager
+    }
+
+    var commandBarWindowRef: NSWindow? {
+        commandBarController?.getWindow()
+    }
+
+    var currentSessionRef: Session? {
+        currentSession
+    }
 
     init(configManager: ConfigManager) {
         self.configManager = configManager
@@ -129,7 +141,7 @@ final class AppState: ObservableObject {
             }
         }
     }
-    
+
     /// Lightweight bridge reconfiguration (no server restart).
     /// Used when switching agents to update the Configuration for the next prompt.
     func reconfigureBridge() {
@@ -150,7 +162,7 @@ final class AppState: ObservableObject {
         pendingAgentRestart = false
         restartAgent()
     }
-    
+
     /// Observe menuBarState transitions to .idle and auto-restart when pending.
     private func installRestartObserver() {
         // Avoid duplicate observers
@@ -177,8 +189,10 @@ final class AppState: ObservableObject {
         currentReasoningText = nil
         reasoningDismissTask?.cancel()
         reasoningDismissTask = nil
-        sessionTimeoutTask?.cancel()
-        sessionTimeoutTask = nil
+        sessionWarningTask?.cancel()
+        sessionWarningTask = nil
+        sessionFailTask?.cancel()
+        sessionFailTask = nil
         autoPromoteTask?.cancel()
         autoPromoteTask = nil
         currentToolName = nil

@@ -41,7 +41,8 @@ enum OutputFormatter {
         guard let data = raw.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data),
               let pretty = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]),
-              let result = String(data: pretty, encoding: .utf8) else {
+              let result = String(data: pretty, encoding: .utf8)
+        else {
             return raw
         }
         return result
@@ -53,7 +54,8 @@ enum OutputFormatter {
 
         // JSON: starts with { or [
         if (trimmed.hasPrefix("{") && trimmed.hasSuffix("}"))
-            || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) {
+            || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
+        {
             // Validate it's actual JSON (not just text in braces)
             if trimmed.data(using: .utf8).flatMap({ try? JSONSerialization.jsonObject(with: $0) }) != nil {
                 return "json"
@@ -73,16 +75,17 @@ enum OutputFormatter {
 
         // Shell output: if the tool is Shell/Bash, hint as shell
         if let toolName = toolName?.lowercased(),
-           toolName == "shell" || toolName == "bash" || toolName == "command" {
+           toolName == "shell" || toolName == "bash" || toolName == "command"
+        {
             return "bash"
         }
 
         // XML/HTML: starts with < and contains >
-        if trimmed.hasPrefix("<") && trimmed.contains(">") {
+        if trimmed.hasPrefix("<"), trimmed.contains(">") {
             return "html"
         }
 
-        return nil  // Plain text — no syntax highlighting
+        return nil // Plain text — no syntax highlighting
     }
 
     /// Tool icon for legacy display

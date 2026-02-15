@@ -5,8 +5,8 @@
 //  Unit tests for MessageStore message insertion, merging, deduplication, and lifecycle management.
 //
 
-import XCTest
 @testable import Motive
+import XCTest
 
 @MainActor
 final class MessageStoreTests: XCTestCase {
@@ -337,7 +337,7 @@ final class MessageStoreTests: XCTestCase {
         XCTAssertFalse(store.isCompletionText(""))
         XCTAssertFalse(store.isCompletionText("Error occurred"))
         XCTAssertFalse(store.isCompletionText("still running"))
-        XCTAssertFalse(store.isCompletionText("complete"))  // not "completed"
+        XCTAssertFalse(store.isCompletionText("complete")) // not "completed"
     }
 
     // MARK: - 6. todoSummary

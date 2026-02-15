@@ -1,57 +1,57 @@
-import Testing
 import Foundation
 @testable import Motive
+import Testing
 
 struct OpenCodeAPIClientTests {
 
     // MARK: - PermissionReply Wire Values
 
-    @Test func permissionReplyOnceWireValue() async throws {
+    @Test func permissionReplyOnceWireValue() {
         let reply = OpenCodeAPIClient.PermissionReply.once
         #expect(reply.wireValue == "once")
     }
 
-    @Test func permissionReplyAlwaysWireValue() async throws {
+    @Test func permissionReplyAlwaysWireValue() {
         let reply = OpenCodeAPIClient.PermissionReply.always
         #expect(reply.wireValue == "always")
     }
 
-    @Test func permissionReplyRejectWireValue() async throws {
+    @Test func permissionReplyRejectWireValue() {
         let reply = OpenCodeAPIClient.PermissionReply.reject(nil)
         #expect(reply.wireValue == "reject")
     }
 
-    @Test func permissionReplyRejectWithMessageWireValue() async throws {
+    @Test func permissionReplyRejectWithMessageWireValue() {
         let reply = OpenCodeAPIClient.PermissionReply.reject("Not allowed")
         #expect(reply.wireValue == "reject")
     }
 
     // MARK: - API Error Descriptions
 
-    @Test func apiErrorNoBaseURLDescription() async throws {
+    @Test func apiErrorNoBaseURLDescription() {
         let error = OpenCodeAPIClient.APIError.noBaseURL
         #expect(error.errorDescription?.contains("no base URL") == true)
     }
 
-    @Test func apiErrorHTTPErrorDescription() async throws {
+    @Test func apiErrorHTTPErrorDescription() {
         let error = OpenCodeAPIClient.APIError.httpError(statusCode: 404, body: "Not Found")
         let desc = error.errorDescription ?? ""
         #expect(desc.contains("404"))
         #expect(desc.contains("Not Found"))
     }
 
-    @Test func apiErrorHTTPErrorWithoutBody() async throws {
+    @Test func apiErrorHTTPErrorWithoutBody() {
         let error = OpenCodeAPIClient.APIError.httpError(statusCode: 500, body: nil)
         let desc = error.errorDescription ?? ""
         #expect(desc.contains("500"))
     }
 
-    @Test func apiErrorDecodingDescription() async throws {
+    @Test func apiErrorDecodingDescription() {
         let error = OpenCodeAPIClient.APIError.decodingError("Missing field")
         #expect(error.errorDescription?.contains("Missing field") == true)
     }
 
-    @Test func apiErrorNetworkDescription() async throws {
+    @Test func apiErrorNetworkDescription() {
         let underlyingError = NSError(domain: "test", code: -1009, userInfo: [NSLocalizedDescriptionKey: "No internet"])
         let error = OpenCodeAPIClient.APIError.networkError(underlyingError)
         #expect(error.errorDescription?.contains("No internet") == true)
@@ -75,13 +75,13 @@ struct OpenCodeAPIClientTests {
 
     // MARK: - Session Info
 
-    @Test func sessionInfoStoresIdAndTitle() async throws {
+    @Test func sessionInfoStoresIdAndTitle() {
         let info = OpenCodeAPIClient.SessionInfo(id: "sess-123", title: "Test Session")
         #expect(info.id == "sess-123")
         #expect(info.title == "Test Session")
     }
 
-    @Test func sessionInfoWithNilTitle() async throws {
+    @Test func sessionInfoWithNilTitle() {
         let info = OpenCodeAPIClient.SessionInfo(id: "sess-456", title: nil)
         #expect(info.id == "sess-456")
         #expect(info.title == nil)

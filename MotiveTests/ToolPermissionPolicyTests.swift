@@ -1,6 +1,6 @@
-import Testing
 import Foundation
 @testable import Motive
+import Testing
 
 // MARK: - ToolPermission Type Tests
 
@@ -257,12 +257,12 @@ struct PermissionRulesGenerationTests {
         }
     }
 
-    // Helper to simulate the rule generation logic from ToolPermissionPolicy
+    /// Helper to simulate the rule generation logic from ToolPermissionPolicy
     private func generateRulesForConfig(
         _ config: ToolPermissionConfig,
         protectedRules: [(pattern: String, action: PermissionAction)]
     ) -> Any {
-        if config.rules.isEmpty && protectedRules.isEmpty {
+        if config.rules.isEmpty, protectedRules.isEmpty {
             return config.defaultAction.rawValue
         }
 

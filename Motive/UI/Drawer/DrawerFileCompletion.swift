@@ -15,11 +15,13 @@ struct DrawerFileCompletion: View {
     @Binding var selectedFileIndex: Int
     @Binding var atQueryRange: Range<String.Index>?
 
-    init(fileCompletion: FileCompletionManager,
-         inputText: Binding<String>,
-         showFileCompletion: Binding<Bool>,
-         selectedFileIndex: Binding<Int>,
-         atQueryRange: Binding<Range<String.Index>?>) {
+    init(
+        fileCompletion: FileCompletionManager,
+        inputText: Binding<String>,
+        showFileCompletion: Binding<Bool>,
+        selectedFileIndex: Binding<Int>,
+        atQueryRange: Binding<Range<String.Index>?>
+    ) {
         _fileCompletion = StateObject(wrappedValue: fileCompletion)
         _inputText = inputText
         _showFileCompletion = showFileCompletion
@@ -104,7 +106,7 @@ struct DrawerFileCompletion: View {
             // Return nil to exit completion mode (user typed "@path " with space)
             return nil
         } else {
-            let range = atIndex..<text.endIndex
+            let range = atIndex ..< text.endIndex
             let query = String(text[range])
             return (query, range)
         }
@@ -119,11 +121,10 @@ struct DrawerFileCompletion: View {
     func selectFileCompletion(_ item: FileCompletionItem) {
         guard let range = atQueryRange else { return }
 
-        let replacement: String
-        if item.isDirectory {
-            replacement = "@\(item.path)/"
+        let replacement = if item.isDirectory {
+            "@\(item.path)/"
         } else {
-            replacement = "@\(item.path) "
+            "@\(item.path) "
         }
 
         // Calculate the new @ range after replacement
@@ -137,7 +138,7 @@ struct DrawerFileCompletion: View {
         if item.isDirectory {
             // Update atQueryRange to point to the new @ token
             if let newEndIndex = inputText.index(startIndex, offsetBy: replacement.count, limitedBy: inputText.endIndex) {
-                atQueryRange = startIndex..<newEndIndex
+                atQueryRange = startIndex ..< newEndIndex
 
                 // Directly load items for the new directory
                 let baseDir = fileCompletion.getBaseDirectory(for: configManager)

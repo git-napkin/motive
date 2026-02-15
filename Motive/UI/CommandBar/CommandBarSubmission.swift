@@ -10,7 +10,7 @@ import SwiftUI
 extension CommandBarView {
     func handleSubmit() {
         // File completion takes priority
-        if showFileCompletion && !fileCompletion.items.isEmpty {
+        if showFileCompletion, !fileCompletion.items.isEmpty {
             if selectedFileIndex < fileCompletion.items.count {
                 selectFileCompletion(fileCompletion.items[selectedFileIndex])
             }
@@ -109,7 +109,7 @@ extension CommandBarView {
             selectedProjectIndex = 0
         case "history":
             inputText = ""
-            showFileCompletion = false  // Ensure file completion doesn't intercept keyboard
+            showFileCompletion = false // Ensure file completion doesn't intercept keyboard
             mode = .history(fromSession: wasFromSession)
             selectedHistoryIndex = 0
         case "settings":

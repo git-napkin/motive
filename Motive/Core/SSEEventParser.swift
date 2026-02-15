@@ -17,7 +17,8 @@ extension SSEClient {
     func parseSSEData(_ dataString: String) -> SSEEvent? {
         guard let data = dataString.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let eventType = json["type"] as? String else {
+              let eventType = json["type"] as? String
+        else {
             return nil
         }
 
@@ -32,6 +33,12 @@ extension SSEClient {
 
         case "message.part.updated":
             return parseMessagePartUpdated(properties)
+
+        case "message.part.delta":
+            return parseMessagePartDelta(properties)
+
+        case "message.part.removed":
+            return nil
 
         case "message.updated":
             return parseMessageUpdated(properties)
@@ -61,6 +68,12 @@ extension SSEClient {
         case "permission.replied":
             return nil
 
+        case "question.replied", "question.rejected":
+            return nil
+
+        case "session.compacted":
+            return nil
+
         default:
             logger.debug("Unhandled SSE event type: \(eventType)")
             return nil
@@ -76,7 +89,8 @@ extension SSEClient {
               JSONSerialization.isValidJSONObject(payload),
               let payloadData = try? JSONSerialization.data(withJSONObject: payload),
               let payloadString = String(data: payloadData, encoding: .utf8),
-              let event = parseSSEData(payloadString) else {
+              let event = parseSSEData(payloadString)
+        else {
             return nil
         }
         let directory = json["directory"] as? String
@@ -87,6 +101,33 @@ extension SSEClient {
 // MARK: - Event Parsers
 
 extension SSEClient {
+
+    func parseMessagePartDelta(_ properties: [String: Any]) -> SSEEvent? {
+        let sessionID = properties["sessionID"] as? String ?? ""
+        let messageID = properties["messageID"] as? String ?? ""
+        let partID = properties["partID"] as? String ?? ""
+        let field = (properties["field"] as? String ?? "").lowercased()
+        let delta = properties["delta"] as? String ?? ""
+
+        guard !delta.isEmpty else { return nil }
+        let inferredPartType = partTypeByPartID[partID]?.lowercased()
+
+        switch (field, inferredPartType) {
+        case ("reasoning", _), ("text", "reasoning"):
+            return .reasoningDelta(ReasoningDeltaInfo(
+                sessionID: sessionID,
+                delta: delta
+            ))
+        case ("text", _):
+            return .textDelta(TextDeltaInfo(
+                sessionID: sessionID,
+                messageID: messageID,
+                delta: delta
+            ))
+        default:
+            return nil
+        }
+    }
 
     func parseMessagePartUpdated(_ properties: [String: Any]) -> SSEEvent? {
         let part = properties["part"] as? [String: Any] ?? properties
@@ -101,6 +142,13 @@ extension SSEClient {
             ?? properties["messageID"] as? String
             ?? ""
         let partType = part["type"] as? String ?? ""
+        let partID = part["id"] as? String
+            ?? properties["partID"] as? String
+            ?? ""
+
+        if !partID.isEmpty, !partType.isEmpty {
+            partTypeByPartID[partID] = partType
+        }
 
         logger.debug("parseMessagePartUpdated: partType=\(partType) hasDelta=\(delta != nil) deltaLen=\(delta?.count ?? 0) sessionID=\(sessionID.prefix(8))")
 
@@ -168,7 +216,8 @@ extension SSEClient {
         // Usage update emitted in message.info (tokens/cost/model).
         if let info,
            let usage = parseTokenUsage(from: info),
-           usage.total > 0 {
+           usage.total > 0
+        {
             let model = parseModelName(from: info) ?? "unknown"
             let cost = parseDouble(from: info["cost"]) ?? 0
             let messageID = parseString(from: info, keys: ["id", "messageID", "messageId"])
@@ -204,7 +253,8 @@ extension SSEClient {
                 return s
             }
             if let modelDict = metadata["model"] as? [String: Any],
-               let mid = modelDict["modelID"] as? String ?? modelDict["modelId"] as? String {
+               let mid = modelDict["modelID"] as? String ?? modelDict["modelId"] as? String
+            {
                 let pid = modelDict["providerID"] as? String ?? modelDict["providerId"] as? String
                 if let pid, !pid.isEmpty {
                     return "\(pid)/\(mid)"
@@ -214,7 +264,7 @@ extension SSEClient {
         }
         return nil
     }
-// PLACEHOLDER_PARSERS_CONTINUE
+    // PLACEHOLDER_PARSERS_CONTINUE
 }
 
 // MARK: - Tool & Session Parsers
@@ -227,17 +277,16 @@ extension SSEClient {
         let status = state["status"] as? String ?? ""
         let toolCallID = state["id"] as? String ?? part["id"] as? String
 
-        let inputDict: [String: Any]?
-        if let dict = state["input"] as? [String: Any] {
-            inputDict = dict
+        let inputDict: [String: Any]? = if let dict = state["input"] as? [String: Any] {
+            dict
         } else if let str = state["input"] as? String, !str.isEmpty {
-            inputDict = ["_rawInput": str]
+            ["_rawInput": str]
         } else if let dict = part["input"] as? [String: Any] {
-            inputDict = dict
+            dict
         } else if let str = part["input"] as? String, !str.isEmpty {
-            inputDict = ["_rawInput": str]
+            ["_rawInput": str]
         } else {
-            inputDict = nil
+            nil
         }
 
         switch status {
@@ -295,6 +344,17 @@ extension SSEClient {
         let sessionID = properties["sessionID"] as? String ?? ""
         let status = properties["status"] as? [String: Any] ?? [:]
         let statusType = status["type"] as? String ?? ""
+        let attempt = parseInt(from: status["attempt"])
+        let message = parseString(from: status, keys: ["message", "error"])
+        let nextRetryUnixMS: Int64? = if let intValue = parseInt(from: status["next"]) {
+            Int64(intValue)
+        } else if let number = status["next"] as? NSNumber {
+            number.int64Value
+        } else if let string = status["next"] as? String, let int64 = Int64(string) {
+            int64
+        } else {
+            nil
+        }
 
         if statusType == "idle" {
             return .sessionIdle(sessionID: sessionID)
@@ -302,7 +362,10 @@ extension SSEClient {
 
         return .sessionStatus(SessionStatusInfo(
             sessionID: sessionID,
-            status: statusType
+            status: statusType,
+            attempt: attempt,
+            message: message,
+            nextRetryUnixMS: nextRetryUnixMS
         ))
     }
 
@@ -314,7 +377,8 @@ extension SSEClient {
             errorMessage = errorStr
         } else if let errorObj = properties["error"] as? [String: Any] {
             if let data = errorObj["data"] as? [String: Any],
-               let message = data["message"] as? String {
+               let message = data["message"] as? String
+            {
                 let name = errorObj["name"] as? String ?? "Error"
                 let statusCode = data["statusCode"] as? Int
                 if let statusCode {
@@ -451,30 +515,30 @@ extension SSEClient {
     func parseInt(from value: Any?) -> Int? {
         switch value {
         case let int as Int:
-            return int
+            int
         case let double as Double:
-            return Int(double)
+            Int(double)
         case let number as NSNumber:
-            return number.intValue
+            number.intValue
         case let string as String:
-            return Int(string)
+            Int(string)
         default:
-            return nil
+            nil
         }
     }
 
     func parseDouble(from value: Any?) -> Double? {
         switch value {
         case let double as Double:
-            return double
+            double
         case let int as Int:
-            return Double(int)
+            Double(int)
         case let number as NSNumber:
-            return number.doubleValue
+            number.doubleValue
         case let string as String:
-            return Double(string)
+            Double(string)
         default:
-            return nil
+            nil
         }
     }
 
@@ -519,10 +583,11 @@ extension SSEClient {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
                 continue
             }
-            let nsRange = NSRange(question.startIndex..<question.endIndex, in: question)
+            let nsRange = NSRange(question.startIndex ..< question.endIndex, in: question)
             guard let match = regex.firstMatch(in: question, options: [], range: nsRange),
                   match.numberOfRanges > 1,
-                  let range = Range(match.range(at: 1), in: question) else {
+                  let range = Range(match.range(at: 1), in: question)
+            else {
                 continue
             }
             let path = question[range].trimmingCharacters(in: .whitespacesAndNewlines)

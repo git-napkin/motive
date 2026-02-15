@@ -21,7 +21,7 @@ struct SessionStatusBadge: View {
             statusIcon
                 .font(.system(size: 10, weight: .bold))
 
-            if status == .running && isThinking {
+            if status == .running, isThinking {
                 ShimmerText(text: statusText)
             } else {
                 Text(statusText)
@@ -56,25 +56,25 @@ struct SessionStatusBadge: View {
     private var statusText: String {
         switch status {
         case .idle:
-            return L10n.StatusBar.idle
+            L10n.StatusBar.idle
         case .running:
-            return currentTool?.simplifiedToolName ?? L10n.Drawer.running
+            currentTool?.simplifiedToolName ?? L10n.Drawer.running
         case .completed:
-            return L10n.Drawer.completed
+            L10n.Drawer.completed
         case .failed:
-            return L10n.Drawer.failed
+            L10n.Drawer.failed
         case .interrupted:
-            return L10n.Drawer.interrupted
+            L10n.Drawer.interrupted
         }
     }
 
     private var foregroundColor: Color {
         switch status {
-        case .idle: return Color.Aurora.textMuted
-        case .running: return Color.Aurora.primary
-        case .completed: return Color.Aurora.success
-        case .failed: return Color.Aurora.error
-        case .interrupted: return Color.Aurora.warning
+        case .idle: Color.Aurora.textMuted
+        case .running: Color.Aurora.primary
+        case .completed: Color.Aurora.success
+        case .failed: Color.Aurora.error
+        case .interrupted: Color.Aurora.warning
         }
     }
 
@@ -154,9 +154,9 @@ struct AgentModeToggle: View {
 
     private func iconForMode(_ value: String) -> String {
         switch value {
-        case "plan": return "checklist"
-        case "agent": return "sparkle"
-        default: return "circle.hexagongrid.fill"
+        case "plan": "checklist"
+        case "agent": "sparkle"
+        default: "circle.hexagongrid.fill"
         }
     }
 

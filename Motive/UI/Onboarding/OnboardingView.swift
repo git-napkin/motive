@@ -15,7 +15,9 @@ struct OnboardingView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var currentStep: OnboardingStep = .welcome
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     enum OnboardingStep: Int, CaseIterable {
         case welcome
@@ -56,7 +58,7 @@ struct OnboardingView: View {
 
             VStack(spacing: 0) {
                 // Progress indicator
-                if currentStep != .welcome && currentStep != .complete {
+                if currentStep != .welcome, currentStep != .complete {
                     AuroraOnboardingProgress(currentStep: currentStep)
                         .padding(.top, AuroraSpacing.space5)
                         .padding(.bottom, AuroraSpacing.space3)
@@ -124,11 +126,7 @@ extension Notification.Name {
 // MARK: - Aurora Onboarding Settings Row
 
 struct OnboardingSettingsRow<Content: View>: View {
-    let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
+    @ViewBuilder let content: Content
 
     var body: some View {
         content

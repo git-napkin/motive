@@ -16,7 +16,9 @@ struct DrawerChatInput: View {
     let onTextChange: (String) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         let isRunning = appState.sessionStatus == .running
@@ -62,17 +64,21 @@ struct DrawerChatInput: View {
 
             HStack(spacing: AuroraSpacing.space3) {
                 HStack(spacing: AuroraSpacing.space2) {
-                    TextField("", text: $inputText, prompt: Text(L10n.Drawer.messagePlaceholder)
-                        .foregroundColor(Color.Aurora.textMuted))
-                        .textFieldStyle(.plain)
-                        .font(.Aurora.body)
-                        .foregroundColor(Color.Aurora.textPrimary)
-                        .focused(isInputFocused)
-                        .onSubmit(onSubmit)
-                        .disabled(isRunning)
-                        .onChange(of: inputText) { _, newValue in
-                            onTextChange(newValue)
-                        }
+                    TextField(
+                        "",
+                        text: $inputText,
+                        prompt: Text(L10n.Drawer.messagePlaceholder)
+                            .foregroundColor(Color.Aurora.textMuted)
+                    )
+                    .textFieldStyle(.plain)
+                    .font(.Aurora.body)
+                    .foregroundColor(Color.Aurora.textPrimary)
+                    .focused(isInputFocused)
+                    .onSubmit(onSubmit)
+                    .disabled(isRunning)
+                    .onChange(of: inputText) { _, newValue in
+                        onTextChange(newValue)
+                    }
 
                     if isRunning {
                         // Stop button when running

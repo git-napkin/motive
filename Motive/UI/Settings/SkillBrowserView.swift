@@ -38,7 +38,7 @@ struct SkillBrowserView: View {
         let query = searchText.lowercased()
         return skills.filter {
             $0.name.lowercased().contains(query) ||
-            $0.description.lowercased().contains(query)
+                $0.description.lowercased().contains(query)
         }
     }
 

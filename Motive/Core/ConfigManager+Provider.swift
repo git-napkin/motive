@@ -9,7 +9,7 @@ import Foundation
 
 extension ConfigManager {
     // MARK: - Per-Provider Configuration Accessors
-    
+
     /// Base URL for current provider (stored in Keychain per-provider)
     var baseURL: String {
         get {
@@ -38,7 +38,7 @@ extension ConfigManager {
         get { providerConfigStore.modelName(for: provider) }
         set { providerConfigStore.setModelName(newValue, for: provider) }
     }
-    
+
     /// API Key for current provider (stored in Keychain per-provider)
     var apiKey: String {
         get {
@@ -71,53 +71,60 @@ extension ConfigManager {
         // Fall back to full check (will trigger Keychain if needed)
         return !apiKey.isEmpty
     }
-    
+
     /// Check if current provider is properly configured
     var isProviderConfigured: Bool {
         switch provider {
         case .ollama:
-            return !baseURL.isEmpty
-        case .openaiCompatible:
-            // OpenAI-compatible requires both base URL and API key
-            return hasAPIKey && !baseURL.isEmpty
+            !baseURL.isEmpty
+        case .lmstudio:
+            // LM Studio only needs local base URL
+            !baseURL.isEmpty
         default:
-            return hasAPIKey
+            hasAPIKey
         }
     }
-    
+
     /// Get configuration error message for current provider
     var providerConfigurationError: String? {
+        if let urlError = validateBaseURLFormat() {
+            return urlError
+        }
+
         switch provider {
         case .ollama:
             if baseURL.isEmpty { return "Ollama Base URL not configured" }
-        case .openaiCompatible:
-            if baseURL.isEmpty { return "Base URL not configured" }
-            if apiKey.isEmpty { return "API Key not configured" }
+        case .lmstudio:
+            if baseURL.isEmpty { return "LM Studio Base URL not configured" }
         default:
-            if provider.requiresAPIKey && apiKey.isEmpty {
+            if provider.requiresAPIKey, apiKey.isEmpty {
                 return "\(provider.displayName) API Key not configured"
             }
         }
         return nil
     }
-    
-    /// Get the model string in format "provider/model" for OpenCode CLI
+
+    /// Get user-specified model override for OpenCode.
+    /// - Returns: Raw user input if provided; otherwise `nil` so OpenCode can choose defaults.
     func getModelString() -> String? {
         let modelValue = modelName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let providerPrefix = provider.openCodeProviderName
-        let defaultModel = provider.defaultModel
-        
-        // If model name is provided, use it
-        if !modelValue.isEmpty {
-            // If model already has provider prefix, use as-is
-            if modelValue.contains("/") {
-                return modelValue
-            }
-            // Otherwise add provider prefix
-            return "\(providerPrefix)/\(modelValue)"
+        guard !modelValue.isEmpty else { return nil }
+        return modelValue
+    }
+
+    /// Validate only URL syntax; never rewrite user input.
+    private func validateBaseURLFormat() -> String? {
+        let raw = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return nil }
+
+        guard let components = URLComponents(string: raw),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              components.host != nil
+        else {
+            return "Invalid Base URL format. Use a full URL like https://api.example.com/v1"
         }
-        
-        // Use default model for provider
-        return "\(providerPrefix)/\(defaultModel)"
+
+        return nil
     }
 }

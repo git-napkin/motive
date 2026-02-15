@@ -12,13 +12,13 @@ extension AppState {
     var isCommandBarVisible: Bool {
         commandBarController?.isVisible ?? false
     }
-    
+
     func showCommandBar() {
         guard let commandBarController else {
             Log.debug("commandBarController is nil!")
             return
         }
-        
+
         if !commandBarController.isVisible {
             // Pre-compute the correct window height BEFORE showing.
             // Without this, the window briefly shows at the stale height
@@ -26,29 +26,29 @@ extension AppState {
             // SwiftUI's onChange(commandBarResetTrigger) fires AFTER show().
             let targetHeight = expectedCommandBarHeight()
             commandBarController.updateHeight(to: targetHeight, animated: false)
-            
+
             // Trigger recenterAndFocus() which syncs mode and resets stale state
             commandBarResetTrigger += 1
         }
-        
+
         commandBarController.show()
     }
-    
+
     /// Pre-compute the expected command bar height based on current session state.
     /// Mirrors the mode-selection logic in CommandBarView.recenterAndFocus().
     private func expectedCommandBarHeight() -> CGFloat {
         switch sessionStatus {
         case .running:
-            return CommandBarWindowController.heights["running"] ?? 160
+            CommandBarWindowController.heights["running"] ?? 160
         case .completed:
-            return CommandBarWindowController.heights["completed"] ?? 160
+            CommandBarWindowController.heights["completed"] ?? 160
         case .failed:
-            return CommandBarWindowController.heights["error"] ?? 160
+            CommandBarWindowController.heights["error"] ?? 160
         case .idle, .interrupted:
-            if currentSessionRef != nil && !messages.isEmpty {
-                return CommandBarWindowController.heights["completed"] ?? 160
+            if currentSessionRef != nil, !messages.isEmpty {
+                CommandBarWindowController.heights["completed"] ?? 160
             } else {
-                return CommandBarWindowController.heights["idle"] ?? 100
+                CommandBarWindowController.heights["idle"] ?? 100
             }
         }
     }

@@ -5,8 +5,8 @@
 //  Skill detail panel view
 //
 
-import SwiftUI
 import MarkdownUI
+import SwiftUI
 
 // MARK: - Skill Detail
 
@@ -73,7 +73,7 @@ struct SkillDetail: View {
                 }
 
                 // Install options
-                if !status.installOptions.isEmpty && !status.missing.bins.isEmpty {
+                if !status.installOptions.isEmpty, !status.missing.bins.isEmpty {
                     installSection
                 }
 
@@ -175,7 +175,6 @@ struct SkillDetail: View {
         )
     }
 
-    @ViewBuilder
     private func apiKeySection(envName: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -183,7 +182,7 @@ struct SkillDetail: View {
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(Color.Aurora.textMuted)
 
-                if hasApiKey && !isEditingKey {
+                if hasApiKey, !isEditingKey {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 10))
                         .foregroundColor(Color.Aurora.success)
@@ -351,7 +350,7 @@ struct SkillDetail: View {
                     .toggleStyle(.switch)
                     .tint(Color.Aurora.primary)
                     .controlSize(.small)
-                    .disabled(!isReady)  // Can't enable blocked skills
+                    .disabled(!isReady) // Can't enable blocked skills
                 }
             }
 
@@ -405,12 +404,12 @@ struct SkillDetail: View {
 
     private func iconName(for kind: InstallKind) -> String {
         switch kind {
-        case .brew: return "cup.and.saucer.fill"
-        case .node: return "shippingbox.fill"
-        case .go: return "chevron.left.forwardslash.chevron.right"
-        case .uv: return "puzzlepiece.fill"
-        case .apt: return "square.and.arrow.down.fill"
-        case .download: return "arrow.down.circle.fill"
+        case .brew: "cup.and.saucer.fill"
+        case .node: "shippingbox.fill"
+        case .go: "chevron.left.forwardslash.chevron.right"
+        case .uv: "puzzlepiece.fill"
+        case .apt: "square.and.arrow.down.fill"
+        case .download: "arrow.down.circle.fill"
         }
     }
 }

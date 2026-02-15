@@ -5,14 +5,16 @@ extension ConfigManager {
     var skillsConfig: SkillsConfig {
         get {
             guard let data = skillsConfigJSON.data(using: .utf8),
-                  let config = try? JSONDecoder().decode(SkillsConfig.self, from: data) else {
+                  let config = try? JSONDecoder().decode(SkillsConfig.self, from: data)
+            else {
                 return SkillsConfig()
             }
             return config
         }
         set {
             if let data = try? JSONEncoder().encode(newValue),
-               let json = String(data: data, encoding: .utf8) {
+               let json = String(data: data, encoding: .utf8)
+            {
                 skillsConfigJSON = json
             }
         }

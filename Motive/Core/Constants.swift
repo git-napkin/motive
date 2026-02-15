@@ -11,8 +11,12 @@ nonisolated enum MotiveConstants: Sendable {
         static let apiRequest: TimeInterval = 30
         /// API resource timeout (seconds)
         static let apiResource: TimeInterval = 300
-        /// Session activity timeout before showing warning (seconds)
-        static let sessionActivity: TimeInterval = 120
+        /// Session inactivity soft warning threshold (seconds).
+        /// Used to inform users that the model is still processing.
+        static let sessionActivityWarning: TimeInterval = 30
+        /// Session inactivity hard failure threshold (seconds).
+        /// If no events arrive before this timeout, terminate the run.
+        static let sessionActivityFail: TimeInterval = 180
         /// Delay before dismissing reasoning bubble (seconds)
         static let reasoningDismiss: TimeInterval = 2
         /// Server port detection timeout (seconds)
@@ -25,10 +29,12 @@ nonisolated enum MotiveConstants: Sendable {
         /// Server health check interval (seconds)
         static let serverHealthCheck: TimeInterval = 0.5
     }
+
     nonisolated enum SSE: Sendable {
         /// Maximum reconnection backoff delay (seconds)
         static let reconnectMaxDelay: TimeInterval = 30
     }
+
     nonisolated enum Limits: Sendable {
         /// Maximum number of recent projects to keep
         static let maxRecentProjects = 10

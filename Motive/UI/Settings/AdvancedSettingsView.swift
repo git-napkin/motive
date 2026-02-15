@@ -11,14 +11,13 @@ import UniformTypeIdentifiers
 struct AdvancedSettingsView: View {
     @EnvironmentObject private var configManager: ConfigManager
     @EnvironmentObject private var appState: AppState
-    
+
     @State private var showFileImporter = false
     @State private var isImporting = false
     @State private var importError: String?
     @State private var browserAgentAPIKeyInput: String = ""
     @State private var showBrowserAgentAPIKey: Bool = false
     @State private var browserAgentBaseUrlInput: String = ""
-    
 
     var body: some View {
         ScrollView {
@@ -31,7 +30,7 @@ struct AdvancedSettingsView: View {
                             binaryStatusText
                         }
                     }
-                    
+
                     if !configManager.openCodeBinarySourcePath.isEmpty {
                         SettingRow(L10n.Settings.sourcePath) {
                             Text(configManager.openCodeBinarySourcePath)
@@ -42,7 +41,7 @@ struct AdvancedSettingsView: View {
                                 .frame(maxWidth: 200, alignment: .trailing)
                         }
                     }
-                    
+
                     SettingRow(L10n.Settings.actions, showDivider: false) {
                         HStack(spacing: 10) {
                             Button {
@@ -64,7 +63,7 @@ struct AdvancedSettingsView: View {
                             .buttonStyle(.borderedProminent)
                             .tint(Color.Aurora.primary)
                             .disabled(isImporting)
-                            
+
                             Button {
                                 autoDetectAndImport()
                             } label: {
@@ -80,20 +79,20 @@ struct AdvancedSettingsView: View {
                         }
                     }
                 }
-                
+
                 // Import Error
                 if let error = importError {
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 12))
                             .foregroundColor(Color.Aurora.error)
-                        
+
                         Text(error)
                             .font(.system(size: 12))
                             .foregroundColor(Color.Aurora.error)
-                        
+
                         Spacer()
-                        
+
                         Button {
                             importError = nil
                         } label: {
@@ -109,7 +108,7 @@ struct AdvancedSettingsView: View {
                             .fill(Color.Aurora.error.opacity(0.1))
                     )
                 }
-                
+
                 // Browser Automation Section
                 CollapsibleSection(L10n.Settings.browserTitle, icon: "globe") {
                     SettingRow(L10n.Settings.browserEnable, description: L10n.Settings.browserEnableDesc) {
@@ -122,7 +121,7 @@ struct AdvancedSettingsView: View {
                                 appState.restartAgent()
                             }
                     }
-                    
+
                     if configManager.browserUseEnabled {
                         SettingRow(L10n.Settings.browserShowWindow, description: L10n.Settings.browserShowWindowDesc) {
                             Toggle("", isOn: $configManager.browserUseHeadedMode)
@@ -134,7 +133,7 @@ struct AdvancedSettingsView: View {
                                     appState.restartAgent()
                                 }
                         }
-                        
+
                         SettingRow(L10n.Settings.browserAgentProvider, description: L10n.Settings.browserAgentProviderDesc) {
                             Picker("", selection: Binding(
                                 get: { configManager.browserAgentProvider },
@@ -155,7 +154,7 @@ struct AdvancedSettingsView: View {
                             .frame(width: 180)
                             .controlSize(.small)
                         }
-                        
+
                         SettingRow(configManager.browserAgentProvider.envKeyName, description: L10n.Settings.browserApiKeyDesc) {
                             // API Key field with eye toggle inside
                             ZStack(alignment: .trailing) {
@@ -194,7 +193,7 @@ struct AdvancedSettingsView: View {
                             .frame(width: 180)
                             .settingsInputField(cornerRadius: 6)
                         }
-                        
+
                         if configManager.browserAgentProvider.supportsBaseUrl {
                             SettingRow(L10n.Settings.browserBaseUrl, description: L10n.Settings.browserBaseUrlDesc) {
                                 TextField("https://api.example.com", text: $browserAgentBaseUrlInput)
@@ -212,7 +211,7 @@ struct AdvancedSettingsView: View {
                                     }
                             }
                         }
-                        
+
                         SettingRow(L10n.Settings.browserStatus, showDivider: false) {
                             HStack(spacing: 8) {
                                 browserUseStatusIcon(configManager.browserUseStatus)
@@ -223,7 +222,7 @@ struct AdvancedSettingsView: View {
                         }
                     }
                 }
-                
+
                 // Debug Section
                 CollapsibleSection(L10n.Settings.diagnostics, icon: "ladybug.fill") {
                     SettingRow(L10n.Settings.debugMode, description: L10n.Settings.debugModeDesc, showDivider: false) {
@@ -263,7 +262,7 @@ struct AdvancedSettingsView: View {
             allowedContentTypes: [.unixExecutable, .item],
             allowsMultipleSelection: false
         ) { result in
-            if case .success(let urls) = result, let url = urls.first {
+            if case let .success(urls) = result, let url = urls.first {
                 importBinary(from: url)
             }
         }
@@ -274,9 +273,9 @@ struct AdvancedSettingsView: View {
             syncBrowserAgentConfig()
         }
     }
-    
+
     // MARK: - Binary Status
-    
+
     private var binaryStatusText: some View {
         Group {
             switch configManager.binaryStatus {
@@ -284,20 +283,20 @@ struct AdvancedSettingsView: View {
                 Text(L10n.Settings.notConfigured)
                     .font(.system(size: 12))
                     .foregroundColor(Color.Aurora.warning)
-            case .ready(let path):
+            case let .ready(path):
                 Text(path)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(Color.Aurora.textMuted)
                     .lineLimit(1)
                     .truncationMode(.middle)
-            case .error(let error):
+            case let .error(error):
                 Text(error)
                     .font(.system(size: 12))
                     .foregroundColor(Color.Aurora.error)
             }
         }
     }
-    
+
     private var binaryStatusIcon: some View {
         Group {
             switch configManager.binaryStatus {
@@ -316,20 +315,20 @@ struct AdvancedSettingsView: View {
             }
         }
     }
-    
+
     // MARK: - Browser Automation Status
-    
+
     private func browserUseStatusDescription(_ status: ConfigManager.BrowserUseStatus) -> String {
         switch status {
         case .ready:
-            return L10n.Settings.browserStatusReady
+            L10n.Settings.browserStatusReady
         case .binaryNotFound:
-            return L10n.Settings.browserStatusNotFound
+            L10n.Settings.browserStatusNotFound
         case .disabled:
-            return L10n.Settings.browserStatusDisabled
+            L10n.Settings.browserStatusDisabled
         }
     }
-    
+
     @ViewBuilder
     private func browserUseStatusIcon(_ status: ConfigManager.BrowserUseStatus) -> some View {
         switch status {
@@ -347,13 +346,13 @@ struct AdvancedSettingsView: View {
                 .foregroundColor(Color.Aurora.textMuted)
         }
     }
-    
+
     // MARK: - Actions
-    
+
     private func importBinary(from url: URL) {
         isImporting = true
         importError = nil
-        
+
         Task {
             do {
                 try await configManager.importBinary(from: url)
@@ -364,11 +363,11 @@ struct AdvancedSettingsView: View {
             isImporting = false
         }
     }
-    
+
     private func autoDetectAndImport() {
         isImporting = true
         importError = nil
-        
+
         Task {
             let result = await configManager.getSignedBinaryURL()
             if let error = result.error {
@@ -379,7 +378,7 @@ struct AdvancedSettingsView: View {
             isImporting = false
         }
     }
-    
+
     /// Sync browser agent API configuration to BrowserUseBridge
     private func syncBrowserAgentConfig() {
         BrowserUseBridge.shared.configureAgentAPIKey(

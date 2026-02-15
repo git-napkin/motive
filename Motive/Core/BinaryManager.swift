@@ -234,7 +234,8 @@ final class BinaryManager {
         let fileManager = FileManager.default
 
         if let signedPath = signedBinaryPath, fileManager.fileExists(atPath: signedPath.path),
-           Self.isValidBinary(at: signedPath) {
+           Self.isValidBinary(at: signedPath)
+        {
             return (signedPath, nil)
         }
 
@@ -289,7 +290,8 @@ final class BinaryManager {
 
     private func resolveBundledOpenCodeURL(fileManager: FileManager) -> URL? {
         if let resourceURL = Bundle.main.url(forResource: "opencode", withExtension: nil),
-           fileManager.fileExists(atPath: resourceURL.path) {
+           fileManager.fileExists(atPath: resourceURL.path)
+        {
             return resourceURL
         }
         let contentsURL = Bundle.main.bundleURL.appendingPathComponent("Contents/opencode")
@@ -302,7 +304,8 @@ final class BinaryManager {
     /// Check if a file is a valid opencode binary (not a shell script stub or corrupted file)
     private static func isValidBinary(at url: URL) -> Bool {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let fileSize = attrs[.size] as? UInt64 else {
+              let fileSize = attrs[.size] as? UInt64
+        else {
             return false
         }
         return fileSize >= minimumBinarySize

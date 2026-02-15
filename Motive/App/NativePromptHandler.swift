@@ -3,8 +3,8 @@
 //  Motive
 //
 
-import Foundation
 import AppKit
+import Foundation
 
 @MainActor
 final class NativePromptHandler {
@@ -56,7 +56,7 @@ final class NativePromptHandler {
         }
 
         // Add custom "Other" option if custom input is enabled and not already present
-        if custom && !options.contains(where: { $0.label.lowercased() == "other" }) {
+        if custom, !options.contains(where: { $0.label.lowercased() == "other" }) {
             options.append(PermissionRequest.QuestionOption(label: "Other", description: "Type your own answer"))
             optionLabels.append("Other")
         }
@@ -153,11 +153,10 @@ final class NativePromptHandler {
                 Log.debug("Native question response: \(response)")
 
                 // Map plan_exit UI labels to what OpenCode expects
-                let apiResponse: String
-                if isPlanExit {
-                    apiResponse = response == "Execute Plan" ? "Yes" : "No"
+                let apiResponse: String = if isPlanExit {
+                    response == "Execute Plan" ? "Yes" : "No"
                 } else {
-                    apiResponse = response
+                    response
                 }
 
                 self?.appState?.updateQuestionMessage(messageId: messageId, response: response, sessionId: sessionId)
@@ -206,15 +205,14 @@ final class NativePromptHandler {
         sessionId: String?,
         planFilePath: String?
     ) {
-        let content: String
-        if response == "Execute Plan" {
+        let content = if response == "Execute Plan" {
             if let planFilePath, !planFilePath.isEmpty, !resolvedPlanFileExists(path: planFilePath) {
-                content = "Approved. Switching to build mode, but plan file was not found at \(planFilePath)."
+                "Approved. Switching to build mode, but plan file was not found at \(planFilePath)."
             } else {
-                content = "Approved. Switching to build mode and executing the plan."
+                "Approved. Switching to build mode and executing the plan."
             }
         } else {
-            content = "Plan execution postponed. Continuing in plan mode to refine the plan."
+            "Plan execution postponed. Continuing in plan mode to refine the plan."
         }
 
         let notice = ConversationMessage(type: .system, content: content)
@@ -330,14 +328,13 @@ final class NativePromptHandler {
                 self?.appState?.updateQuestionMessage(messageId: messageId, response: response, sessionId: sessionId)
                 self?.appState?.pendingQuestionMessageId = nil
 
-                let reply: OpenCodeAPIClient.PermissionReply
-                switch response.lowercased() {
+                let reply: OpenCodeAPIClient.PermissionReply = switch response.lowercased() {
                 case "always allow":
-                    reply = .always
+                    .always
                 case "reject":
-                    reply = .reject(nil)
+                    .reject(nil)
                 default:
-                    reply = .once
+                    .once
                 }
 
                 Task { [weak self] in
@@ -362,5 +359,4 @@ final class NativePromptHandler {
             }
         )
     }
-
 }

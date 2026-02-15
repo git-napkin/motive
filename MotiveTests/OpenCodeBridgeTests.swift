@@ -1,6 +1,6 @@
-import Testing
 import Foundation
 @testable import Motive
+import Testing
 
 /// Tests for OpenCodeBridge's session tracking, event routing, and text accumulation.
 struct OpenCodeBridgeTests {
@@ -14,20 +14,20 @@ struct OpenCodeBridgeTests {
 
     // MARK: - Session Management
 
-    @Test func bridgeStartsWithNoSession() async throws {
+    @Test func bridgeStartsWithNoSession() async {
         let (bridge, _) = makeBridge()
         let sessionId = await bridge.getSessionId()
         #expect(sessionId == nil)
     }
 
-    @Test func setSessionIdTracksSession() async throws {
+    @Test func setSessionIdTracksSession() async {
         let (bridge, _) = makeBridge()
         await bridge.setSessionId("sess-1")
         let sessionId = await bridge.getSessionId()
         #expect(sessionId == "sess-1")
     }
 
-    @Test func setSessionIdReplacesOldSession() async throws {
+    @Test func setSessionIdReplacesOldSession() async {
         let (bridge, _) = makeBridge()
         await bridge.setSessionId("sess-1")
         await bridge.setSessionId("sess-2")
@@ -35,7 +35,7 @@ struct OpenCodeBridgeTests {
         #expect(sessionId == "sess-2")
     }
 
-    @Test func clearSessionIdSetsNil() async throws {
+    @Test func clearSessionIdSetsNil() async {
         let (bridge, _) = makeBridge()
         await bridge.setSessionId("sess-1")
         await bridge.setSessionId(nil)
@@ -45,7 +45,7 @@ struct OpenCodeBridgeTests {
 
     // MARK: - Configuration
 
-    @Test func bridgeAcceptsConfiguration() async throws {
+    @Test func bridgeAcceptsConfiguration() async {
         let (bridge, events) = makeBridge()
 
         let config = OpenCodeBridge.Configuration(
@@ -65,7 +65,7 @@ struct OpenCodeBridgeTests {
 
     // MARK: - Submit Without Configuration
 
-    @Test func submitIntentWithoutConfigProducesError() async throws {
+    @Test func submitIntentWithoutConfigProducesError() async {
         let (bridge, events) = makeBridge()
 
         await bridge.submitIntent(text: "hello", cwd: "/tmp")
@@ -84,7 +84,7 @@ struct OpenCodeBridgeTests {
 
     // MARK: - Event Handler Callback
 
-    @Test func eventHandlerReceivesEvents() async throws {
+    @Test func eventHandlerReceivesEvents() async {
         let (bridge, events) = makeBridge()
 
         // Without a running server, submitting will produce an error event
@@ -201,7 +201,7 @@ struct OpenCodeBridgeTests {
             text: "How to proceed?",
             toolName: "Question",
             toolInput: "How to proceed?",
-            toolInputDict: inputDict,
+            toolInputJSON: OpenCodeEvent.serializeJSON(inputDict),
             sessionId: "sess-1"
         )
 
@@ -228,7 +228,7 @@ struct OpenCodeBridgeTests {
             text: "Permission: edit for src/main.ts",
             toolName: "Permission",
             toolInput: "src/main.ts",
-            toolInputDict: inputDict,
+            toolInputJSON: OpenCodeEvent.serializeJSON(inputDict),
             sessionId: "sess-1"
         )
 

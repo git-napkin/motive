@@ -13,15 +13,15 @@ extension String {
     /// Simplify tool names for better UI display
     var simplifiedToolName: String {
         switch self {
-        case "ReadFile", "Read": return "Read"
-        case "WriteFile", "Write": return "Write"
-        case "EditFile", "Edit": return "Edit"
-        case "DeleteFile", "Delete": return "Delete"
-        case "ListFiles", "Glob": return "List"
-        case "SearchFiles", "Grep": return "Search"
-        case "Shell", "Bash": return "Shell"
-        case "TodoWrite", "todo_write": return "Todo"
-        default: return self
+        case "ReadFile", "Read": "Read"
+        case "WriteFile", "Write": "Write"
+        case "EditFile", "Edit": "Edit"
+        case "DeleteFile", "Delete": "Delete"
+        case "ListFiles", "Glob": "List"
+        case "SearchFiles", "Grep": "Search"
+        case "Shell", "Bash": "Shell"
+        case "TodoWrite", "todo_write": "Todo"
+        default: self
         }
     }
 
@@ -74,15 +74,15 @@ struct ConversationMessage: Identifiable, Sendable, Codable {
         case assistant
         case tool
         case system
-        case todo       // Dedicated type for todo list display
-        case reasoning  // Reasoning/thinking stream
+        case todo // Dedicated type for todo list display
+        case reasoning // Reasoning/thinking stream
     }
 
     enum Status: String, Sendable, Codable {
-        case pending    // Created, not yet started
-        case running    // In progress (tool executing, step processing)
-        case completed  // Finished successfully
-        case failed     // Finished with error
+        case pending // Created, not yet started
+        case running // In progress (tool executing, step processing)
+        case completed // Finished successfully
+        case failed // Finished with error
     }
 
     let id: UUID
@@ -93,9 +93,9 @@ struct ConversationMessage: Identifiable, Sendable, Codable {
     let toolInput: String?
     let toolOutput: String?
     let toolCallId: String?
-    let status: Status          // Lifecycle status (replaces isStreaming)
-    let todoItems: [TodoItem]?  // Parsed todo items for .todo type
-    let diffContent: String?    // Unified diff for file-editing tools
+    let status: Status // Lifecycle status (replaces isStreaming)
+    let todoItems: [TodoItem]? // Parsed todo items for .todo type
+    let diffContent: String? // Unified diff for file-editing tools
 
     init(
         id: UUID = UUID(),
@@ -132,12 +132,12 @@ struct OpenCodeEvent: Sendable, Identifiable {
         case call
         case diff
         case finish
-        case error      // Explicit error from OpenCode
+        case error // Explicit error from OpenCode
         case unknown
         case user
-        case assistant  // text message from AI
-        case tool       // tool_call / tool_use
-        case usage      // token usage updates
+        case assistant // text message from AI
+        case tool // tool_call / tool_use
+        case usage // token usage updates
     }
 
     let id: UUID
@@ -146,7 +146,7 @@ struct OpenCodeEvent: Sendable, Identifiable {
     let text: String
     let toolName: String?
     let toolInput: String?
-    let toolInputDict: [String: Any]?  // Full tool input for TodoWrite parsing
+    let toolInputJSON: String? // Full tool input as JSON string (Sendable-safe)
     let toolOutput: String?
     let toolCallId: String?
     let sessionId: String?
@@ -168,7 +168,7 @@ struct OpenCodeEvent: Sendable, Identifiable {
         text: String,
         toolName: String? = nil,
         toolInput: String? = nil,
-        toolInputDict: [String: Any]? = nil,
+        toolInputJSON: String? = nil,
         toolOutput: String? = nil,
         toolCallId: String? = nil,
         sessionId: String? = nil,
@@ -186,7 +186,7 @@ struct OpenCodeEvent: Sendable, Identifiable {
         self.text = text
         self.toolName = toolName
         self.toolInput = toolInput
-        self.toolInputDict = toolInputDict
+        self.toolInputJSON = toolInputJSON
         self.toolOutput = toolOutput
         self.toolCallId = toolCallId
         self.sessionId = sessionId
@@ -203,11 +203,12 @@ struct OpenCodeEvent: Sendable, Identifiable {
     /// Based on: https://github.com/accomplish-ai/openwork/blob/main/packages/shared/src/types/opencode.ts
     init(rawJson: String) {
         let trimmed = rawJson.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         // Skip non-JSON lines (terminal decorations, etc.)
         guard trimmed.hasPrefix("{"),
               let data = trimmed.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
             self.init(kind: .unknown, rawJson: rawJson, text: trimmed.isEmpty ? "" : trimmed)
             return
         }
@@ -216,21 +217,30 @@ struct OpenCodeEvent: Sendable, Identifiable {
         let messageType = object["type"] as? String ?? ""
         let part = object["part"] as? [String: Any]
         let sessionId = part?["sessionID"] as? String ?? object["sessionID"] as? String
-        
+
         switch messageType {
         case "text":
             // AI text response: { type: "text", part: { text: "..." } }
             let text = part?["text"] as? String ?? ""
             self.init(kind: .assistant, rawJson: rawJson, text: text, sessionId: sessionId)
-            
+
         case "tool_call":
             // Tool call: { type: "tool_call", part: { tool: "Read", input: {...} } }
             let toolName = part?["tool"] as? String ?? "Tool"
             let inputDict = OpenCodeEvent.extractToolInputDict(from: part)
             let toolCallId = OpenCodeEvent.extractToolCallId(from: part)
             let inputStr = OpenCodeEvent.extractPrimaryInput(from: inputDict)
-            self.init(kind: .tool, rawJson: rawJson, text: inputStr ?? "", toolName: toolName, toolInput: inputStr, toolInputDict: inputDict, toolCallId: toolCallId, sessionId: sessionId)
-            
+            self.init(
+                kind: .tool,
+                rawJson: rawJson,
+                text: inputStr ?? "",
+                toolName: toolName,
+                toolInput: inputStr,
+                toolInputJSON: OpenCodeEvent.serializeJSON(inputDict),
+                toolCallId: toolCallId,
+                sessionId: sessionId
+            )
+
         case "tool_use":
             // Tool use (combined): { type: "tool_use", part: { tool: "Read", state: { status, input, output } } }
             let toolName = part?["tool"] as? String ?? "Tool"
@@ -239,15 +249,25 @@ struct OpenCodeEvent: Sendable, Identifiable {
             let outputStr = state?["output"] as? String
             let toolCallId = OpenCodeEvent.extractToolCallId(from: state) ?? OpenCodeEvent.extractToolCallId(from: part)
             let inputStr = OpenCodeEvent.extractPrimaryInput(from: inputDict)
-            self.init(kind: .tool, rawJson: rawJson, text: inputStr ?? "", toolName: toolName, toolInput: inputStr, toolInputDict: inputDict, toolOutput: outputStr, toolCallId: toolCallId, sessionId: sessionId)
-            
+            self.init(
+                kind: .tool,
+                rawJson: rawJson,
+                text: inputStr ?? "",
+                toolName: toolName,
+                toolInput: inputStr,
+                toolInputJSON: OpenCodeEvent.serializeJSON(inputDict),
+                toolOutput: outputStr,
+                toolCallId: toolCallId,
+                sessionId: sessionId
+            )
+
         case "tool_result":
             // Tool result: { type: "tool_result", part: { output: "..." } }
             let output = part?["output"] as? String ?? ""
             let toolCallId = OpenCodeEvent.extractToolCallId(from: part)
             // text is empty — output is accessed via toolOutputSummary + expand
             self.init(kind: .tool, rawJson: rawJson, text: "", toolName: "Result", toolOutput: output, toolCallId: toolCallId, sessionId: sessionId)
-            
+
         case "step_start":
             self.init(kind: .thought, rawJson: rawJson, text: "Processing...", sessionId: sessionId)
 
@@ -295,7 +315,7 @@ struct OpenCodeEvent: Sendable, Identifiable {
             inputDict["multiple"] = q["multiple"] ?? false
             inputDict["custom"] = q["custom"] ?? true
         }
-        return OpenCodeEvent(kind: .tool, rawJson: rawJson, text: questionText, toolName: "Question", toolInput: questionText, toolInputDict: inputDict, sessionId: sessionId)
+        return OpenCodeEvent(kind: .tool, rawJson: rawJson, text: questionText, toolName: "Question", toolInput: questionText, toolInputJSON: serializeJSON(inputDict), sessionId: sessionId)
     }
 
     private static func parsePermissionAsked(from object: [String: Any], rawJson: String, sessionId: String?) -> OpenCodeEvent {
@@ -311,7 +331,15 @@ struct OpenCodeEvent: Sendable, Identifiable {
         ]
         if let id = permId { inputDict["_nativePermissionID"] = id }
         let description = "\(permission): \(patterns.joined(separator: ", "))"
-        return OpenCodeEvent(kind: .tool, rawJson: rawJson, text: description, toolName: "Permission", toolInput: patterns.joined(separator: ", "), toolInputDict: inputDict, sessionId: sessionId)
+        return OpenCodeEvent(
+            kind: .tool,
+            rawJson: rawJson,
+            text: description,
+            toolName: "Permission",
+            toolInput: patterns.joined(separator: ", "),
+            toolInputJSON: serializeJSON(inputDict),
+            sessionId: sessionId
+        )
     }
 
     private static func parseStepFinish(from part: [String: Any]?, rawJson: String, sessionId: String?) -> OpenCodeEvent {
@@ -343,7 +371,11 @@ struct OpenCodeEvent: Sendable, Identifiable {
         case .tool, .call:
             // Reconstruct as tool_use (combined call + result format)
             var state: [String: Any] = ["tool": toolName ?? "Tool"]
-            if let input = toolInputDict, JSONSerialization.isValidJSONObject(input) {
+            if let inputJSON = toolInputJSON,
+               let inputData = inputJSON.data(using: .utf8),
+               let input = try? JSONSerialization.jsonObject(with: inputData) as? [String: Any],
+               JSONSerialization.isValidJSONObject(input)
+            {
                 state["input"] = input
             } else if let inputStr = toolInput {
                 state["input"] = ["description": inputStr]
@@ -378,12 +410,13 @@ struct OpenCodeEvent: Sendable, Identifiable {
             return rawJson
 
         case .unknown:
-            return rawJson  // Nothing useful to serialize
+            return rawJson // Nothing useful to serialize
         }
 
         guard JSONSerialization.isValidJSONObject(dict),
               let data = try? JSONSerialization.data(withJSONObject: dict),
-              let str = String(data: data, encoding: .utf8) else {
+              let str = String(data: data, encoding: .utf8)
+        else {
             return rawJson
         }
         return str
@@ -396,7 +429,8 @@ struct OpenCodeEvent: Sendable, Identifiable {
             }
             if let value = object[key] as? [String: Any],
                let nested = value["text"] as? String,
-               !nested.isEmpty {
+               !nested.isEmpty
+            {
                 return nested
             }
         }
@@ -413,7 +447,8 @@ struct OpenCodeEvent: Sendable, Identifiable {
         for key in keys {
             if let str = container[key] as? String,
                let data = str.data(using: .utf8),
-               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            {
                 return dict
             }
         }
@@ -434,17 +469,33 @@ struct OpenCodeEvent: Sendable, Identifiable {
         return keys.lazy.compactMap { dict[$0] as? String }.first
     }
 
+    /// Serialize a dictionary to a JSON string for Sendable-safe storage.
+    static func serializeJSON(_ dict: [String: Any]?) -> String? {
+        guard let dict, JSONSerialization.isValidJSONObject(dict),
+              let data = try? JSONSerialization.data(withJSONObject: dict),
+              let str = String(data: data, encoding: .utf8)
+        else { return nil }
+        return str
+    }
+
+    /// Deserialize toolInputJSON back to a dictionary (for consumers that need dict access).
+    var toolInputDict: [String: Any]? {
+        guard let toolInputJSON, let data = toolInputJSON.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return dict
+    }
 
     /// Convert to ConversationMessage for UI display
     func toMessage() -> ConversationMessage? {
         // Skip empty messages — but always keep finish, error, and tool-with-name events
-        if text.isEmpty && kind != .finish && kind != .error {
+        if text.isEmpty, kind != .finish, kind != .error {
             guard kind == .tool, toolName != nil else { return nil }
         }
-        
+
         let messageType: ConversationMessage.MessageType
         let messageStatus: ConversationMessage.Status
-        
+
         switch kind {
         case .user:
             messageType = .user
@@ -477,7 +528,7 @@ struct OpenCodeEvent: Sendable, Identifiable {
         case .usage:
             return nil
         }
-        
+
         return ConversationMessage(
             id: id,
             type: messageType,
@@ -546,7 +597,7 @@ extension ConversationMessage {
     /// Uniform output summary — always "Output · N lines", never raw content.
     /// Clicking "Show" in the UI reveals the actual output.
     var toolOutputSummary: String? {
-        guard let toolOutput = toolOutput, !toolOutput.isEmpty else { return nil }
+        guard let toolOutput, !toolOutput.isEmpty else { return nil }
         let trimmed = toolOutput.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return nil }
 
@@ -582,7 +633,8 @@ extension ConversationMessage {
     static func deserializeMessages(_ data: Data) -> [ConversationMessage]? {
         // Try Codable (new format)
         if let messages = try? JSONDecoder().decode([ConversationMessage].self, from: data),
-           !messages.isEmpty {
+           !messages.isEmpty
+        {
             return messages
         }
 

@@ -32,7 +32,6 @@ extension CommandBarView {
         }
     }
 
-    @ViewBuilder
     var leftFooterContent: some View {
         HStack(spacing: AuroraSpacing.space3) {
             // Agent indicator
@@ -56,7 +55,7 @@ extension CommandBarView {
                 // Quick access to /project command
                 inputText = "/"
                 mode = .command(fromSession: !appState.messages.isEmpty)
-                selectedCommandIndex = 0  // /project is first in the list
+                selectedCommandIndex = 0 // /project is first in the list
             }
         }
     }
@@ -186,15 +185,15 @@ private struct AgentIndicator: View {
 
     private var agentIcon: String {
         switch agentName {
-        case "plan": return "checklist"
-        default: return "sparkle"
+        case "plan": "checklist"
+        default: "sparkle"
         }
     }
 
     private var agentColor: Color {
         switch agentName {
-        case "plan": return Color.Aurora.planAccent
-        default: return Color.Aurora.primary
+        case "plan": Color.Aurora.planAccent
+        default: Color.Aurora.primary
         }
     }
 

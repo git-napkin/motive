@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import Motive
+import Testing
 
 struct SkillWatcherTests {
     @Test func debounceCoalescesEvents() async throws {

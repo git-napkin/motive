@@ -121,13 +121,14 @@ extension AppState {
 
     /// Switch to a different session.
     /// Saves current session messages if running; loads target from buffer or messagesData.
-    func switchToSession(_ session: Session) { 
+    func switchToSession(_ session: Session) {
         // Save current session's messages if running (for background event processing)
         saveCurrentSessionToBuffer()
 
         // Also persist non-running session's messages (they may have changed in UI)
         if let current = currentSession,
-           current.sessionStatus != .running {
+           current.sessionStatus != .running
+        {
             current.messagesData = ConversationMessage.serializeMessages(messages)
         }
 
@@ -152,7 +153,7 @@ extension AppState {
 
         // Restore project directory for this session
         restoreProjectDirectory(for: session)
-  
+
         // Load messages: running buffer first, or persisted snapshot
         let ocId = session.openCodeSessionId
         if let ocId {
@@ -163,7 +164,8 @@ extension AppState {
         if let ocId, let running = runningSessionMessages[ocId] {
             messages = running
         } else if let data = session.messagesData,
-                  let saved = ConversationMessage.deserializeMessages(data) {
+                  let saved = ConversationMessage.deserializeMessages(data)
+        {
             messages = saved
         } else {
             messages = [ConversationMessage(type: .user, content: session.intent, timestamp: session.createdAt)]
@@ -177,7 +179,7 @@ extension AppState {
         if session.projectPath == defaultPath {
             _ = configManager.setProjectDirectory(nil)
         } else {
-             _ = configManager.setProjectDirectory(session.projectPath)
+            _ = configManager.setProjectDirectory(session.projectPath)
         }
     }
 
@@ -239,7 +241,7 @@ extension AppState {
         } catch {
             Log.error("Failed to save after deleting session: \(error)")
         }
-        
+
         // Trigger list refresh so CommandBarView updates
         sessionListRefreshTrigger += 1
     }
@@ -266,7 +268,7 @@ extension AppState {
             } catch {
                 Log.error("Failed to save after deleting session by id: \(error)")
             }
-            
+
             // Trigger list refresh so CommandBarView updates
             sessionListRefreshTrigger += 1
         }
@@ -285,9 +287,7 @@ extension AppState {
         clearCurrentSession()
 
         // Set the new directory
-        let success = configManager.setProjectDirectory(path)
-
-        return success
+        return configManager.setProjectDirectory(path)
     }
 
     /// Open a folder picker dialog to select project directory
@@ -303,7 +303,7 @@ extension AppState {
         hideCommandBar()
 
         panel.begin { [weak self] response in
-            guard let self = self else { return }
+            guard let self else { return }
             if response == .OK, let url = panel.url {
                 self.switchProjectDirectory(url.path)
             }
@@ -318,7 +318,8 @@ extension AppState {
     /// Resume a session with a follow-up message
     func resumeSession(with text: String) {
         guard let session = currentSession,
-              let openCodeSessionId = session.openCodeSessionId else {
+              let openCodeSessionId = session.openCodeSessionId
+        else {
             // No session to resume, start a new one
             submitIntent(text)
             return

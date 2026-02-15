@@ -12,7 +12,9 @@ struct UsageSettingsView: View {
     @EnvironmentObject private var configManager: ConfigManager
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -181,42 +183,42 @@ private enum TokenUsageCategory: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .input: return L10n.Usage.input
-        case .output: return L10n.Usage.output
-        case .reasoning: return L10n.Usage.reasoning
-        case .cacheRead: return L10n.Usage.cacheRead
-        case .cacheWrite: return L10n.Usage.cacheWrite
+        case .input: L10n.Usage.input
+        case .output: L10n.Usage.output
+        case .reasoning: L10n.Usage.reasoning
+        case .cacheRead: L10n.Usage.cacheRead
+        case .cacheWrite: L10n.Usage.cacheWrite
         }
     }
 
     var color: Color {
         switch self {
-        case .input: return Color(red: 0.30, green: 0.56, blue: 1.0)   // Blue
-        case .output: return Color(red: 0.34, green: 0.80, blue: 0.46) // Green
-        case .reasoning: return Color(red: 1.0, green: 0.72, blue: 0.25) // Amber
-        case .cacheRead: return Color(red: 0.68, green: 0.52, blue: 0.98) // Purple
-        case .cacheWrite: return Color(red: 0.90, green: 0.42, blue: 0.48) // Rose
+        case .input: Color(red: 0.30, green: 0.56, blue: 1.0) // Blue
+        case .output: Color(red: 0.34, green: 0.80, blue: 0.46) // Green
+        case .reasoning: Color(red: 1.0, green: 0.72, blue: 0.25) // Amber
+        case .cacheRead: Color(red: 0.68, green: 0.52, blue: 0.98) // Purple
+        case .cacheWrite: Color(red: 0.90, green: 0.42, blue: 0.48) // Rose
         }
     }
 
     static var styleScale: KeyValuePairs<String, Color> {
         KeyValuePairs(
             dictionaryLiteral:
-                (L10n.Usage.input, Color(red: 0.30, green: 0.56, blue: 1.0)),
-                (L10n.Usage.output, Color(red: 0.34, green: 0.80, blue: 0.46)),
-                (L10n.Usage.reasoning, Color(red: 1.0, green: 0.72, blue: 0.25)),
-                (L10n.Usage.cacheRead, Color(red: 0.68, green: 0.52, blue: 0.98)),
-                (L10n.Usage.cacheWrite, Color(red: 0.90, green: 0.42, blue: 0.48))
+            (L10n.Usage.input, Color(red: 0.30, green: 0.56, blue: 1.0)),
+            (L10n.Usage.output, Color(red: 0.34, green: 0.80, blue: 0.46)),
+            (L10n.Usage.reasoning, Color(red: 1.0, green: 0.72, blue: 0.25)),
+            (L10n.Usage.cacheRead, Color(red: 0.68, green: 0.52, blue: 0.98)),
+            (L10n.Usage.cacheWrite, Color(red: 0.90, green: 0.42, blue: 0.48))
         )
     }
 
     func value(from totals: ConfigManager.TokenUsageTotals) -> Int {
         switch self {
-        case .input: return totals.input
-        case .output: return totals.output
-        case .reasoning: return totals.reasoning
-        case .cacheRead: return totals.cacheRead
-        case .cacheWrite: return totals.cacheWrite
+        case .input: totals.input
+        case .output: totals.output
+        case .reasoning: totals.reasoning
+        case .cacheRead: totals.cacheRead
+        case .cacheWrite: totals.cacheWrite
         }
     }
 }

@@ -23,7 +23,7 @@ struct GeneralSettingsView: View {
                         .controlSize(.small)
                 }
             }
-            
+
             // Appearance Section
             SettingSection(L10n.Settings.appearance) {
                 SettingRow(L10n.Settings.theme, description: L10n.Settings.themeDesc) {
@@ -36,7 +36,7 @@ struct GeneralSettingsView: View {
                         label: { $0.localizedName }
                     )
                 }
-                
+
                 SettingRow(L10n.Settings.language, description: L10n.Settings.languageDesc, showDivider: false) {
                     menuPicker(
                         selection: Binding(
@@ -54,7 +54,7 @@ struct GeneralSettingsView: View {
                     )
                 }
             }
-            
+
             // Keyboard Section
             SettingSection(L10n.Settings.keyboard) {
                 SettingRow(L10n.Settings.globalHotkey, description: L10n.Settings.globalHotkeyDesc, showDivider: false) {
@@ -62,11 +62,11 @@ struct GeneralSettingsView: View {
                         .frame(width: 140, height: 32)
                 }
             }
-            
+
             Spacer()
         }
         .alert(L10n.Settings.language, isPresented: $showRestartAlert) {
-            Button(L10n.cancel) { }
+            Button(L10n.cancel) {}
             Button(L10n.Settings.restartNow) {
                 restartApp()
             }
@@ -74,33 +74,33 @@ struct GeneralSettingsView: View {
             Text(L10n.Settings.languageRestartRequired)
         }
     }
-    
+
     private func restartApp() {
         guard let bundlePath = Bundle.main.bundlePath as String? else { return }
-        
+
         let script = """
         sleep 0.5
         open "\(bundlePath)"
         """
-        
+
         let task = Process()
         task.launchPath = "/bin/sh"
         task.arguments = ["-c", script]
-        
+
         do {
             try task.run()
         } catch {
             Log.error("Failed to restart: \(error)")
         }
-        
+
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(100))
             NSApplication.shared.terminate(nil)
         }
     }
-    
+
     // MARK: - Custom Menu Picker
-    
+
     /// Creates a consistent-width menu picker
     private func menuPicker<T: Hashable>(
         selection: Binding<T>,
@@ -118,7 +118,7 @@ struct GeneralSettingsView: View {
                 Text(label(selection.wrappedValue))
                     .font(.system(size: 13))
                     .foregroundColor(Color.Aurora.textPrimary)
-                
+
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(Color.Aurora.textSecondary)
@@ -165,19 +165,20 @@ final class HotkeyRecorderButton: NSButton {
             updateTitle()
         }
     }
+
     private var isRecording = false
     private var localMonitor: Any?
-    
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setupAppearance()
     }
-    
+
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         setupAppearance()
     }
-    
+
     private func setupAppearance() {
         bezelStyle = .rounded
         isBordered = true
@@ -187,7 +188,7 @@ final class HotkeyRecorderButton: NSButton {
         action = #selector(buttonClicked)
         updateTitle()
     }
-    
+
     private func updateTitle() {
         if isRecording {
             title = L10n.Settings.pressKeys
@@ -197,7 +198,7 @@ final class HotkeyRecorderButton: NSButton {
             title = currentHotkey
         }
     }
-    
+
     @objc private func buttonClicked() {
         if isRecording {
             stopRecording()
@@ -205,18 +206,18 @@ final class HotkeyRecorderButton: NSButton {
             startRecording()
         }
     }
-    
+
     private func startRecording() {
         isRecording = true
         updateTitle()
-        
+
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
-            guard let self = self, self.isRecording else { return event }
-            
+            guard let self, self.isRecording else { return event }
+
             if event.type == .keyDown {
                 let symbols = self.modifierSymbols(for: event.modifierFlags)
                 let key = self.keyName(for: event)
-                
+
                 if !symbols.isEmpty || self.isSpecialKey(event.keyCode) {
                     let value = symbols + key
                     self.currentHotkey = value
@@ -227,23 +228,23 @@ final class HotkeyRecorderButton: NSButton {
             }
             return event
         }
-        
+
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(5))
             self?.stopRecording()
         }
     }
-    
+
     private func stopRecording() {
         isRecording = false
         updateTitle()
-        
+
         if let monitor = localMonitor {
             NSEvent.removeMonitor(monitor)
             localMonitor = nil
         }
     }
-    
+
     private func isSpecialKey(_ keyCode: UInt16) -> Bool {
         let specialKeys: Set<UInt16> = [49, 36, 48, 51, 53, 123, 124, 125, 126]
         let functionKeys: Set<UInt16> = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111]
@@ -258,35 +259,35 @@ final class HotkeyRecorderButton: NSButton {
         if flags.contains(.command) { symbols += "⌘" }
         return symbols
     }
-    
+
     private func keyName(for event: NSEvent) -> String {
         switch event.keyCode {
-        case 49: return "Space"
-        case 36: return "Return"
-        case 48: return "Tab"
-        case 51: return "Delete"
-        case 53: return "Escape"
-        case 123: return "←"
-        case 124: return "→"
-        case 125: return "↓"
-        case 126: return "↑"
-        case 122: return "F1"
-        case 120: return "F2"
-        case 99: return "F3"
-        case 118: return "F4"
-        case 96: return "F5"
-        case 97: return "F6"
-        case 98: return "F7"
-        case 100: return "F8"
-        case 101: return "F9"
-        case 109: return "F10"
-        case 103: return "F11"
-        case 111: return "F12"
+        case 49: "Space"
+        case 36: "Return"
+        case 48: "Tab"
+        case 51: "Delete"
+        case 53: "Escape"
+        case 123: "←"
+        case 124: "→"
+        case 125: "↓"
+        case 126: "↑"
+        case 122: "F1"
+        case 120: "F2"
+        case 99: "F3"
+        case 118: "F4"
+        case 96: "F5"
+        case 97: "F6"
+        case 98: "F7"
+        case 100: "F8"
+        case 101: "F9"
+        case 109: "F10"
+        case 103: "F11"
+        case 111: "F12"
         default:
-            return event.charactersIgnoringModifiers?.uppercased() ?? ""
+            event.charactersIgnoringModifiers?.uppercased() ?? ""
         }
     }
-    
+
     deinit {
         if let monitor = localMonitor {
             NSEvent.removeMonitor(monitor)

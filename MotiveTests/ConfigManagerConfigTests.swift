@@ -1,6 +1,6 @@
-import Testing
 import Foundation
 @testable import Motive
+import Testing
 
 /// Tests that the generated OpenCode configuration is clean of legacy
 /// MCP and question-deny references, and contains correct permission rules.
@@ -34,8 +34,10 @@ struct ConfigManagerConfigTests {
 
         // All tool categories should be present
         for tool in ToolPermission.allCases {
-            #expect(rules[tool.rawValue] != nil,
-                    "Missing permission rule for \(tool.rawValue)")
+            #expect(
+                rules[tool.rawValue] != nil,
+                "Missing permission rule for \(tool.rawValue)"
+            )
         }
     }
 
@@ -44,8 +46,10 @@ struct ConfigManagerConfigTests {
         let rules = policy.toOpenCodePermissionRules()
 
         // There should be no "question: deny" entry
-        #expect(rules["question"] == nil,
-                "Permission rules should not contain 'question' key (native, not MCP)")
+        #expect(
+            rules["question"] == nil,
+            "Permission rules should not contain 'question' key (native, not MCP)"
+        )
     }
 
     @Test @MainActor func permissionRulesDoNotContainMCPEntries() {
@@ -67,12 +71,16 @@ struct ConfigManagerConfigTests {
         for (key, value) in rules {
             if let stringValue = value as? String {
                 let validActions = ["allow", "ask", "deny"]
-                #expect(validActions.contains(stringValue),
-                        "Invalid action '\(stringValue)' for tool '\(key)'")
+                #expect(
+                    validActions.contains(stringValue),
+                    "Invalid action '\(stringValue)' for tool '\(key)'"
+                )
             } else if let dictValue = value as? [String: String] {
                 // Pattern-based format must have a wildcard default
-                #expect(dictValue["*"] != nil,
-                        "Pattern-based rules for '\(key)' must have a '*' default")
+                #expect(
+                    dictValue["*"] != nil,
+                    "Pattern-based rules for '\(key)' must have a '*' default"
+                )
             } else {
                 Issue.record("Unexpected type for permission rule '\(key)': \(type(of: value))")
             }
@@ -87,12 +95,18 @@ struct ConfigManagerConfigTests {
 
         // Edit rules should include system protection
         if let editRules = rules["edit"] as? [String: String] {
-            #expect(editRules["/System/**"] == "deny",
-                    "Edit rules should deny /System/**")
-            #expect(editRules["/usr/**"] == "deny",
-                    "Edit rules should deny /usr/**")
-            #expect(editRules["~/.ssh/**"] == "deny",
-                    "Edit rules should deny ~/.ssh/**")
+            #expect(
+                editRules["/System/**"] == "deny",
+                "Edit rules should deny /System/**"
+            )
+            #expect(
+                editRules["/usr/**"] == "deny",
+                "Edit rules should deny /usr/**"
+            )
+            #expect(
+                editRules["~/.ssh/**"] == "deny",
+                "Edit rules should deny ~/.ssh/**"
+            )
         }
         // If edit has no user rules, it might be a simple string, and protected
         // rules would upgrade it to a dict. Check that protection exists.
@@ -104,10 +118,14 @@ struct ConfigManagerConfigTests {
 
         // Bash rules should include destructive command protection
         if let bashRules = rules["bash"] as? [String: String] {
-            #expect(bashRules["rm -rf /"] == "deny",
-                    "Bash rules should deny 'rm -rf /'")
-            #expect(bashRules["rm -rf /*"] == "deny",
-                    "Bash rules should deny 'rm -rf /*'")
+            #expect(
+                bashRules["rm -rf /"] == "deny",
+                "Bash rules should deny 'rm -rf /'"
+            )
+            #expect(
+                bashRules["rm -rf /*"] == "deny",
+                "Bash rules should deny 'rm -rf /*'"
+            )
         }
     }
 

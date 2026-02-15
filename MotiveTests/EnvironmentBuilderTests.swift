@@ -3,8 +3,8 @@
 //  MotiveTests
 //
 
-import XCTest
 @testable import Motive
+import XCTest
 
 @MainActor
 final class EnvironmentBuilderTests: XCTestCase {
@@ -92,8 +92,10 @@ final class EnvironmentBuilderTests: XCTestCase {
         let inputs = makeInputs(provider: .claude, apiKey: "")
         let env = EnvironmentBuilder.build(from: inputs, baseEnvironment: emptyBase)
 
-        XCTAssertNil(env["ANTHROPIC_API_KEY"],
-                     "ANTHROPIC_API_KEY should not be present when apiKey is empty")
+        XCTAssertNil(
+            env["ANTHROPIC_API_KEY"],
+            "ANTHROPIC_API_KEY should not be present when apiKey is empty"
+        )
     }
 
     func testAPIKeyNotSetForOllama() {
@@ -121,8 +123,10 @@ final class EnvironmentBuilderTests: XCTestCase {
         let inputs = makeInputs(debugMode: false)
         let env = EnvironmentBuilder.build(from: inputs, baseEnvironment: emptyBase)
 
-        XCTAssertNil(env["DEBUG"],
-                     "DEBUG should not be present when debugMode is false")
+        XCTAssertNil(
+            env["DEBUG"],
+            "DEBUG should not be present when debugMode is false"
+        )
     }
 
     // MARK: - Config Path Injection
@@ -139,8 +143,10 @@ final class EnvironmentBuilderTests: XCTestCase {
         let inputs = makeInputs(openCodeConfigPath: "")
         let env = EnvironmentBuilder.build(from: inputs, baseEnvironment: emptyBase)
 
-        XCTAssertNil(env["OPENCODE_CONFIG"],
-                     "OPENCODE_CONFIG should not be present when openCodeConfigPath is empty")
+        XCTAssertNil(
+            env["OPENCODE_CONFIG"],
+            "OPENCODE_CONFIG should not be present when openCodeConfigPath is empty"
+        )
     }
 
     // MARK: - Config Dir Injection
@@ -159,16 +165,20 @@ final class EnvironmentBuilderTests: XCTestCase {
         let inputs = makeInputs(openCodeConfigPath: "", openCodeConfigDir: "/tmp/motive-test")
         let env = EnvironmentBuilder.build(from: inputs, baseEnvironment: emptyBase)
 
-        XCTAssertNil(env["OPENCODE_CONFIG_DIR"],
-                     "OPENCODE_CONFIG_DIR should not be set when openCodeConfigPath is empty")
+        XCTAssertNil(
+            env["OPENCODE_CONFIG_DIR"],
+            "OPENCODE_CONFIG_DIR should not be set when openCodeConfigPath is empty"
+        )
     }
 
     func testOpenCodeConfigDirNotSetWhenDirEmpty() {
         let inputs = makeInputs(openCodeConfigPath: "/tmp/config.json", openCodeConfigDir: "")
         let env = EnvironmentBuilder.build(from: inputs, baseEnvironment: emptyBase)
 
-        XCTAssertNil(env["OPENCODE_CONFIG_DIR"],
-                     "OPENCODE_CONFIG_DIR should not be set when openCodeConfigDir is empty")
+        XCTAssertNil(
+            env["OPENCODE_CONFIG_DIR"],
+            "OPENCODE_CONFIG_DIR should not be set when openCodeConfigDir is empty"
+        )
     }
 
     // MARK: - Memory Environment
@@ -236,12 +246,12 @@ final class EnvironmentBuilderTests: XCTestCase {
         XCTAssertEqual(env["OPENCODE_EXPERIMENTAL_PLAN_MODE"], "1")
     }
 
-    func testPATHIsSet() {
+    func testPATHIsSet() throws {
         let inputs = makeInputs()
         let env = EnvironmentBuilder.build(from: inputs, baseEnvironment: emptyBase)
 
         XCTAssertNotNil(env["PATH"], "PATH should always be set")
-        XCTAssertFalse(env["PATH"]!.isEmpty, "PATH should not be empty")
+        XCTAssertFalse(try XCTUnwrap(env["PATH"]?.isEmpty), "PATH should not be empty")
     }
 
     // MARK: - Browser Agent API Key

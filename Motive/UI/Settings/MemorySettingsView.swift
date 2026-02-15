@@ -144,10 +144,11 @@ struct MemorySettingsView: View {
         if fm.fileExists(atPath: dbPath.path) {
             let memoryDir = workspaceURL.appendingPathComponent("memory")
             let files = (try? fm.contentsOfDirectory(at: memoryDir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-            indexFileCount = files.filter { $0.pathExtension == "md" }.count
+            indexFileCount = files.count(where: { $0.pathExtension == "md" })
 
             if let attrs = try? fm.attributesOfItem(atPath: dbPath.path),
-               let modDate = attrs[.modificationDate] as? Date {
+               let modDate = attrs[.modificationDate] as? Date
+            {
                 let formatter = RelativeDateTimeFormatter()
                 formatter.unitsStyle = .abbreviated
                 indexLastSync = formatter.localizedString(for: modDate, relativeTo: Date())

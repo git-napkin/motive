@@ -8,35 +8,36 @@
 import SwiftUI
 
 // MARK: - Skill Status Type
+
 // Two dimensions:
 // 1. Dependency: Ready (deps satisfied) vs Blocked (missing deps)
 // 2. Enabled: Enabled vs Disabled (only meaningful when Ready)
 
 enum SkillListStatus {
-    case blockedDisabled   // Missing deps + disabled
-    case blockedEnabled    // Missing deps + enabled (shouldn't happen but handle it)
-    case readyDisabled     // Deps OK but disabled
-    case readyEnabled      // Deps OK and enabled - fully active
+    case blockedDisabled // Missing deps + disabled
+    case blockedEnabled // Missing deps + enabled (shouldn't happen but handle it)
+    case readyDisabled // Deps OK but disabled
+    case readyEnabled // Deps OK and enabled - fully active
 
     var color: Color {
         switch self {
         case .blockedDisabled, .blockedEnabled:
-            return Color.Aurora.warning  // Orange for blocked
+            Color.Aurora.warning // Orange for blocked
         case .readyDisabled:
-            return Color.Aurora.textMuted  // Gray for disabled
+            Color.Aurora.textMuted // Gray for disabled
         case .readyEnabled:
-            return Color.Aurora.success  // Green for active
+            Color.Aurora.success // Green for active
         }
     }
 
     var icon: String {
         switch self {
         case .blockedDisabled, .blockedEnabled:
-            return "exclamationmark.circle.fill"  // Warning for blocked
+            "exclamationmark.circle.fill" // Warning for blocked
         case .readyDisabled:
-            return "minus.circle.fill"  // Minus for disabled
+            "minus.circle.fill" // Minus for disabled
         case .readyEnabled:
-            return "checkmark.circle.fill"  // Check for active
+            "checkmark.circle.fill" // Check for active
         }
     }
 }

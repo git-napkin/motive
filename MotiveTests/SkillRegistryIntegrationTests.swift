@@ -5,18 +5,18 @@
 //  Integration tests for SkillRegistry using mock config providers.
 //
 
-import Testing
 import Foundation
 @testable import Motive
+import Testing
 
 @MainActor
 struct SkillRegistryIntegrationTests {
 
     private class MockSkillConfigProvider: SkillConfigProvider {
         var skillsSystemEnabled: Bool = true
-        var skillsConfig: SkillsConfig = SkillsConfig()
+        var skillsConfig: SkillsConfig = .init()
         var skillsManagedDirectoryURL: URL?
-        var currentProjectURL: URL = URL(fileURLWithPath: "/tmp/test-project")
+        var currentProjectURL: URL = .init(fileURLWithPath: "/tmp/test-project")
     }
 
     private func makeEntry(
@@ -46,6 +46,7 @@ struct SkillRegistryIntegrationTests {
             eligibility: SkillEligibility(isEligible: true, reasons: [])
         )
     }
+
     @Test func refresh_withDisabledSystem_clearsEntries() {
         let registry = SkillRegistry.shared
         let provider = MockSkillConfigProvider()

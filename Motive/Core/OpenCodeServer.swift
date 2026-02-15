@@ -38,15 +38,15 @@ actor OpenCodeServer {
         var errorDescription: String? {
             switch self {
             case .notConfigured:
-                return "Server not configured"
-            case .startFailed(let reason):
-                return "Failed to start OpenCode server: \(reason)"
+                "Server not configured"
+            case let .startFailed(reason):
+                "Failed to start OpenCode server: \(reason)"
             case .portDetectionTimeout:
-                return "Timed out waiting for server to report its port"
-            case .maxRetriesExceeded(let attempts):
-                return "Server failed to start after \(attempts) attempts"
+                "Timed out waiting for server to report its port"
+            case let .maxRetriesExceeded(attempts):
+                "Server failed to start after \(attempts) attempts"
             case .alreadyRunning:
-                return "Server is already running"
+                "Server is already running"
             }
         }
     }
@@ -79,7 +79,7 @@ actor OpenCodeServer {
 
     /// The URL of the running server, if available.
     var serverURL: URL? {
-        if case .running(let url) = state {
+        if case let .running(url) = state {
             return url
         }
         return nil
@@ -104,7 +104,7 @@ actor OpenCodeServer {
     /// - Returns: The base URL of the running server.
     /// - Throws: `ServerError` if the server fails to start.
     func start(configuration: Configuration) async throws -> URL {
-        if case .running(let url) = state {
+        if case let .running(url) = state {
             logger.info("Server already running at \(url.absoluteString)")
             return url
         }
@@ -143,7 +143,7 @@ actor OpenCodeServer {
 
         // Wait for graceful shutdown (poll instead of blocking)
         let deadline = Date().addingTimeInterval(Self.gracefulShutdownSeconds)
-        while process.isRunning && Date() < deadline {
+        while process.isRunning, Date() < deadline {
             try? await Task.sleep(nanoseconds: UInt64(MotiveConstants.Timeouts.serverStartupPoll * 1_000_000_000))
         }
 
@@ -172,7 +172,7 @@ actor OpenCodeServer {
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
             if let httpResponse = response as? HTTPURLResponse {
-                return (200...499).contains(httpResponse.statusCode)
+                return (200 ... 499).contains(httpResponse.statusCode)
             }
             return false
         } catch {

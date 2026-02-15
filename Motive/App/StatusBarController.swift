@@ -23,36 +23,36 @@ enum StatusBarDisplayState {
     case idle
     case thinking
     case executing(tool: String?)
-    case waitingForInput(type: String)  // "Permission", "Question", etc.
+    case waitingForInput(type: String) // "Permission", "Question", etc.
     case completed
     case error
-    
+
     var icon: String {
         switch self {
-        case .idle: return "sparkle"
-        case .thinking: return "brain.head.profile"
-        case .executing: return "bolt.fill"
-        case .waitingForInput: return "hand.raised.fill"
-        case .completed: return "checkmark.circle.fill"
-        case .error: return "exclamationmark.triangle.fill"
+        case .idle: "sparkle"
+        case .thinking: "brain.head.profile"
+        case .executing: "bolt.fill"
+        case .waitingForInput: "hand.raised.fill"
+        case .completed: "checkmark.circle.fill"
+        case .error: "exclamationmark.triangle.fill"
         }
     }
-    
+
     var text: String {
         switch self {
-        case .idle: return ""
-        case .thinking: return "Thinking…"
-        case .executing(let tool): return tool ?? "Running…"
-        case .waitingForInput(let type): return type
-        case .completed: return "Done"
-        case .error: return "Error"
+        case .idle: ""
+        case .thinking: "Thinking…"
+        case let .executing(tool): tool ?? "Running…"
+        case let .waitingForInput(type): type
+        case .completed: "Done"
+        case .error: "Error"
         }
     }
-    
+
     var showText: Bool {
         switch self {
-        case .idle: return false
-        default: return true
+        case .idle: false
+        default: true
         }
     }
 }
@@ -77,21 +77,21 @@ final class StatusBarController {
         configureMenu()
         updateDisplay(state: .idle)
     }
-    
+
     /// Configure with ConfigManager to display hotkey in menu
     func configure(configManager: ConfigManager) {
         self.configManager = configManager
         updateCommandBarMenuItem()
     }
-    
+
     /// Update the Command Bar menu item with current hotkey
     func updateCommandBarMenuItem() {
-        guard let item = commandMenuItem, let configManager = configManager else { return }
+        guard let item = commandMenuItem, let configManager else { return }
         let parsed = HotkeyParser.parseToMenuShortcut(configManager.hotkey)
         item.keyEquivalent = parsed.keyEquivalent
         item.keyEquivalentModifierMask = parsed.modifiers
     }
-    
+
     /// Get the frame of the status bar button in screen coordinates
     var buttonFrame: NSRect? {
         guard let button = statusItem.button,
@@ -101,26 +101,24 @@ final class StatusBarController {
     }
 
     func update(state: AppState.MenuBarState, toolName: String? = nil, isWaitingForInput: Bool = false, inputType: String? = nil) {
-        let displayState: StatusBarDisplayState
-
-        if isWaitingForInput {
-            displayState = .waitingForInput(type: inputType ?? "Input Required")
+        let displayState: StatusBarDisplayState = if isWaitingForInput {
+            .waitingForInput(type: inputType ?? "Input Required")
         } else {
             switch state {
             case .idle:
-                displayState = .idle
+                .idle
             case .reasoning:
-                displayState = .thinking
+                .thinking
             case .executing:
-                displayState = .executing(tool: toolName)
+                .executing(tool: toolName)
             case .responding:
-                displayState = .executing(tool: toolName)
+                .executing(tool: toolName)
             }
         }
 
         updateDisplay(state: displayState)
     }
-    
+
     func showCompleted() {
         updateDisplay(state: .completed)
         showNotification(type: .success)
@@ -130,7 +128,7 @@ final class StatusBarController {
             self?.updateDisplay(state: .idle)
         }
     }
-    
+
     func showError() {
         updateDisplay(state: .error)
         showNotification(type: .error)
@@ -140,20 +138,20 @@ final class StatusBarController {
             self?.updateDisplay(state: .idle)
         }
     }
-    
+
     // MARK: - Notification Popup
-    
+
     private func showNotification(type: StatusNotificationType) {
         // Dismiss existing
         dismissNotification()
-        
+
         let view = StatusNotificationView(type: type) { [weak self] in
             self?.dismissNotification()
         }
-        
+
         let hostingView = NSHostingView(rootView: view)
         let size = hostingView.fittingSize
-        
+
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -166,24 +164,24 @@ final class StatusBarController {
         panel.level = .popUpMenu
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentView = hostingView
-        
+
         // Position below status bar button
         if let anchor = buttonFrame {
             let x = anchor.midX - size.width / 2
             let y = anchor.minY - size.height - 8
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
-        
+
         panel.alphaValue = 0
         panel.orderFrontRegardless()
-        
+
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.15
             panel.animator().alphaValue = 1
         }
-        
+
         notificationPanel = panel
-        
+
         // Auto dismiss after 2.5 seconds
         notificationDismissTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
@@ -191,29 +189,29 @@ final class StatusBarController {
             await self?.dismissNotification()
         }
     }
-    
+
     private func dismissNotification() {
         notificationDismissTask?.cancel()
         notificationDismissTask = nil
-        
+
         guard let panel = notificationPanel else { return }
-        
-        NSAnimationContext.runAnimationGroup({ context in
+
+        NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.1
             panel.animator().alphaValue = 0
-        }, completionHandler: {
+        } completionHandler: {
             panel.orderOut(nil)
-        })
+        }
         notificationPanel = nil
     }
-    
+
     private func updateDisplay(state: StatusBarDisplayState) {
         guard let button = statusItem.button else { return }
-        
+
         // Stop any existing animation
         animationTask?.cancel()
         animationTask = nil
-        
+
         // Configure icon based on state
         switch state {
         case .idle:
@@ -236,15 +234,15 @@ final class StatusBarController {
             configured?.isTemplate = true
             button.image = configured
         }
-        
+
         button.imagePosition = state.showText ? .imageLeading : .imageOnly
-        button.contentTintColor = nil  // Let system handle color
-        
+        button.contentTintColor = nil // Let system handle color
+
         // Configure text (always use variableLength — the system auto-sizes
         // to the image alone when there is no title text).
         if state.showText {
             let baseText = state.text
-            
+
             // Start animation for active states
             switch state {
             case .thinking, .executing, .waitingForInput:
@@ -255,30 +253,30 @@ final class StatusBarController {
         } else {
             button.title = ""
         }
-        
+
         statusItem.length = NSStatusItem.variableLength
         statusItem.isVisible = true
     }
-    
+
     private func startTextAnimation(baseText: String, button: NSStatusBarButton) {
         // Remove ... from text
         let cleanText = baseText.replacingOccurrences(of: "…", with: "")
         animationDots = 0
-        
+
         // Start shimmer animation using Task-based loop
         animationTask = Task { @MainActor [weak self, weak button] in
             while !Task.isCancelled {
                 guard let self, let button else { break }
-                
+
                 // Increment phase
-                self.animationDots = (self.animationDots + 1) % 40  // 40 frames, ~1.2s per cycle
+                self.animationDots = (self.animationDots + 1) % 40 // 40 frames, ~1.2s per cycle
                 self.updateShimmerTitle(cleanText, button: button, phase: self.animationDots)
-                
+
                 try? await Task.sleep(for: .milliseconds(30))
             }
         }
     }
-    
+
     /// Resolve the correct text color for the menu bar based on the
     /// status button's effective appearance. The menu bar switches between
     /// vibrant-dark (light text) and vibrant-light (dark text) depending
@@ -292,31 +290,31 @@ final class StatusBarController {
     private func updateShimmerTitle(_ text: String, button: NSStatusBarButton, phase: Int) {
         let baseAlpha: CGFloat = 0.4
         let highlightAlpha: CGFloat = 1.0
-        
+
         // Calculate highlight position (0 to 1)
         let progress = CGFloat(phase) / 40.0
-        let highlightCenter = progress * 1.4 - 0.2  // -0.2 to 1.2 range for smooth entry/exit
-        
+        let highlightCenter = progress * 1.4 - 0.2 // -0.2 to 1.2 range for smooth entry/exit
+
         let attributedString = NSMutableAttributedString(string: " \(text)")
         let font = NSFont.systemFont(ofSize: 12, weight: .medium)
         let baseColor = menuBarTextColor(for: button)
-        
+
         // Apply gradient effect per character
-        for i in 0..<attributedString.length {
+        for i in 0 ..< attributedString.length {
             let charProgress = CGFloat(i) / CGFloat(max(1, attributedString.length - 1))
             let distance = abs(charProgress - highlightCenter)
             let alpha = max(baseAlpha, highlightAlpha - distance * 2.5)
-            
+
             let color = baseColor.withAlphaComponent(alpha)
             attributedString.addAttributes([
                 .font: font,
                 .foregroundColor: color
             ], range: NSRange(location: i, length: 1))
         }
-        
+
         button.attributedTitle = attributedString
     }
-    
+
     private func setButtonTitle(_ title: String, button: NSStatusBarButton, alpha: CGFloat = 1.0) {
         let color = menuBarTextColor(for: button).withAlphaComponent(alpha)
         let attributes: [NSAttributedString.Key: Any] = [
@@ -337,13 +335,13 @@ final class StatusBarController {
         let commandItem = NSMenuItem(title: L10n.StatusBar.commandBar, action: #selector(openCommandBar), keyEquivalent: "")
         commandItem.target = self
         commandItem.image = NSImage(systemSymbolName: "command", accessibilityDescription: nil)
-        self.commandMenuItem = commandItem  // Save reference for later update
-        
+        self.commandMenuItem = commandItem // Save reference for later update
+
         let settingsItem = NSMenuItem(title: L10n.StatusBar.settings, action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         settingsItem.keyEquivalentModifierMask = .command
         settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
-        
+
         let quitItem = NSMenuItem(title: L10n.StatusBar.quit, action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         quitItem.keyEquivalentModifierMask = .command
@@ -377,5 +375,4 @@ final class StatusBarController {
     @objc private func openCommandBar() {
         delegate?.statusBarDidRequestCommandBar()
     }
-
 }

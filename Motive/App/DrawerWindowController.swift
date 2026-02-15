@@ -15,17 +15,19 @@ final class DrawerWindowController {
     private let window: KeyablePanel
     private var statusBarButtonFrame: NSRect?
     private var resignKeyObserver: Any?
-    var isVisible: Bool { window.isVisible }
-    
+    var isVisible: Bool {
+        window.isVisible
+    }
+
     /// When true, the window will not hide on resign key (used during delete confirmation)
     var suppressAutoHide: Bool = false
 
-    init<Content: View>(rootView: Content) {
+    init(rootView: some View) {
         let hostingView = NSHostingView(rootView: AnyView(rootView))
         hostingView.safeAreaRegions = []
         hostingView.wantsLayer = true
         hostingView.layer?.masksToBounds = false
-        
+
         window = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 600),
             styleMask: [.titled, .fullSizeContentView],
@@ -36,24 +38,24 @@ final class DrawerWindowController {
         window.applyFloatingPanelStyle()
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = true
-        
+
         // Hide when window loses key status (clicks outside, unless suppressed)
         resignKeyObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification,
             object: window,
             queue: .main
         ) { [weak self] _ in
-            guard let self = self else { return }
+            guard let self else { return }
             if !self.suppressAutoHide {
                 self.hide()
             }
         }
     }
-    
+
     deinit {
         resignKeyObserver.map { NotificationCenter.default.removeObserver($0) }
     }
-    
+
     /// Update the position reference for the status bar button
     func updateStatusBarButtonFrame(_ frame: NSRect?) {
         self.statusBarButtonFrame = frame
@@ -70,7 +72,7 @@ final class DrawerWindowController {
         window.makeFirstResponder(nil)
         window.orderOut(nil)
     }
-    
+
     func getWindow() -> NSWindow {
         window
     }
@@ -79,26 +81,26 @@ final class DrawerWindowController {
         guard let screen = NSScreen.main else { return }
         let width = window.frame.width
         let height = window.frame.height
-        
+
         let x: CGFloat
         let y: CGFloat
-        
+
         if let buttonFrame = statusBarButtonFrame {
             // Position below status bar icon, aligned to right edge
             x = buttonFrame.maxX - width
-            y = buttonFrame.minY - height - 6  // 6pt gap below status bar
+            y = buttonFrame.minY - height - 6 // 6pt gap below status bar
         } else {
             // Fallback: position at top-right of screen
             let visibleFrame = screen.visibleFrame
             x = visibleFrame.maxX - width - 12
             y = visibleFrame.maxY - height - 12
         }
-        
+
         // Ensure window stays within screen bounds
         let screenFrame = screen.frame
         let clampedX = max(screenFrame.minX + 12, min(x, screenFrame.maxX - width - 12))
         let clampedY = max(screenFrame.minY + 12, y)
-        
+
         window.setFrameOrigin(NSPoint(x: clampedX, y: clampedY))
     }
 }

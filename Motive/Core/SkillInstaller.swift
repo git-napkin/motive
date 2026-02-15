@@ -21,11 +21,11 @@ struct SkillInstallResult: Sendable, Equatable {
     var stdout: String
     var stderr: String
     var exitCode: Int?
-    
+
     static func success(message: String = "Installed successfully", stdout: String = "", stderr: String = "") -> SkillInstallResult {
         SkillInstallResult(ok: true, message: message, stdout: stdout, stderr: stderr, exitCode: 0)
     }
-    
+
     static func failure(message: String, stdout: String = "", stderr: String = "", exitCode: Int? = nil) -> SkillInstallResult {
         SkillInstallResult(ok: false, message: message, stdout: stdout, stderr: stderr, exitCode: exitCode)
     }
@@ -35,23 +35,23 @@ struct SkillInstallResult: Sendable, Equatable {
 
 final class SkillInstaller: SkillInstallerProtocol, @unchecked Sendable {
     private let commandRunner: CommandRunnerProtocol
-    
+
     init(commandRunner: CommandRunnerProtocol = CommandRunner.shared) {
         self.commandRunner = commandRunner
     }
-    
+
     func install(spec: SkillInstallSpec, timeoutSeconds: Int) async -> SkillInstallResult {
         let command = buildCommand(for: spec)
-        
+
         guard !command.isEmpty else {
             if spec.kind == .download {
                 return await handleDownloadInstall(spec: spec, timeoutSeconds: timeoutSeconds)
             }
             return .failure(message: "Missing required field for \(spec.kind.rawValue) install")
         }
-        
+
         let result = await commandRunner.run(command, timeout: timeoutSeconds, env: nil)
-        
+
         if result.succeeded {
             return .success(
                 message: "Installed via \(spec.kind.rawValue)",
@@ -67,15 +67,15 @@ final class SkillInstaller: SkillInstallerProtocol, @unchecked Sendable {
             )
         }
     }
-    
+
     // MARK: - Private
-    
+
     private func buildCommand(for spec: SkillInstallSpec) -> [String] {
         switch spec.kind {
         case .brew:
             guard let formula = spec.formula, !formula.isEmpty else { return [] }
             return ["brew", "install", formula]
-            
+
         case .node:
             guard let package = spec.package, !package.isEmpty else { return [] }
             // Check for preferred package manager
@@ -83,29 +83,29 @@ final class SkillInstaller: SkillInstallerProtocol, @unchecked Sendable {
                 return ["pnpm", "add", "-g", package]
             }
             return ["npm", "install", "-g", package]
-            
+
         case .go:
             guard let module = spec.module, !module.isEmpty else { return [] }
             return ["go", "install", module]
-            
+
         case .uv:
             guard let package = spec.package, !package.isEmpty else { return [] }
             return ["uv", "tool", "install", package]
-            
+
         case .apt:
             guard let package = spec.package, !package.isEmpty else { return [] }
             return ["sudo", "apt", "install", "-y", package]
-            
+
         case .download:
-            return []  // Handled separately
+            return [] // Handled separately
         }
     }
-    
+
     private func handleDownloadInstall(spec: SkillInstallSpec, timeoutSeconds: Int) async -> SkillInstallResult {
         guard let url = spec.url, !url.isEmpty else {
             return .failure(message: "Download install requires url")
         }
-        
+
         // Determine target directory
         let targetDir: String
         if let dir = spec.targetDir, !dir.isEmpty {
@@ -116,13 +116,13 @@ final class SkillInstaller: SkillInstallerProtocol, @unchecked Sendable {
                 .appendingPathComponent("tools")
             targetDir = toolsDir.path
         }
-        
+
         // Create target directory
         try? FileManager.default.createDirectory(
             atPath: targetDir,
             withIntermediateDirectories: true
         )
-        
+
         // Download with curl
         let downloadPath = "\(targetDir)/\(URL(string: url)?.lastPathComponent ?? "download")"
         let curlResult = await commandRunner.run(
@@ -130,7 +130,7 @@ final class SkillInstaller: SkillInstallerProtocol, @unchecked Sendable {
             timeout: timeoutSeconds,
             env: nil
         )
-        
+
         guard curlResult.succeeded else {
             return .failure(
                 message: "Download failed: \(curlResult.stderr)",
@@ -139,7 +139,7 @@ final class SkillInstaller: SkillInstallerProtocol, @unchecked Sendable {
                 exitCode: curlResult.exitCode
             )
         }
-        
+
         // Extract if needed
         if let archive = spec.archive, !archive.isEmpty, spec.extract != false {
             let extractResult = await extractArchive(
@@ -149,7 +149,7 @@ final class SkillInstaller: SkillInstallerProtocol, @unchecked Sendable {
                 stripComponents: spec.stripComponents ?? 0,
                 timeoutSeconds: timeoutSeconds
             )
-            
+
             if !extractResult.succeeded {
                 return .failure(
                     message: "Extraction failed: \(extractResult.stderr)",
@@ -158,14 +158,14 @@ final class SkillInstaller: SkillInstallerProtocol, @unchecked Sendable {
                     exitCode: extractResult.exitCode
                 )
             }
-            
+
             // Clean up archive
             try? FileManager.default.removeItem(atPath: downloadPath)
         }
-        
+
         return .success(message: "Downloaded to \(targetDir)")
     }
-    
+
     private func extractArchive(
         path: String,
         archiveType: String,
@@ -174,38 +174,38 @@ final class SkillInstaller: SkillInstallerProtocol, @unchecked Sendable {
         timeoutSeconds: Int
     ) async -> CommandResult {
         var command: [String]
-        
+
         switch archiveType.lowercased() {
         case "tar.gz", "tgz":
             command = ["tar", "-xzf", path, "-C", targetDir]
             if stripComponents > 0 {
                 command.append(contentsOf: ["--strip-components=\(stripComponents)"])
             }
-            
+
         case "tar.bz2", "tbz2":
             command = ["tar", "-xjf", path, "-C", targetDir]
             if stripComponents > 0 {
                 command.append(contentsOf: ["--strip-components=\(stripComponents)"])
             }
-            
+
         case "zip":
             command = ["unzip", "-o", path, "-d", targetDir]
-            
+
         default:
             return CommandResult(stdout: "", stderr: "Unknown archive type: \(archiveType)", exitCode: 1)
         }
-        
+
         return await commandRunner.run(command, timeout: timeoutSeconds, env: nil)
     }
-    
+
     private func formatFailureMessage(_ result: CommandResult, kind: InstallKind) -> String {
         let code = result.exitCode.map { "exit \($0)" } ?? "unknown exit"
         let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         if stderr.isEmpty {
             return "Install via \(kind.rawValue) failed (\(code))"
         }
-        
+
         let truncated = stderr.count > 200 ? String(stderr.prefix(200)) + "..." : stderr
         return "Install via \(kind.rawValue) failed (\(code)): \(truncated)"
     }

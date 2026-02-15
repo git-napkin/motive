@@ -8,9 +8,11 @@
 import SwiftUI
 
 extension CommandBarView {
-    var isDark: Bool { colorScheme == .dark }
+    var isDark: Bool {
+        colorScheme == .dark
+    }
 
-    // Filtered commands based on input
+    /// Filtered commands based on input
     var filteredCommands: [CommandDefinition] {
         let query = inputText.hasPrefix("/") ? String(inputText.dropFirst()) : ""
         return CommandDefinition.matching(query)
@@ -44,20 +46,20 @@ extension CommandBarView {
         // Removed SwiftUI-level entrance animation to prevent double animation
     }
 
-    // Content ABOVE input (session status)
+    /// Content ABOVE input (session status)
     var showsAboveContent: Bool {
         switch mode {
         case .running, .completed, .error:
-            return true
-        case .command(let fromSession), .history(let fromSession), .modes(let fromSession):
+            true
+        case let .command(fromSession), let .history(fromSession), let .modes(fromSession):
             // Keep status visible when command/history/modes triggered from session
-            return fromSession
+            fromSession
         default:
-            return false
+            false
         }
     }
 
-    // Content BELOW input (lists)
+    /// Content BELOW input (lists)
     var showsBelowContent: Bool {
         mode.isCommand || mode.isHistory || mode.isProjects || mode.isModes
             || isFileCompletionActive
@@ -83,7 +85,6 @@ extension CommandBarView {
 
     // MARK: - Above Input Content (Session Status)
 
-    @ViewBuilder
     var aboveInputContent: some View {
         Group {
             switch mode {
@@ -91,15 +92,15 @@ extension CommandBarView {
                 runningStatusView
             case .completed:
                 completedSummaryView
-            case .error(let message):
+            case let .error(message):
                 errorStatusView(message: message)
-            case .command(let fromSession) where fromSession:
+            case let .command(fromSession) where fromSession:
                 // Show completed status when command triggered from session
                 completedSummaryView
-            case .history(let fromSession) where fromSession:
+            case let .history(fromSession) where fromSession:
                 // Show completed status when history triggered from session
                 completedSummaryView
-            case .modes(let fromSession) where fromSession:
+            case let .modes(fromSession) where fromSession:
                 completedSummaryView
             default:
                 EmptyView()
@@ -110,7 +111,6 @@ extension CommandBarView {
 
     // MARK: - Below Input Content (Lists)
 
-    @ViewBuilder
     var belowInputContent: some View {
         Group {
             if isFileCompletionActive {
@@ -160,7 +160,7 @@ extension CommandBarView {
         guard let hint = autocompleteHint else { return nil }
 
         // If input is shorter than hint, return the remaining part
-        if inputText.count < hint.count && hint.lowercased().hasPrefix(inputText.lowercased()) {
+        if inputText.count < hint.count, hint.lowercased().hasPrefix(inputText.lowercased()) {
             return String(hint.dropFirst(inputText.count))
         }
         return nil

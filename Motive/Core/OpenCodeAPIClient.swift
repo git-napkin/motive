@@ -19,15 +19,15 @@ actor OpenCodeAPIClient {
 
     /// Reply types for native permission requests.
     enum PermissionReply: Sendable {
-        case once           // Allow this single request
-        case always         // Allow and remember for future matching
+        case once // Allow this single request
+        case always // Allow and remember for future matching
         case reject(String?) // Deny with optional message
 
         var wireValue: String {
             switch self {
-            case .once: return "once"
-            case .always: return "always"
-            case .reject: return "reject"
+            case .once: "once"
+            case .always: "always"
+            case .reject: "reject"
             }
         }
     }
@@ -48,14 +48,38 @@ actor OpenCodeAPIClient {
             switch self {
             case .noBaseURL:
                 return "API client has no base URL configured"
-            case .httpError(let code, let body):
-                let detail = body.map { " — \($0)" } ?? ""
-                return "HTTP \(code)\(detail)"
-            case .decodingError(let msg):
+            case let .httpError(code, body):
+                let friendly = Self.friendlyServerMessage(from: body)
+                let detail = friendly ?? body ?? "Unknown server error"
+                return "HTTP \(code): \(detail)"
+            case let .decodingError(msg):
                 return "Response decoding failed: \(msg)"
-            case .networkError(let error):
+            case let .networkError(error):
                 return "Network error: \(error.localizedDescription)"
             }
+        }
+
+        private static func friendlyServerMessage(from body: String?) -> String? {
+            guard let body, !body.isEmpty else { return nil }
+
+            if let data = body.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            {
+                // OpenAI-compatible error payload: {"error":{"message":"...","code":"..."}}
+                if let err = json["error"] as? [String: Any] {
+                    if let message = err["message"] as? String, !message.isEmpty {
+                        return message
+                    }
+                }
+                // OpenCode payload style: {"name":"...","data":{"message":"..."}}
+                if let dataObj = json["data"] as? [String: Any],
+                   let message = dataObj["message"] as? String, !message.isEmpty
+                {
+                    return message
+                }
+            }
+
+            return body
         }
     }
 
@@ -98,7 +122,8 @@ actor OpenCodeAPIClient {
         let responseData = try await post(path: "/session", body: body)
 
         guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
-              let id = json["id"] as? String else {
+              let id = json["id"] as? String
+        else {
             throw APIError.decodingError("Missing session ID in response")
         }
 
@@ -121,13 +146,14 @@ actor OpenCodeAPIClient {
     /// - Parameters:
     ///   - sessionID: The target session.
     ///   - text: The user's prompt text.
-    ///   - model: Provider/model string (e.g. `"anthropic/claude-sonnet-4-5-20250929"`).
-    ///     Split into `{ providerID, modelID }` for the server.
+    ///   - model: User-provided model name override.
+    ///   - modelProviderID: Selected provider ID used when `model` doesn't include provider prefix.
     ///   - agent: Agent name to use for this prompt (e.g. `"motive"`, `"plan"`).
     func sendPromptAsync(
         sessionID: String,
         text: String,
         model: String? = nil,
+        modelProviderID: String? = nil,
         agent: String? = nil
     ) async throws {
         var body: [String: Any] = [
@@ -140,14 +166,25 @@ actor OpenCodeAPIClient {
             body["agent"] = agent
         }
 
-        // Server expects model as { providerID, modelID }, not a flat string
+        // Server expects model as { providerID, modelID }.
+        // If user enters raw model name, use selected provider and keep modelID verbatim.
         if let model {
-            let components = model.split(separator: "/", maxSplits: 1)
-            if components.count == 2 {
-                body["model"] = [
-                    "providerID": String(components[0]),
-                    "modelID": String(components[1]),
-                ]
+            let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedModel.isEmpty {
+                let components = trimmedModel.split(separator: "/", maxSplits: 1)
+                if components.count == 2 {
+                    body["model"] = [
+                        "providerID": String(components[0]),
+                        "modelID": String(components[1]),
+                    ]
+                } else if let providerID = modelProviderID?.trimmingCharacters(in: .whitespacesAndNewlines),
+                          !providerID.isEmpty
+                {
+                    body["model"] = [
+                        "providerID": providerID,
+                        "modelID": trimmedModel,
+                    ]
+                }
             }
         }
 
@@ -194,7 +231,7 @@ actor OpenCodeAPIClient {
             "reply": reply.wireValue
         ]
 
-        if case .reject(let message) = reply, let message {
+        if case let .reject(message) = reply, let message {
             body["message"] = message
         }
 
@@ -247,7 +284,7 @@ actor OpenCodeAPIClient {
                 throw APIError.httpError(statusCode: status, body: bodyStr)
             }
         } else {
-            guard (200...299).contains(status) else {
+            guard (200 ... 299).contains(status) else {
                 let bodyStr = String(data: data, encoding: .utf8)
                 throw APIError.httpError(statusCode: status, body: bodyStr)
             }

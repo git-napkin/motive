@@ -31,6 +31,7 @@ actor MockOpenCodeAPIClient: OpenCodeAPIClientProtocol {
     var sendPromptAsyncLastSessionID: String?
     var sendPromptAsyncLastText: String?
     var sendPromptAsyncLastModel: String?
+    var sendPromptAsyncLastModelProviderID: String?
 
     var replyToQuestionCalled = false
     var replyToQuestionLastRequestID: String?
@@ -110,16 +111,33 @@ actor MockOpenCodeAPIClient: OpenCodeAPIClientProtocol {
         }
     }
 
-    nonisolated func sendPromptAsync(sessionID: String, text: String, model: String?, agent: String?) async throws {
-        try await _performSendPromptAsync(sessionID: sessionID, text: text, model: model)
+    nonisolated func sendPromptAsync(
+        sessionID: String,
+        text: String,
+        model: String?,
+        modelProviderID: String?,
+        agent: String?
+    ) async throws {
+        try await _performSendPromptAsync(
+            sessionID: sessionID,
+            text: text,
+            model: model,
+            modelProviderID: modelProviderID
+        )
     }
 
-    private func _performSendPromptAsync(sessionID: String, text: String, model: String?) throws {
+    private func _performSendPromptAsync(
+        sessionID: String,
+        text: String,
+        model: String?,
+        modelProviderID: String?
+    ) throws {
         sendPromptAsyncCalled = true
         sendPromptAsyncCallCount += 1
         sendPromptAsyncLastSessionID = sessionID
         sendPromptAsyncLastText = text
         sendPromptAsyncLastModel = model
+        sendPromptAsyncLastModelProviderID = modelProviderID
 
         if let error = sendPromptAsyncError {
             throw error
@@ -185,6 +203,7 @@ actor MockOpenCodeAPIClient: OpenCodeAPIClientProtocol {
         sendPromptAsyncLastSessionID = nil
         sendPromptAsyncLastText = nil
         sendPromptAsyncLastModel = nil
+        sendPromptAsyncLastModelProviderID = nil
         replyToQuestionCalled = false
         replyToQuestionLastRequestID = nil
         replyToQuestionLastAnswers = nil

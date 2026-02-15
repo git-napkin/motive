@@ -27,7 +27,7 @@ struct TodoBubble: View {
 
                 // Progress summary
                 if let items = message.todoItems {
-                    let completed = items.filter { $0.status == .completed }.count
+                    let completed = items.count(where: { $0.status == .completed })
                     Text("\(completed)/\(items.count)")
                         .font(.Aurora.micro.weight(.medium))
                         .foregroundColor(Color.Aurora.textMuted)
@@ -59,7 +59,7 @@ struct TodoBubble: View {
 
     /// Progress bar showing overall todo completion
     private func todoProgressBar(items: [TodoItem]) -> some View {
-        let completed = Double(items.filter { $0.status == .completed }.count)
+        let completed = Double(items.count(where: { $0.status == .completed }))
         let total = Double(items.count)
         let progress = total > 0 ? completed / total : 0
 
@@ -86,8 +86,10 @@ struct TodoBubble: View {
             Text(item.content)
                 .font(.Aurora.caption)
                 .foregroundColor(todoTextColor(item.status))
-                .strikethrough(item.status == .completed || item.status == .cancelled,
-                               color: Color.Aurora.textMuted.opacity(0.5))
+                .strikethrough(
+                    item.status == .completed || item.status == .cancelled,
+                    color: Color.Aurora.textMuted.opacity(0.5)
+                )
                 .lineLimit(2)
         }
         .padding(.vertical, 1)
@@ -119,10 +121,10 @@ struct TodoBubble: View {
     /// Text color based on todo status
     private func todoTextColor(_ status: TodoItem.Status) -> Color {
         switch status {
-        case .pending: return Color.Aurora.textSecondary
-        case .inProgress: return Color.Aurora.textPrimary
-        case .completed: return Color.Aurora.textMuted
-        case .cancelled: return Color.Aurora.textMuted
+        case .pending: Color.Aurora.textSecondary
+        case .inProgress: Color.Aurora.textPrimary
+        case .completed: Color.Aurora.textMuted
+        case .cancelled: Color.Aurora.textMuted
         }
     }
 }

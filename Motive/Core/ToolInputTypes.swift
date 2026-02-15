@@ -66,22 +66,19 @@ struct TodoWriteInput: Codable, Sendable {
 extension OpenCodeEvent {
     /// Decode tool input as a native question request
     var nativeQuestionInput: NativeQuestionInput? {
-        guard let dict = toolInputDict else { return nil }
-        guard let data = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+        guard let json = toolInputJSON, let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(NativeQuestionInput.self, from: data)
     }
 
     /// Decode tool input as a native permission request
     var nativePermissionInput: NativePermissionInput? {
-        guard let dict = toolInputDict else { return nil }
-        guard let data = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+        guard let json = toolInputJSON, let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(NativePermissionInput.self, from: data)
     }
 
     /// Decode tool input as a TodoWrite request
     var todoWriteInput: TodoWriteInput? {
-        guard let dict = toolInputDict else { return nil }
-        guard let data = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+        guard let json = toolInputJSON, let data = json.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(TodoWriteInput.self, from: data)
     }
 }

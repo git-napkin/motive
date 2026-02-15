@@ -10,44 +10,44 @@ import Foundation
 extension ConfigManager {
     /// Browser Agent LLM provider for autonomous tasks
     enum BrowserAgentProvider: String, CaseIterable {
-        case anthropic = "anthropic"
-        case openai = "openai"
+        case anthropic
+        case openai
         case browserUse = "browser-use"
-        
+
         var displayName: String {
             switch self {
-            case .anthropic: return "Anthropic (Claude)"
-            case .openai: return "OpenAI (GPT-4)"
-            case .browserUse: return "Browser Use (ChatBrowserUse)"
+            case .anthropic: "Anthropic (Claude)"
+            case .openai: "OpenAI (GPT-4)"
+            case .browserUse: "Browser Use (ChatBrowserUse)"
             }
         }
-        
+
         var envKeyName: String {
             switch self {
-            case .anthropic: return "ANTHROPIC_API_KEY"
-            case .openai: return "OPENAI_API_KEY"
-            case .browserUse: return "BROWSER_USE_API_KEY"
+            case .anthropic: "ANTHROPIC_API_KEY"
+            case .openai: "OPENAI_API_KEY"
+            case .browserUse: "BROWSER_USE_API_KEY"
             }
         }
-        
+
         var baseUrlEnvName: String? {
             switch self {
-            case .anthropic: return "ANTHROPIC_BASE_URL"
-            case .openai: return "OPENAI_BASE_URL"
-            case .browserUse: return nil  // browser-use doesn't support custom base URL
+            case .anthropic: "ANTHROPIC_BASE_URL"
+            case .openai: "OPENAI_BASE_URL"
+            case .browserUse: nil // browser-use doesn't support custom base URL
             }
         }
-        
+
         var supportsBaseUrl: Bool {
             baseUrlEnvName != nil
         }
     }
-    
+
     var browserAgentProvider: BrowserAgentProvider {
         get { BrowserAgentProvider(rawValue: browserAgentProviderRaw) ?? .anthropic }
         set { browserAgentProviderRaw = newValue.rawValue }
     }
-    
+
     var browserAgentAPIKey: String {
         get {
             if let cached = cachedBrowserAgentAPIKey {
@@ -68,7 +68,7 @@ extension ConfigManager {
             }
         }
     }
-    
+
     /// Check if browser agent has API key configured
     /// Uses cache to avoid triggering Keychain prompt
     var hasBrowserAgentAPIKey: Bool {
@@ -79,53 +79,53 @@ extension ConfigManager {
         // Fall back to full check (will trigger Keychain if needed)
         return !browserAgentAPIKey.isEmpty
     }
-    
+
     var browserAgentBaseUrl: String {
         get {
             switch browserAgentProvider {
-            case .anthropic: return browserAgentBaseUrlAnthropic
-            case .openai: return browserAgentBaseUrlOpenAI
-            case .browserUse: return ""  // Not supported
+            case .anthropic: browserAgentBaseUrlAnthropic
+            case .openai: browserAgentBaseUrlOpenAI
+            case .browserUse: "" // Not supported
             }
         }
         set {
             switch browserAgentProvider {
             case .anthropic: browserAgentBaseUrlAnthropic = newValue
             case .openai: browserAgentBaseUrlOpenAI = newValue
-            case .browserUse: break  // Not supported
+            case .browserUse: break // Not supported
             }
         }
     }
-    
+
     /// Clear cached browser agent API key (call when provider changes)
     func clearBrowserAgentAPIKeyCache() {
         cachedBrowserAgentAPIKey = nil
     }
-    
+
     /// Browser automation status
     enum BrowserUseStatus {
-        case ready                    // Sidecar binary available
-        case binaryNotFound           // Binary not in bundle
-        case disabled                 // Feature disabled in settings
-        
+        case ready // Sidecar binary available
+        case binaryNotFound // Binary not in bundle
+        case disabled // Feature disabled in settings
+
         var isReady: Bool {
             if case .ready = self { return true }
             return false
         }
-        
+
         var description: String {
             switch self {
-            case .ready: return "Ready"
-            case .binaryNotFound: return "Binary not found in bundle"
-            case .disabled: return "Disabled"
+            case .ready: "Ready"
+            case .binaryNotFound: "Binary not found in bundle"
+            case .disabled: "Disabled"
             }
         }
     }
-    
+
     /// Check browser automation status
     var browserUseStatus: BrowserUseStatus {
         guard browserUseEnabled else { return .disabled }
-        
+
         // Check if sidecar binary is bundled (supports both --onedir and --onefile builds)
         if let dirURL = Bundle.main.url(forResource: "browser-use-sidecar", withExtension: nil) {
             // Try --onedir structure first
@@ -138,7 +138,7 @@ extension ConfigManager {
                 return .ready
             }
         }
-        
+
         return .binaryNotFound
     }
 }

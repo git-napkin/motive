@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct EnvironmentBuilder {
+enum EnvironmentBuilder {
 
     struct Inputs {
         let provider: ConfigManager.Provider
@@ -35,9 +35,18 @@ struct EnvironmentBuilder {
 
         // Remove proxy environment variables to avoid SOCKS proxy errors with browser-use
         // browser-use uses httpx which doesn't have socksio installed by default
-        let proxyKeys = ["ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy",
-                         "HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy",
-                         "SOCKS_PROXY", "socks_proxy"]
+        let proxyKeys = [
+            "ALL_PROXY",
+            "all_proxy",
+            "HTTP_PROXY",
+            "http_proxy",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "NO_PROXY",
+            "no_proxy",
+            "SOCKS_PROXY",
+            "socks_proxy"
+        ]
         for key in proxyKeys {
             environment.removeValue(forKey: key)
         }
@@ -130,7 +139,7 @@ struct EnvironmentBuilder {
 
 // MARK: - Path Builder
 
-struct PathBuilder {
+enum PathBuilder {
     /// Build extended PATH for OpenCode's runtime environment.
     ///
     /// Uses `CommandRunner.effectivePaths()` as the single source of truth,
@@ -157,7 +166,7 @@ struct PathBuilder {
                 .sorted { v1, v2 in
                     let parse: (String) -> Int = { v in
                         let parts = v.dropFirst().split(separator: ".").compactMap { Int($0) }
-                        let major = parts.count > 0 ? parts[0] : 0
+                        let major = !parts.isEmpty ? parts[0] : 0
                         let minor = parts.count > 1 ? parts[1] : 0
                         let patch = parts.count > 2 ? parts[2] : 0
                         return major * 10000 + minor * 100 + patch
@@ -174,14 +183,14 @@ struct PathBuilder {
 
         // Node.js version manager paths (not covered by CommandRunner.effectivePaths)
         let nodeManagerPaths = [
-            "\(homeDir)/.volta/bin",       // Volta
-            "\(homeDir)/.asdf/shims",      // asdf
+            "\(homeDir)/.volta/bin", // Volta
+            "\(homeDir)/.asdf/shims", // asdf
             "\(homeDir)/.fnm/current/bin", // fnm
-            "\(homeDir)/.nodenv/shims",    // nodenv
-            "/opt/local/bin",              // MacPorts
+            "\(homeDir)/.nodenv/shims", // nodenv
+            "/opt/local/bin", // MacPorts
         ]
         for path in nodeManagerPaths {
-            if FileManager.default.fileExists(atPath: path) && !pathParts.contains(path) {
+            if FileManager.default.fileExists(atPath: path), !pathParts.contains(path) {
                 pathParts.append(path)
             }
         }
@@ -204,7 +213,7 @@ struct PathBuilder {
         }
 
         // Add base PATH
-        if let base = base {
+        if let base {
             for path in base.split(separator: ":").map(String.init) {
                 if !pathParts.contains(path) {
                     pathParts.append(path)
@@ -236,7 +245,7 @@ struct PathBuilder {
                 if let match = output.range(of: #"PATH="([^"]+)""#, options: .regularExpression) {
                     let pathValue = output[match]
                         .dropFirst(6) // Remove PATH="
-                        .dropLast(1)  // Remove trailing "
+                        .dropLast(1) // Remove trailing "
                     return String(pathValue)
                 }
             }

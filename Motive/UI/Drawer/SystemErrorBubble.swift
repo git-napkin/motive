@@ -41,6 +41,7 @@ struct SystemErrorBubble: View {
     @ViewBuilder
     private var errorBubble: some View {
         let (title, detail) = Self.parseErrorMessage(message.content)
+        let fullDetail = (detail ?? message.content).trimmingCharacters(in: .whitespacesAndNewlines)
 
         VStack(alignment: .leading, spacing: 0) {
             // Header row: icon + title + Show button
@@ -56,7 +57,7 @@ struct SystemErrorBubble: View {
 
                 Spacer()
 
-                if detail != nil {
+                if !fullDetail.isEmpty {
                     Button {
                         withAnimation(.auroraFast) { isDetailExpanded.toggle() }
                     } label: {
@@ -71,11 +72,11 @@ struct SystemErrorBubble: View {
             .padding(.vertical, AuroraSpacing.space2)
 
             // Expandable detail
-            if isDetailExpanded, let detail {
+            if isDetailExpanded, !fullDetail.isEmpty {
                 Divider()
                     .background(Color.Aurora.error.opacity(0.15))
 
-                Text(detail)
+                Text(fullDetail)
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .foregroundColor(Color.Aurora.textSecondary)
                     .textSelection(.enabled)
@@ -103,14 +104,15 @@ struct SystemErrorBubble: View {
            let data = String(trimmed[jsonStart.lowerBound...]).data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let error = json["error"] as? [String: Any],
-           let message = error["message"] as? String {
+           let message = error["message"] as? String
+        {
             let shortMessage = message.components(separatedBy: "..").first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? message
             return (shortMessage, trimmed)
         }
 
         // Try to extract "Name: short description" before any JSON
         if let jsonStart = trimmed.range(of: "{") {
-            let prefix = String(trimmed[trimmed.startIndex..<jsonStart.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let prefix = String(trimmed[trimmed.startIndex ..< jsonStart.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
             if !prefix.isEmpty {
                 return (prefix, trimmed)
             }
@@ -123,7 +125,7 @@ struct SystemErrorBubble: View {
 
         // Truncate for title, full text as detail
         let titleEnd = trimmed.index(trimmed.startIndex, offsetBy: min(80, trimmed.count))
-        return (String(trimmed[trimmed.startIndex..<titleEnd]) + "…", trimmed)
+        return (String(trimmed[trimmed.startIndex ..< titleEnd]) + "…", trimmed)
     }
 
     private var completionIcon: String {

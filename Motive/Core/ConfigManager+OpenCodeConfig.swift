@@ -8,37 +8,44 @@ extension ConfigManager {
         let homeDir = FileManager.default.homeDirectoryForCurrentUser
         let authDir = homeDir.appendingPathComponent(".local/share/opencode")
         let authPath = authDir.appendingPathComponent("auth.json")
-        
+
         // Ensure directory exists
         try? FileManager.default.createDirectory(at: authDir, withIntermediateDirectories: true)
-        
+
         // Read existing auth.json or create new
         var auth: [String: [String: String]] = [:]
         if let data = try? Data(contentsOf: authPath),
-           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: [String: String]] {
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: [String: String]]
+        {
             auth = existing
         }
-        
+
         // Only sync current provider's API key (to avoid multiple keychain prompts)
         let providerName = provider.openCodeProviderName
-        
+
         // Use the cached apiKey property instead of direct keychain read
         let apiKeyValue = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !apiKeyValue.isEmpty && provider.requiresAPIKey {
+        if !apiKeyValue.isEmpty, provider.requiresAPIKey {
             auth[providerName] = [
                 "type": "api",
                 "key": apiKeyValue
             ]
             Log.config(" Synced \(providerName) API key to auth.json")
         }
-        
+
+        // Legacy provider ID cleanup (provider removed from UI/config).
+        if auth["openai-compatible"] != nil {
+            auth.removeValue(forKey: "openai-compatible")
+            Log.config(" Removed legacy 'openai-compatible' entry from auth.json")
+        }
+
         // Write back
         if let jsonData = try? JSONSerialization.data(withJSONObject: auth, options: .prettyPrinted) {
             try? jsonData.write(to: authPath)
             Log.config(" Synced auth.json to \(authPath.path)")
         }
     }
-    
+
     /// Generate opencode.json config file
     /// Path: ~/.motive/config/opencode.json
     ///
@@ -77,7 +84,9 @@ extension ConfigManager {
 
         let inputs = OpenCodeConfigGenerator.Inputs(
             providerName: provider.openCodeProviderName,
+            provider: provider,
             baseURL: baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            modelName: modelName.trimmingCharacters(in: .whitespacesAndNewlines),
             workspaceDirectory: workspaceDirectory,
             skillsSystemEnabled: skillsSystemEnabled,
             compactionEnabled: compactionEnabled,

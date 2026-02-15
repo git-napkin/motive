@@ -1,6 +1,6 @@
-import Testing
 import Foundation
 @testable import Motive
+import Testing
 
 /// Tests for SSE native question/permission event types and their
 /// serialization for REST API replies.
@@ -8,7 +8,7 @@ struct NativeEventTests {
 
     // MARK: - QuestionRequest Parsing
 
-    @Test func questionRequestWithSingleQuestion() async throws {
+    @Test func questionRequestWithSingleQuestion() async {
         let client = SSEClient()
         let json = """
         {
@@ -32,7 +32,7 @@ struct NativeEventTests {
         """
 
         let event = await client.parseSSEData(json)
-        guard case .questionAsked(let request) = event else {
+        guard case let .questionAsked(request) = event else {
             Issue.record("Expected questionAsked event")
             return
         }
@@ -51,7 +51,7 @@ struct NativeEventTests {
         #expect(q.custom == true)
     }
 
-    @Test func questionRequestWithMultipleQuestions() async throws {
+    @Test func questionRequestWithMultipleQuestions() async {
         let client = SSEClient()
         let json = """
         {
@@ -78,7 +78,7 @@ struct NativeEventTests {
         """
 
         let event = await client.parseSSEData(json)
-        guard case .questionAsked(let request) = event else {
+        guard case let .questionAsked(request) = event else {
             Issue.record("Expected questionAsked event")
             return
         }
@@ -91,7 +91,7 @@ struct NativeEventTests {
         #expect(request.questions[1].custom == true)
     }
 
-    @Test func questionRequestWithNoOptions() async throws {
+    @Test func questionRequestWithNoOptions() async {
         let client = SSEClient()
         let json = """
         {
@@ -111,7 +111,7 @@ struct NativeEventTests {
         """
 
         let event = await client.parseSSEData(json)
-        guard case .questionAsked(let request) = event else {
+        guard case let .questionAsked(request) = event else {
             Issue.record("Expected questionAsked event")
             return
         }
@@ -120,7 +120,7 @@ struct NativeEventTests {
         #expect(request.questions[0].custom == true)
     }
 
-    @Test func questionRequestDefaultsCustomToTrue() async throws {
+    @Test func questionRequestDefaultsCustomToTrue() async {
         let client = SSEClient()
         // When "custom" field is missing, the parser defaults to true
         let json = """
@@ -141,7 +141,7 @@ struct NativeEventTests {
         """
 
         let event = await client.parseSSEData(json)
-        guard case .questionAsked(let request) = event else {
+        guard case let .questionAsked(request) = event else {
             Issue.record("Expected questionAsked event")
             return
         }
@@ -150,7 +150,7 @@ struct NativeEventTests {
         #expect(request.questions[0].custom == true)
     }
 
-    @Test func questionRequestInfersPlanExitContextAndPath() async throws {
+    @Test func questionRequestInfersPlanExitContextAndPath() async {
         let client = SSEClient()
         let json = """
         {
@@ -175,7 +175,7 @@ struct NativeEventTests {
         """
 
         let event = await client.parseSSEData(json)
-        guard case .questionAsked(let request) = event else {
+        guard case let .questionAsked(request) = event else {
             Issue.record("Expected questionAsked event")
             return
         }
@@ -184,7 +184,7 @@ struct NativeEventTests {
         #expect(request.planFilePath == ".opencode/plans/123-demo.md")
     }
 
-    @Test func questionRequestInfersPlanEnterContextAndPath() async throws {
+    @Test func questionRequestInfersPlanEnterContextAndPath() async {
         let client = SSEClient()
         let json = """
         {
@@ -205,7 +205,7 @@ struct NativeEventTests {
         """
 
         let event = await client.parseSSEData(json)
-        guard case .questionAsked(let request) = event else {
+        guard case let .questionAsked(request) = event else {
             Issue.record("Expected questionAsked event")
             return
         }
@@ -216,7 +216,7 @@ struct NativeEventTests {
 
     // MARK: - NativePermissionRequest Parsing
 
-    @Test func permissionRequestWithDiffMetadata() async throws {
+    @Test func permissionRequestWithDiffMetadata() async {
         let client = SSEClient()
         let json = """
         {
@@ -236,7 +236,7 @@ struct NativeEventTests {
         """
 
         let event = await client.parseSSEData(json)
-        guard case .permissionAsked(let request) = event else {
+        guard case let .permissionAsked(request) = event else {
             Issue.record("Expected permissionAsked event")
             return
         }
@@ -249,7 +249,7 @@ struct NativeEventTests {
         #expect(request.always == ["src/**"])
     }
 
-    @Test func permissionRequestForBash() async throws {
+    @Test func permissionRequestForBash() async {
         let client = SSEClient()
         let json = """
         {
@@ -266,7 +266,7 @@ struct NativeEventTests {
         """
 
         let event = await client.parseSSEData(json)
-        guard case .permissionAsked(let request) = event else {
+        guard case let .permissionAsked(request) = event else {
             Issue.record("Expected permissionAsked event")
             return
         }
@@ -277,7 +277,7 @@ struct NativeEventTests {
         #expect(request.always == ["rm *"])
     }
 
-    @Test func permissionRequestWithEmptyAlways() async throws {
+    @Test func permissionRequestWithEmptyAlways() async {
         let client = SSEClient()
         let json = """
         {
@@ -293,7 +293,7 @@ struct NativeEventTests {
         """
 
         let event = await client.parseSSEData(json)
-        guard case .permissionAsked(let request) = event else {
+        guard case let .permissionAsked(request) = event else {
             Issue.record("Expected permissionAsked event")
             return
         }
@@ -301,7 +301,7 @@ struct NativeEventTests {
         #expect(request.always.isEmpty)
     }
 
-    @Test func permissionRequestMultiplePatterns() async throws {
+    @Test func permissionRequestMultiplePatterns() async {
         let client = SSEClient()
         let json = """
         {
@@ -318,7 +318,7 @@ struct NativeEventTests {
         """
 
         let event = await client.parseSSEData(json)
-        guard case .permissionAsked(let request) = event else {
+        guard case let .permissionAsked(request) = event else {
             Issue.record("Expected permissionAsked event")
             return
         }

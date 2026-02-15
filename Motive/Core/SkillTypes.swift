@@ -40,7 +40,7 @@ struct SkillMetadata: Codable, Equatable, Sendable {
     var requires: SkillRequirements?
     var skillKey: String?
     var install: [SkillInstallSpec]?
-    
+
     /// Override default enabled state for bundled skills.
     /// - `true`: Skill is enabled by default (system skills)
     /// - `false`: Skill is disabled by default (optional bundled skills)
@@ -65,16 +65,16 @@ struct SkillInstallSpec: Codable, Equatable, Sendable {
     var label: String?
     var bins: [String]?
     var os: [String]?
-    
+
     // Kind-specific fields
-    var formula: String?      // brew
-    var package: String?      // node, uv, apt
-    var module: String?       // go
-    var url: String?          // download
-    var archive: String?      // download (tar.gz, tar.bz2, zip)
-    var extract: Bool?        // download
+    var formula: String? // brew
+    var package: String? // node, uv, apt
+    var module: String? // go
+    var url: String? // download
+    var archive: String? // download (tar.gz, tar.bz2, zip)
+    var extract: Bool? // download
     var stripComponents: Int? // download
-    var targetDir: String?    // download
+    var targetDir: String? // download
 }
 
 enum SkillWiring: Equatable, Sendable {
@@ -102,7 +102,10 @@ struct SkillEligibility: Equatable, Sendable {
 }
 
 struct SkillEntry: Equatable, Identifiable, Sendable {
-    var id: String { name }
+    var id: String {
+        name
+    }
+
     var name: String
     var description: String
     var filePath: String

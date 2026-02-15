@@ -17,7 +17,9 @@ struct AuroraBrowserStep: View {
     @State private var browserAgentAPIKey: String = ""
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         VStack(spacing: AuroraSpacing.space4) {
@@ -176,7 +178,7 @@ struct AuroraBrowserStep: View {
     }
 
     private func saveSettings() {
-        if configManager.browserUseEnabled && !browserAgentAPIKey.isEmpty {
+        if configManager.browserUseEnabled, !browserAgentAPIKey.isEmpty {
             configManager.browserAgentAPIKey = browserAgentAPIKey
         }
         SkillManager.shared.reloadSkills()

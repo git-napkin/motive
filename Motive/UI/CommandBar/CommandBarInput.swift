@@ -76,13 +76,13 @@ extension CommandBarView {
     var placeholderText: String {
         switch mode {
         case .command:
-            return "Type a command..."
+            "Type a command..."
         case .history:
-            return "Search sessions..."
+            "Search sessions..."
         case .running, .completed, .error:
-            return "Follow up..."  // Status shown above, not in placeholder
+            "Follow up..." // Status shown above, not in placeholder
         default:
-            return L10n.CommandBar.placeholder
+            L10n.CommandBar.placeholder
         }
     }
 
@@ -114,7 +114,7 @@ extension CommandBarView {
         } else {
             let canSend = !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let isCommandInput = inputText.hasPrefix("/")
-            if canSend && !isCommandInput {
+            if canSend, !isCommandInput {
                 Button(action: handleSubmit) {
                     Image(systemName: "return")
                         .font(.system(size: 14, weight: .medium))

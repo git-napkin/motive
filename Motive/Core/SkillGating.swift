@@ -75,7 +75,8 @@ enum SkillGating {
                     }
                     if let apiKey = skillConfig?.apiKey,
                        !apiKey.isEmpty,
-                       entry.metadata?.primaryEnv == envName {
+                       entry.metadata?.primaryEnv == envName
+                    {
                         continue
                     }
                     reasons.append("missing_env:\(envName)")
@@ -123,15 +124,16 @@ enum SkillGating {
 
     private static func isConfigPathTruthy(_ path: String, entryConfig: SkillEntryConfig?) -> Bool {
         guard let value = entryConfig?.config[path]?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !value.isEmpty else {
+              !value.isEmpty
+        else {
             return false
         }
         let lower = value.lowercased()
         return !(lower == "false" || lower == "0" || lower == "no")
     }
-    
+
     // MARK: - Status Building
-    
+
     static func buildStatus(
         entry: SkillEntry,
         config: SkillsConfig,
@@ -144,7 +146,7 @@ enum SkillGating {
         let installOptions = resolveInstallOptions(entry: entry, commandRunner: commandRunner, platform: platform)
         let skillKey = resolveSkillKey(entry)
         let entryConfig = config.entries[skillKey] ?? config.entries[entry.name]
-        
+
         // Determine disabled state using priority:
         // 1. User explicit config > 2. metadata.defaultEnabled > 3. system skill check
         let disabled: Bool
@@ -157,7 +159,7 @@ enum SkillGating {
             let defaultEnabled = entry.metadata?.defaultEnabled ?? isSystemSkill
             disabled = !defaultEnabled
         }
-        
+
         return SkillStatusEntry(
             entry: entry,
             eligible: eligibility.isEligible,
@@ -166,7 +168,7 @@ enum SkillGating {
             installOptions: installOptions
         )
     }
-    
+
     static func detectMissingDeps(
         entry: SkillEntry,
         commandRunner: CommandRunnerProtocol,
@@ -176,14 +178,14 @@ enum SkillGating {
         var missing = SkillMissingDeps()
         let skillKey = resolveSkillKey(entry)
         let skillConfig = config.entries[skillKey] ?? config.entries[entry.name]
-        
+
         guard let requires = entry.metadata?.requires else {
             return missing
         }
-        
+
         // Check bins
         missing.bins = requires.bins.filter { !commandRunner.hasBinary($0) }
-        
+
         // Check env
         for envName in requires.env {
             if environment[envName]?.isEmpty == false {
@@ -194,57 +196,58 @@ enum SkillGating {
             }
             if let apiKey = skillConfig?.apiKey,
                !apiKey.isEmpty,
-               entry.metadata?.primaryEnv == envName {
+               entry.metadata?.primaryEnv == envName
+            {
                 continue
             }
             missing.env.append(envName)
         }
-        
+
         // Check config
         for configPath in requires.config {
             if !isConfigPathTruthy(configPath, entryConfig: skillConfig) {
                 missing.config.append(configPath)
             }
         }
-        
+
         return missing
     }
-    
+
     static func resolveInstallOptions(
         entry: SkillEntry,
         commandRunner: CommandRunnerProtocol,
         platform: String = SkillPlatform.current
     ) -> [SkillInstallOption] {
         guard let installSpecs = entry.metadata?.install else { return [] }
-        
+
         return installSpecs.enumerated().compactMap { index, spec in
             // Check OS match
             if let osList = spec.os, !osList.isEmpty, !osList.contains(platform) {
                 return nil
             }
-            
+
             let id = spec.id ?? "\(spec.kind.rawValue)-\(index)"
             let label = spec.label ?? "Install via \(spec.kind.rawValue)"
             let available = isInstallerAvailable(spec.kind, commandRunner: commandRunner)
-            
+
             return SkillInstallOption(id: id, label: label, kind: spec.kind, available: available)
         }
     }
-    
+
     private static func isInstallerAvailable(_ kind: InstallKind, commandRunner: CommandRunnerProtocol) -> Bool {
         switch kind {
         case .brew:
-            return commandRunner.hasBinary("brew")
+            commandRunner.hasBinary("brew")
         case .node:
-            return commandRunner.hasBinary("npm") || commandRunner.hasBinary("pnpm")
+            commandRunner.hasBinary("npm") || commandRunner.hasBinary("pnpm")
         case .go:
-            return commandRunner.hasBinary("go")
+            commandRunner.hasBinary("go")
         case .uv:
-            return commandRunner.hasBinary("uv")
+            commandRunner.hasBinary("uv")
         case .apt:
-            return commandRunner.hasBinary("apt")
+            commandRunner.hasBinary("apt")
         case .download:
-            return true
+            true
         }
     }
 }
@@ -252,13 +255,13 @@ enum SkillGating {
 enum SkillPlatform {
     static var current: String {
         #if os(macOS)
-        return "darwin"
+            return "darwin"
         #elseif os(Linux)
-        return "linux"
+            return "linux"
         #elseif os(Windows)
-        return "win32"
+            return "win32"
         #else
-        return "unknown"
+            return "unknown"
         #endif
     }
 }

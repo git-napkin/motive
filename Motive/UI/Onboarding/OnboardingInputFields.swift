@@ -17,7 +17,7 @@ enum AuroraInputFieldStyle {
     /// Shared input background color matching the onboarding card surface.
     static func backgroundColor(isDark: Bool) -> Color {
         isDark ? Color(red: 0x19 / 255.0, green: 0x19 / 255.0, blue: 0x19 / 255.0)
-               : Color(red: 0xFA / 255.0, green: 0xFA / 255.0, blue: 0xFA / 255.0)
+            : Color(red: 0xFA / 255.0, green: 0xFA / 255.0, blue: 0xFA / 255.0)
     }
 }
 
