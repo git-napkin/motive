@@ -22,28 +22,28 @@ enum TrustLevel: String, CaseIterable, Codable, Sendable {
 
     var displayName: String {
         switch self {
-        case .careful:  return L10n.Settings.trustCareful
-        case .balanced: return L10n.Settings.trustBalanced
-        case .yolo:     return L10n.Settings.trustYolo
+        case .careful: L10n.Settings.trustCareful
+        case .balanced: L10n.Settings.trustBalanced
+        case .yolo: L10n.Settings.trustYolo
         }
     }
 
     var description: String {
         switch self {
         case .careful:
-            return L10n.Settings.trustCarefulDesc
+            L10n.Settings.trustCarefulDesc
         case .balanced:
-            return L10n.Settings.trustBalancedDesc
+            L10n.Settings.trustBalancedDesc
         case .yolo:
-            return L10n.Settings.trustYoloDesc
+            L10n.Settings.trustYoloDesc
         }
     }
 
     var systemSymbol: String {
         switch self {
-        case .careful:  return "shield.checkered"
-        case .balanced: return "gauge.with.dots.needle.50percent"
-        case .yolo:     return "bolt.shield"
+        case .careful: "shield.checkered"
+        case .balanced: "gauge.with.dots.needle.50percent"
+        case .yolo: "bolt.shield"
         }
     }
 }
@@ -53,81 +53,81 @@ enum TrustLevel: String, CaseIterable, Codable, Sendable {
 /// Tool permission categories matching OpenCode's permission system.
 /// Each category corresponds to a tool or tool group in OpenCode.
 enum ToolPermission: String, CaseIterable, Codable, Hashable, Sendable {
-    case edit              // File editing (create, modify, overwrite)
-    case bash              // Shell commands
-    case read              // File reading
-    case glob              // File searching
-    case grep              // Content searching
-    case list              // Directory listing
-    case task              // Subtask creation
-    case question          // Native question popup (must always be allowed)
-    case webfetch          // Web fetching
-    case websearch         // Web searching
+    case edit // File editing (create, modify, overwrite)
+    case bash // Shell commands
+    case read // File reading
+    case glob // File searching
+    case grep // Content searching
+    case list // Directory listing
+    case task // Subtask creation
+    case question // Native question popup (must always be allowed)
+    case webfetch // Web fetching
+    case websearch // Web searching
     case externalDirectory = "external_directory" // External directory access
 
     /// Human-readable display name.
     var displayName: String {
         switch self {
-        case .edit:              return "Edit"
-        case .bash:              return "Bash"
-        case .read:              return "Read"
-        case .glob:              return "Glob"
-        case .grep:              return "Grep"
-        case .list:              return "List"
-        case .task:              return "Task"
-        case .question:          return "Question"
-        case .webfetch:          return "Web Fetch"
-        case .websearch:         return "Web Search"
-        case .externalDirectory: return "External Directory"
+        case .edit: "Edit"
+        case .bash: "Bash"
+        case .read: "Read"
+        case .glob: "Glob"
+        case .grep: "Grep"
+        case .list: "List"
+        case .task: "Task"
+        case .question: "Question"
+        case .webfetch: "Web Fetch"
+        case .websearch: "Web Search"
+        case .externalDirectory: "External Directory"
         }
     }
 
     /// Localized description for the Settings UI.
     var localizedDescription: String {
         switch self {
-        case .edit:              return "Create, modify, or overwrite files"
-        case .bash:              return "Run shell commands"
-        case .read:              return "Read file contents"
-        case .glob:              return "Search for files by pattern"
-        case .grep:              return "Search file contents"
-        case .list:              return "List directory contents"
-        case .task:              return "Create subtask agents"
-        case .question:          return "Ask user questions via native popup"
-        case .webfetch:          return "Fetch web content"
-        case .websearch:         return "Search the web"
-        case .externalDirectory: return "Access directories outside the project"
+        case .edit: "Create, modify, or overwrite files"
+        case .bash: "Run shell commands"
+        case .read: "Read file contents"
+        case .glob: "Search for files by pattern"
+        case .grep: "Search file contents"
+        case .list: "List directory contents"
+        case .task: "Create subtask agents"
+        case .question: "Ask user questions via native popup"
+        case .webfetch: "Fetch web content"
+        case .websearch: "Search the web"
+        case .externalDirectory: "Access directories outside the project"
         }
     }
 
     /// SF Symbol name for the Settings UI.
     var systemSymbol: String {
         switch self {
-        case .edit:              return "pencil"
-        case .bash:              return "terminal"
-        case .read:              return "doc.text"
-        case .glob:              return "doc.text.magnifyingglass"
-        case .grep:              return "magnifyingglass"
-        case .list:              return "folder"
-        case .task:              return "arrow.triangle.branch"
-        case .question:          return "questionmark.bubble"
-        case .webfetch:          return "globe"
-        case .websearch:         return "magnifyingglass.circle"
-        case .externalDirectory: return "folder.badge.questionmark"
+        case .edit: "pencil"
+        case .bash: "terminal"
+        case .read: "doc.text"
+        case .glob: "doc.text.magnifyingglass"
+        case .grep: "magnifyingglass"
+        case .list: "folder"
+        case .task: "arrow.triangle.branch"
+        case .question: "questionmark.bubble"
+        case .webfetch: "globe"
+        case .websearch: "magnifyingglass.circle"
+        case .externalDirectory: "folder.badge.questionmark"
         }
     }
 
     /// Risk level for visual indication.
     var riskLevel: RiskLevel {
         switch self {
-        case .edit:              return .medium
-        case .bash:              return .high
+        case .edit: .medium
+        case .bash: .high
         case .read, .glob, .grep, .list:
-                                 return .low
-        case .task:              return .medium
-        case .question:          return .low
+            .low
+        case .task: .medium
+        case .question: .low
         case .webfetch, .websearch:
-                                 return .low
-        case .externalDirectory: return .medium
+            .low
+        case .externalDirectory: .medium
         }
     }
 
@@ -136,9 +136,9 @@ enum ToolPermission: String, CaseIterable, Codable, Hashable, Sendable {
     var isPrimary: Bool {
         switch self {
         case .edit, .bash, .read, .externalDirectory:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 }
@@ -158,19 +158,19 @@ enum RiskLevel: Int, Comparable, Sendable {
 
     var displayName: String {
         switch self {
-        case .low:      return "Low"
-        case .medium:   return "Medium"
-        case .high:     return "High"
-        case .critical: return "Critical"
+        case .low: "Low"
+        case .medium: "Medium"
+        case .high: "High"
+        case .critical: "Critical"
         }
     }
 
     var color: String {
         switch self {
-        case .low:      return "green"
-        case .medium:   return "yellow"
-        case .high:     return "orange"
-        case .critical: return "red"
+        case .low: "green"
+        case .medium: "yellow"
+        case .high: "orange"
+        case .critical: "red"
         }
     }
 }
@@ -185,9 +185,9 @@ enum PermissionAction: String, Codable, CaseIterable, Sendable {
 
     var displayName: String {
         switch self {
-        case .allow: return "Allow"
-        case .ask:   return "Ask"
-        case .deny:  return "Deny"
+        case .allow: "Allow"
+        case .ask: "Ask"
+        case .deny: "Deny"
         }
     }
 }
@@ -197,7 +197,7 @@ enum PermissionAction: String, Codable, CaseIterable, Sendable {
 /// A pattern-based permission rule for a specific tool.
 struct ToolPermissionRule: Codable, Identifiable, Sendable, Equatable {
     let id: UUID
-    let pattern: String          // e.g., "*.ts", "git *", "/System/**"
+    let pattern: String // e.g., "*.ts", "git *", "/System/**"
     let action: PermissionAction
     let description: String?
 
@@ -331,7 +331,7 @@ final class ToolPermissionPolicy {
             let config = self.config(for: tool)
             let toolProtectedRules = protectedRules.filter { $0.tool == tool }
 
-            if config.rules.isEmpty && toolProtectedRules.isEmpty {
+            if config.rules.isEmpty, toolProtectedRules.isEmpty {
                 // Simple format: just the default action
                 rules[tool.rawValue] = config.defaultAction.rawValue
             } else {
@@ -374,9 +374,9 @@ final class ToolPermissionPolicy {
     /// Generate tool configs for a specific trust level.
     static func configsForTrustLevel(_ level: TrustLevel) -> [ToolPermission: ToolPermissionConfig] {
         switch level {
-        case .careful:  return carefulConfigs()
-        case .balanced: return balancedConfigs()
-        case .yolo:     return yoloConfigs()
+        case .careful: carefulConfigs()
+        case .balanced: balancedConfigs()
+        case .yolo: yoloConfigs()
         }
     }
 

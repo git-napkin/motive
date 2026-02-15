@@ -6,8 +6,8 @@
 //  Provides browser automation capabilities via a bundled standalone executable.
 //
 
-import Foundation
 import Combine
+import Foundation
 
 /// Result of a browser automation command
 struct BrowserResult: Codable {
@@ -26,19 +26,19 @@ struct BrowserResultData: Codable {
     let text: String?
     let key: String?
     let direction: String?
-    
+
     // State command fields
     let elementCount: Int?
     let elements: [String]?
     let elementsRaw: [[String: AnyCodable]]?
-    
+
     // Click/input fields
     let clicked: String?
     let element: String?
-    
-    // Sessions fields
+
+    /// Sessions fields
     let sessions: [[String: AnyCodable]]?
-    
+
     enum CodingKeys: String, CodingKey {
         case url, title, message, path, text, key, direction
         case elementCount = "element_count"
@@ -51,14 +51,14 @@ struct BrowserResultData: Codable {
 /// Helper type for handling arbitrary JSON values
 struct AnyCodable: Codable {
     let value: Any
-    
+
     init(_ value: Any) {
         self.value = value
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        
+
         if let bool = try? container.decode(Bool.self) {
             value = bool
         } else if let int = try? container.decode(Int.self) {
@@ -68,17 +68,17 @@ struct AnyCodable: Codable {
         } else if let string = try? container.decode(String.self) {
             value = string
         } else if let array = try? container.decode([AnyCodable].self) {
-            value = array.map { $0.value }
+            value = array.map(\.value)
         } else if let dict = try? container.decode([String: AnyCodable].self) {
             value = dict.mapValues { $0.value }
         } else {
             value = NSNull()
         }
     }
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        
+
         switch value {
         case let bool as Bool:
             try container.encode(bool)
@@ -101,25 +101,25 @@ struct AnyCodable: Codable {
 /// Browser automation bridge using bundled sidecar binary
 @MainActor
 final class BrowserUseBridge: ObservableObject {
-    
+
     /// Shared instance
     static let shared = BrowserUseBridge()
-    
+
     /// Whether browser is currently active
     @Published private(set) var isActive: Bool = false
-    
+
     /// Current session name
     @Published private(set) var currentSession: String = "default"
-    
+
     /// Last error message
     @Published private(set) var lastError: String?
-    
+
     /// Browser Agent API configuration (set from ConfigManager)
     var agentAPIKeyEnvName: String?
     var agentAPIKey: String?
     var agentBaseUrlEnvName: String?
     var agentBaseUrl: String?
-    
+
     /// Configure agent API key and base URL (call this when settings change)
     func configureAgentAPIKey(envName: String?, apiKey: String?, baseUrlEnvName: String? = nil, baseUrl: String? = nil) {
         self.agentAPIKeyEnvName = envName
@@ -127,7 +127,7 @@ final class BrowserUseBridge: ObservableObject {
         self.agentBaseUrlEnvName = baseUrlEnvName
         self.agentBaseUrl = baseUrl
     }
-    
+
     /// Path to the bundled browser-use-sidecar binary
     /// Now looks for browser-use-sidecar/browser-use-sidecar (directory structure from PyInstaller --onedir)
     private var binaryPath: String? {
@@ -144,17 +144,17 @@ final class BrowserUseBridge: ObservableObject {
         }
         return nil
     }
-    
+
     /// Check if the sidecar binary is available
     var isAvailable: Bool {
         guard let path = binaryPath else { return false }
         return FileManager.default.isExecutableFile(atPath: path)
     }
-    
+
     private init() {}
-    
+
     // MARK: - Browser Commands
-    
+
     /// Open a URL in the browser
     /// - Parameters:
     ///   - url: URL to navigate to
@@ -167,7 +167,7 @@ final class BrowserUseBridge: ObservableObject {
             args.append("--headed")
         }
         args.append(contentsOf: ["--session", session])
-        
+
         let result = try await execute(args)
         if result.success {
             isActive = true
@@ -175,55 +175,55 @@ final class BrowserUseBridge: ObservableObject {
         }
         return result
     }
-    
+
     /// Get current page state with interactive elements
     /// - Parameter session: Session name
     /// - Returns: Result containing elements list
     func state(session: String = "default") async throws -> BrowserResult {
-        return try await execute(["state", "--session", session])
+        try await execute(["state", "--session", session])
     }
-    
+
     /// Click an element by index
     /// - Parameters:
     ///   - index: Element index from state command
     ///   - session: Session name
     func click(index: Int, session: String = "default") async throws -> BrowserResult {
-        return try await execute(["click", String(index), "--session", session])
+        try await execute(["click", String(index), "--session", session])
     }
-    
+
     /// Input text into an element
     /// - Parameters:
     ///   - index: Element index from state command
     ///   - text: Text to input
     ///   - session: Session name
     func input(index: Int, text: String, session: String = "default") async throws -> BrowserResult {
-        return try await execute(["input", String(index), text, "--session", session])
+        try await execute(["input", String(index), text, "--session", session])
     }
-    
+
     /// Type text without targeting specific element
     /// - Parameters:
     ///   - text: Text to type
     ///   - session: Session name
     func type(text: String, session: String = "default") async throws -> BrowserResult {
-        return try await execute(["type", text, "--session", session])
+        try await execute(["type", text, "--session", session])
     }
-    
+
     /// Scroll the page
     /// - Parameters:
     ///   - direction: Scroll direction (up, down, left, right)
     ///   - session: Session name
     func scroll(direction: String, session: String = "default") async throws -> BrowserResult {
-        return try await execute(["scroll", direction, "--session", session])
+        try await execute(["scroll", direction, "--session", session])
     }
-    
+
     /// Press keyboard keys
     /// - Parameters:
     ///   - key: Key to press (e.g., "Enter", "Tab", "Escape")
     ///   - session: Session name
     func keys(_ key: String, session: String = "default") async throws -> BrowserResult {
-        return try await execute(["keys", key, "--session", session])
+        try await execute(["keys", key, "--session", session])
     }
-    
+
     /// Take a screenshot
     /// - Parameters:
     ///   - filename: Optional filename to save to
@@ -231,19 +231,19 @@ final class BrowserUseBridge: ObservableObject {
     /// - Returns: Result containing screenshot path
     func screenshot(filename: String? = nil, session: String = "default") async throws -> BrowserResult {
         var args = ["screenshot"]
-        if let filename = filename {
+        if let filename {
             args.append(filename)
         }
         args.append(contentsOf: ["--session", session])
         return try await execute(args)
     }
-    
+
     /// Go back in browser history
     /// - Parameter session: Session name
     func back(session: String = "default") async throws -> BrowserResult {
-        return try await execute(["back", "--session", session])
+        try await execute(["back", "--session", session])
     }
-    
+
     /// Close the browser
     /// - Parameter session: Session name
     func close(session: String = "default") async throws -> BrowserResult {
@@ -253,76 +253,78 @@ final class BrowserUseBridge: ObservableObject {
         }
         return result
     }
-    
+
     /// List active browser sessions
     func sessions() async throws -> BrowserResult {
-        return try await execute(["sessions"])
+        try await execute(["sessions"])
     }
-    
+
     // MARK: - Private
-    
+
     /// Execute a browser-use-sidecar command
     private func execute(_ arguments: [String]) async throws -> BrowserResult {
-        guard let binaryPath = binaryPath else {
+        guard let binaryPath else {
             throw BrowserUseError.binaryNotFound
         }
-        
+
         guard FileManager.default.isExecutableFile(atPath: binaryPath) else {
             throw BrowserUseError.binaryNotExecutable
         }
-        
+
         Log.debug("[BrowserUse] Executing: \(binaryPath) \(arguments.joined(separator: " "))")
-        
+
         return try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: binaryPath)
             process.arguments = arguments
-            
+
             let outputPipe = Pipe()
             let errorPipe = Pipe()
             process.standardOutput = outputPipe
             process.standardError = errorPipe
-            
+
             // Set up environment with API keys for agent mode
             var env = ProcessInfo.processInfo.environment
             env["PYTHONUNBUFFERED"] = "1"
-            
+
             // Add browser agent API key if configured
             if let envName = self.agentAPIKeyEnvName,
                let apiKey = self.agentAPIKey,
-               !apiKey.isEmpty {
+               !apiKey.isEmpty
+            {
                 env[envName] = apiKey
             }
-            
+
             // Add browser agent base URL if configured
             if let baseUrlEnvName = self.agentBaseUrlEnvName,
                let baseUrl = self.agentBaseUrl,
-               !baseUrl.isEmpty {
+               !baseUrl.isEmpty
+            {
                 env[baseUrlEnvName] = baseUrl
             }
-            
+
             process.environment = env
-            
+
             do {
                 try process.run()
             } catch {
                 continuation.resume(throwing: BrowserUseError.executionFailed(error.localizedDescription))
                 return
             }
-            
+
             process.waitUntilExit()
-            
+
             let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
             let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            
+
             let output = String(data: outputData, encoding: .utf8) ?? ""
             let errorOutput = String(data: errorData, encoding: .utf8) ?? ""
-            
+
             Log.debug("[BrowserUse] Output: \(output.prefix(500))")
             if !errorOutput.isEmpty {
                 Log.debug("[BrowserUse] Stderr: \(errorOutput.prefix(500))")
             }
-            
+
             // Parse JSON result
             guard !output.isEmpty else {
                 if !errorOutput.isEmpty {
@@ -332,16 +334,16 @@ final class BrowserUseBridge: ObservableObject {
                 }
                 return
             }
-            
+
             do {
                 let decoder = JSONDecoder()
                 let result = try decoder.decode(BrowserResult.self, from: Data(output.utf8))
-                
+
                 // Update error state
                 Task { @MainActor in
                     self.lastError = result.error
                 }
-                
+
                 continuation.resume(returning: result)
             } catch {
                 Log.debug("[BrowserUse] JSON parse error: \(error)")
@@ -358,19 +360,19 @@ enum BrowserUseError: LocalizedError {
     case executionFailed(String)
     case emptyResponse
     case invalidResponse(String)
-    
+
     var errorDescription: String? {
         switch self {
         case .binaryNotFound:
-            return "browser-use-sidecar binary not found in bundle"
+            "browser-use-sidecar binary not found in bundle"
         case .binaryNotExecutable:
-            return "browser-use-sidecar binary is not executable"
-        case .executionFailed(let message):
-            return "Execution failed: \(message)"
+            "browser-use-sidecar binary is not executable"
+        case let .executionFailed(message):
+            "Execution failed: \(message)"
         case .emptyResponse:
-            return "Empty response from browser-use-sidecar"
-        case .invalidResponse(let output):
-            return "Invalid JSON response: \(output.prefix(200))"
+            "Empty response from browser-use-sidecar"
+        case let .invalidResponse(output):
+            "Invalid JSON response: \(output.prefix(200))"
         }
     }
 }

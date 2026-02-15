@@ -1,12 +1,12 @@
-import Foundation
 import Combine
+import Foundation
 
 // MARK: - Permission Request Types
 
 /// Permission request type (native system: question and permission only)
 enum PermissionRequestType: String, Codable, Sendable {
-    case question    // Native question from OpenCode
-    case permission  // Native permission from OpenCode
+    case question // Native question from OpenCode
+    case permission // Native permission from OpenCode
 }
 
 /// Permission request model for the QuickConfirm UI.
@@ -17,17 +17,17 @@ struct PermissionRequest: Identifiable, @unchecked Sendable {
     let id: String
     let taskId: String
     let type: PermissionRequestType
-    
+
     // Question fields
     var question: String?
     var header: String?
     var options: [QuestionOption]?
     var multiSelect: Bool?
-    
+
     // Permission fields (native)
-    var permissionType: String?   // "edit", "bash", etc.
-    var patterns: [String]?       // File paths or command patterns
-    var diff: String?             // Diff preview for edit permissions
+    var permissionType: String? // "edit", "bash", etc.
+    var patterns: [String]? // File paths or command patterns
+    var diff: String? // Diff preview for edit permissions
 
     /// Session intent for parallel prompts: "From: [intent]" so user knows which task is asking
     var sessionIntent: String?
@@ -40,13 +40,13 @@ struct PermissionRequest: Identifiable, @unchecked Sendable {
         let label: String
         var value: String?
         var description: String?
-        
+
         /// Returns value if available, otherwise label
         var effectiveValue: String {
             value ?? label
         }
     }
-    
+
     init(
         id: String,
         taskId: String,
@@ -82,7 +82,7 @@ struct PermissionResponse: Sendable {
     var selectedOptions: [String]?
     var customText: String?
     var message: String?
-    
+
     enum Decision: String, Sendable {
         case allow
         case deny
@@ -99,27 +99,27 @@ struct PermissionResponse: Sendable {
 @MainActor
 class PermissionManager: ObservableObject {
     static let shared = PermissionManager()
-    
+
     @Published var currentRequest: PermissionRequest?
     @Published var isShowingRequest = false
-    
+
     private init() {}
-    
+
     /// Show a permission/question request in the UI
     func showRequest(_ request: PermissionRequest) {
         currentRequest = request
         isShowingRequest = true
     }
-    
+
     /// Handle user response
     func respond(with response: PermissionResponse) {
         Log.permission("respond() called with requestId: \(response.requestId), decision: \(response.decision)")
-        
+
         // Clear current request
         currentRequest = nil
         isShowingRequest = false
     }
-    
+
     /// Cancel current request
     func cancelRequest() {
         if let request = currentRequest {

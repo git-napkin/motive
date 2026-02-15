@@ -61,13 +61,13 @@ struct SessionListItem: View {
     private var statusGradient: AnyShapeStyle {
         switch session.status {
         case "running":
-            return AnyShapeStyle(Color.Aurora.primary)
+            AnyShapeStyle(Color.Aurora.primary)
         case "completed":
-            return AnyShapeStyle(Color.Aurora.success)
+            AnyShapeStyle(Color.Aurora.success)
         case "failed":
-            return AnyShapeStyle(Color.Aurora.error)
+            AnyShapeStyle(Color.Aurora.error)
         default:
-            return AnyShapeStyle(Color.Aurora.textMuted)
+            AnyShapeStyle(Color.Aurora.textMuted)
         }
     }
 

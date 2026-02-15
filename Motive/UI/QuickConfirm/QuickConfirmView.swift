@@ -11,12 +11,14 @@ struct QuickConfirmView: View {
     let request: PermissionRequest
     let onResponse: (String) -> Void
     let onCancel: () -> Void
-    
+
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedOptions: Set<String> = []
     @State private var textInput: String = ""
-    private var isDark: Bool { colorScheme == .dark }
-    
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             headerView
@@ -39,20 +41,20 @@ struct QuickConfirmView: View {
         )
         .shadow(color: Color.black.opacity(isDark ? 0.25 : 0.12), radius: 18, y: 10)
     }
-    
+
     // MARK: - Header
-    
+
     private var headerView: some View {
         HStack(spacing: 12) {
             Image(systemName: iconName)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(request.isPlanExitConfirmation ? Color.Aurora.success : Color.Aurora.primary)
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(headerTitle)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(Color.Aurora.textPrimary)
-                
+
                 if let subtitle = headerSubtitle {
                     Text(subtitle)
                         .font(.system(size: 12))
@@ -60,9 +62,9 @@ struct QuickConfirmView: View {
                         .lineLimit(1)
                 }
             }
-            
+
             Spacer()
-            
+
             // Close button
             Button(action: onCancel) {
                 Image(systemName: "xmark")
@@ -74,9 +76,9 @@ struct QuickConfirmView: View {
             .accessibilityLabel(L10n.cancel)
         }
     }
-    
+
     // MARK: - Content
-    
+
     @ViewBuilder
     private var contentView: some View {
         switch request.type {
@@ -86,7 +88,7 @@ struct QuickConfirmView: View {
             permissionContent
         }
     }
-    
+
     private var questionContent: some View {
         VStack(alignment: .leading, spacing: AuroraSpacing.space3) {
             // Question text
@@ -96,7 +98,7 @@ struct QuickConfirmView: View {
                     .foregroundColor(Color.Aurora.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            
+
             // Options or text input
             if let options = request.options, !options.isEmpty {
                 optionsView(options: options)
@@ -109,7 +111,7 @@ struct QuickConfirmView: View {
             }
         }
     }
-    
+
     private func optionsView(options: [PermissionRequest.QuestionOption]) -> some View {
         VStack(spacing: AuroraSpacing.space2) {
             ForEach(options, id: \.effectiveValue) { option in
@@ -117,7 +119,7 @@ struct QuickConfirmView: View {
             }
         }
     }
-    
+
     private func optionButton(option: PermissionRequest.QuestionOption) -> some View {
         let optionValue = option.effectiveValue
         let isSelected = selectedOptions.contains(optionValue)
@@ -154,9 +156,9 @@ struct QuickConfirmView: View {
                 Text(option.label)
                     .font(.system(size: 13, weight: isPlanExecute || isSelected ? .semibold : .regular))
                     .foregroundColor(isPlanExecute ? Color.Aurora.success : Color.Aurora.textPrimary)
-                
+
                 Spacer()
-                
+
                 if !isMultiSelect {
                     Image(systemName: isPlanExecute ? "arrow.right" : "chevron.right")
                         .font(.system(size: 10, weight: .medium))
@@ -185,7 +187,7 @@ struct QuickConfirmView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
     private var permissionContent: some View {
         VStack(alignment: .leading, spacing: AuroraSpacing.space2) {
             // Permission type (e.g., "edit", "bash")
@@ -223,9 +225,9 @@ struct QuickConfirmView: View {
             }
         }
     }
-    
+
     // MARK: - Action Buttons
-    
+
     @ViewBuilder
     private var actionButtons: some View {
         switch request.type {
@@ -233,13 +235,13 @@ struct QuickConfirmView: View {
             if request.multiSelect == true || request.options == nil {
                 HStack(spacing: AuroraSpacing.space2) {
                     Spacer()
-                    
+
                     Button(L10n.cancel) {
                         onCancel()
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    
+
                     Button(L10n.submit) {
                         if request.options != nil {
                             onResponse(selectedOptions.joined(separator: ","))
@@ -253,24 +255,24 @@ struct QuickConfirmView: View {
                     .disabled(request.options != nil ? selectedOptions.isEmpty : textInput.isEmpty)
                 }
             }
-            
+
         case .permission:
             HStack(spacing: AuroraSpacing.space2) {
                 Spacer()
-                
+
                 Button(L10n.reject) {
                     onResponse("Reject")
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                
+
                 Button(L10n.allowOnce) {
                     onResponse("Allow Once")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.Aurora.primary)
                 .controlSize(.small)
-                
+
                 Button(L10n.alwaysAllow) {
                     onResponse("Always Allow")
                 }
@@ -280,18 +282,18 @@ struct QuickConfirmView: View {
             }
         }
     }
-    
+
     // MARK: - Background
-    
+
     private var backgroundView: some View {
         ZStack {
             VisualEffectView(material: .popover, blendingMode: .behindWindow, state: .active)
             Color.Aurora.background.opacity(isDark ? 0.6 : 0.7)
         }
     }
-    
+
     // MARK: - Helpers
-    
+
     private var iconName: String {
         if request.isPlanExitConfirmation {
             return "doc.badge.gearshape"
@@ -301,16 +303,16 @@ struct QuickConfirmView: View {
         case .permission: return "lock.shield"
         }
     }
-    
+
     private var headerTitle: String {
         switch request.type {
         case .question:
-            return request.header ?? L10n.Permission.question
+            request.header ?? L10n.Permission.question
         case .permission:
-            return L10n.Permission.permissionRequired
+            L10n.Permission.permissionRequired
         }
     }
-    
+
     private var headerSubtitle: String? {
         if let intent = request.sessionIntent, !intent.isEmpty {
             let truncated = intent.count > 40 ? String(intent.prefix(40)) + "…" : intent
@@ -323,7 +325,7 @@ struct QuickConfirmView: View {
             return request.permissionType?.capitalized
         }
     }
-    
+
     private func shortenPath(_ path: String) -> String {
         let components = path.split(separator: "/")
         if components.count > 3 {
@@ -339,11 +341,11 @@ private struct AuroraQuickConfirmButtonStyle: ButtonStyle {
     enum Style {
         case primary, secondary
     }
-    
+
     let style: Style
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isEnabled) private var isEnabled
-    
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.Aurora.bodySmall.weight(.medium))
@@ -357,7 +359,7 @@ private struct AuroraQuickConfirmButtonStyle: ButtonStyle {
             .opacity(isEnabled ? 1.0 : 0.5)
             .animation(.auroraSpringStiff, value: configuration.isPressed)
     }
-    
+
     @ViewBuilder
     private func background(isPressed: Bool) -> some View {
         switch style {
@@ -373,14 +375,14 @@ private struct AuroraQuickConfirmButtonStyle: ButtonStyle {
                 .opacity(isPressed ? 0.8 : 1.0)
         }
     }
-    
+
     private var foregroundColor: Color {
         switch style {
-        case .primary: return .white
-        case .secondary: return Color.Aurora.textPrimary
+        case .primary: .white
+        case .secondary: Color.Aurora.textPrimary
         }
     }
-    
+
     @ViewBuilder
     private var overlay: some View {
         if style == .secondary {
@@ -397,7 +399,9 @@ struct DiffView: View {
     let diff: String
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     private var parsedLines: [DiffLine] {
         DiffParser.parse(diff)
@@ -462,8 +466,8 @@ enum DiffLineType: Sendable {
     case addition
     case deletion
     case context
-    case header     // @@ ... @@ or diff --git lines
-    case meta       // --- or +++ lines
+    case header // @@ ... @@ or diff --git lines
+    case meta // --- or +++ lines
 }
 
 struct DiffLine: Sendable {
@@ -476,43 +480,43 @@ struct DiffLine: Sendable {
     func backgroundColor(isDark: Bool) -> Color {
         switch type {
         case .addition:
-            return isDark
+            isDark
                 ? Color(red: 0.1, green: 0.3, blue: 0.1).opacity(0.5)
                 : Color(red: 0.85, green: 1.0, blue: 0.85)
         case .deletion:
-            return isDark
+            isDark
                 ? Color(red: 0.35, green: 0.1, blue: 0.1).opacity(0.5)
                 : Color(red: 1.0, green: 0.9, blue: 0.9)
         case .header, .meta:
-            return isDark
+            isDark
                 ? Color(red: 0.15, green: 0.2, blue: 0.35).opacity(0.4)
                 : Color(red: 0.92, green: 0.95, blue: 1.0)
         case .context:
-            return .clear
+            .clear
         }
     }
 
     func textColor(isDark: Bool) -> Color {
         switch type {
         case .addition:
-            return isDark ? Color(red: 0.5, green: 0.9, blue: 0.5) : Color(red: 0.1, green: 0.5, blue: 0.1)
+            isDark ? Color(red: 0.5, green: 0.9, blue: 0.5) : Color(red: 0.1, green: 0.5, blue: 0.1)
         case .deletion:
-            return isDark ? Color(red: 0.95, green: 0.5, blue: 0.5) : Color(red: 0.6, green: 0.1, blue: 0.1)
+            isDark ? Color(red: 0.95, green: 0.5, blue: 0.5) : Color(red: 0.6, green: 0.1, blue: 0.1)
         case .header, .meta:
-            return isDark ? Color(red: 0.5, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.3, blue: 0.6)
+            isDark ? Color(red: 0.5, green: 0.7, blue: 1.0) : Color(red: 0.2, green: 0.3, blue: 0.6)
         case .context:
-            return isDark ? Color(white: 0.7) : Color(white: 0.3)
+            isDark ? Color(white: 0.7) : Color(white: 0.3)
         }
     }
 
     func prefixColor(isDark: Bool) -> Color {
         switch type {
         case .addition:
-            return isDark ? Color(red: 0.3, green: 0.9, blue: 0.3) : Color(red: 0.1, green: 0.6, blue: 0.1)
+            isDark ? Color(red: 0.3, green: 0.9, blue: 0.3) : Color(red: 0.1, green: 0.6, blue: 0.1)
         case .deletion:
-            return isDark ? Color(red: 0.95, green: 0.35, blue: 0.35) : Color(red: 0.7, green: 0.1, blue: 0.1)
+            isDark ? Color(red: 0.95, green: 0.35, blue: 0.35) : Color(red: 0.7, green: 0.1, blue: 0.1)
         default:
-            return .clear
+            .clear
         }
     }
 }
@@ -561,7 +565,8 @@ enum DiffParser {
         // Matches: @@ -10,5 +10,8 @@
         let pattern = #"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: header, range: NSRange(header.startIndex..., in: header)) else {
+              let match = regex.firstMatch(in: header, range: NSRange(header.startIndex..., in: header))
+        else {
             return (1, 1)
         }
         let oldStart = Int(header[Range(match.range(at: 1), in: header)!]) ?? 1

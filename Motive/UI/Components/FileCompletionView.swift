@@ -12,9 +12,9 @@ struct FileCompletionView: View {
     let selectedIndex: Int
     let currentPath: String
     let onSelect: (FileCompletionItem) -> Void
-    var showFooter: Bool = false  // Only show footer in Drawer, not CommandBar
-    var maxHeight: CGFloat? = nil
-    
+    var showFooter: Bool = false // Only show footer in Drawer, not CommandBar
+    var maxHeight: CGFloat?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Path breadcrumb
@@ -23,18 +23,18 @@ struct FileCompletionView: View {
                     Image(systemName: "folder")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(Color.Aurora.textMuted)
-                    
+
                     Text("@\(currentPath)/")
                         .font(.Aurora.micro)
                         .foregroundColor(Color.Aurora.textMuted)
-                    
+
                     Spacer()
                 }
                 .padding(.horizontal, AuroraSpacing.space3)
                 .padding(.vertical, AuroraSpacing.space2)
                 .background(Color.Aurora.surface.opacity(0.5))
             }
-            
+
             // Items list
             ScrollViewReader { proxy in
                 ScrollView {
@@ -69,9 +69,9 @@ private struct FileCompletionItemView: View {
     let item: FileCompletionItem
     let isSelected: Bool
     let action: () -> Void
-    
+
     @State private var isHovering = false
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: AuroraSpacing.space3) {
@@ -80,29 +80,29 @@ private struct FileCompletionItemView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(iconColor)
                     .frame(width: 20)
-                
+
                 // Name
                 Text(item.name)
                     .font(.Aurora.body)
                     .foregroundColor(Color.Aurora.textPrimary)
                     .lineLimit(1)
-                
+
                 // Directory indicator
                 if item.isDirectory {
                     Text("/")
                         .font(.Aurora.caption)
                         .foregroundColor(Color.Aurora.textMuted)
                 }
-                
+
                 Spacer()
-                
+
                 // Size (for files)
                 if let size = item.sizeString {
                     Text(size)
                         .font(.Aurora.micro)
                         .foregroundColor(Color.Aurora.textMuted)
                 }
-                
+
                 // Selection indicator
                 if isSelected {
                     Image(systemName: "return")
@@ -131,7 +131,7 @@ private struct FileCompletionItemView: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
     }
-    
+
     private var iconColor: Color {
         if item.isDirectory {
             return Color.Aurora.accent
@@ -148,11 +148,11 @@ struct FileCompletionPopup: ViewModifier {
     let selectedIndex: Int
     let currentPath: String
     let onSelect: (FileCompletionItem) -> Void
-    
+
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .bottom) {
-                if isShowing && !items.isEmpty {
+                if isShowing, !items.isEmpty {
                     FileCompletionView(
                         items: items,
                         selectedIndex: selectedIndex,

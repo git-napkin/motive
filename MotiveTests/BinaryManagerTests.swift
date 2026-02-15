@@ -3,9 +3,9 @@
 //  MotiveTests
 //
 
-import Testing
 import Foundation
 @testable import Motive
+import Testing
 
 @MainActor
 struct BinaryManagerTests {
@@ -28,23 +28,24 @@ struct BinaryManagerTests {
         )
     }
 
-    @Test func resolveBinary_noSourcePath_returnsError() async throws {
+    @Test func resolveBinary_noSourcePath_returnsError() throws {
         let manager = makeBinaryManager()
         let (url, error) = manager.resolveBinary()
         // If no binary exists at any known path, we get nil + error message
         // (unless the test machine has opencode installed)
         if url == nil {
             #expect(error != nil)
-            #expect(error!.contains("not found"))
+            #expect(try #require(error?.contains("not found")))
         }
     }
 
-    @Test func binaryStorageDirectory_isInAppSupport() async throws {
+    @Test func binaryStorageDirectory_isInAppSupport() throws {
         let manager = makeBinaryManager()
         let dir = manager.binaryStorageDirectory
         #expect(dir != nil)
-        #expect(dir!.path.contains("Application Support/Motive") || dir!.path.contains("Motive"))
+        #expect(try #require(dir?.path.contains("Application Support/Motive")) || dir!.path.contains("Motive"))
     }
+
     @Test func importBinary_copiesAndSigns() async throws {
         try await withTempDirectory { tempDir in
             let sourceURL = tempDir.appendingPathComponent("opencode")
@@ -86,7 +87,7 @@ struct BinaryManagerTests {
         }
     }
 
-    @Test func getSignedBinaryURL_withMissingBinary_returnsError() async throws {
+    @Test func getSignedBinaryURL_withMissingBinary_returnsError() async {
         // Create a manager that won't find any binary
         var lastStatus: ConfigManager.BinaryStatus?
         let manager = makeBinaryManager(

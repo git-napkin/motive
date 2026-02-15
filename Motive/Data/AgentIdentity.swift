@@ -14,7 +14,7 @@ struct AgentIdentity: Codable, Sendable, Equatable {
     var creature: String?
     var vibe: String?
     var avatar: String?
-    
+
     init(name: String? = nil, emoji: String? = nil, creature: String? = nil, vibe: String? = nil, avatar: String? = nil) {
         self.name = name
         self.emoji = emoji
@@ -22,17 +22,17 @@ struct AgentIdentity: Codable, Sendable, Equatable {
         self.vibe = vibe
         self.avatar = avatar
     }
-    
+
     /// Check if any identity values are set
     func hasValues() -> Bool {
         name != nil || emoji != nil || creature != nil || vibe != nil
     }
-    
+
     /// Display name with fallback to "Motive"
     var displayName: String {
         name ?? "Motive"
     }
-    
+
     /// Display emoji with fallback to "✦"
     var displayEmoji: String {
         emoji ?? "✦"

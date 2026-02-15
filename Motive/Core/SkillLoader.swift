@@ -23,7 +23,8 @@ enum SkillLoader {
         return subdirs.compactMap { dir -> SkillEntry? in
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDirectory),
-                  isDirectory.boolValue else {
+                  isDirectory.boolValue
+            else {
                 return nil
             }
             return loadSkill(from: dir, source: source)
@@ -57,7 +58,8 @@ enum SkillLoader {
     private static func loadSkill(from directory: URL, source: SkillSource) -> SkillEntry? {
         let skillMd = directory.appendingPathComponent("SKILL.md")
         guard FileManager.default.fileExists(atPath: skillMd.path),
-              let content = try? String(contentsOf: skillMd, encoding: .utf8) else {
+              let content = try? String(contentsOf: skillMd, encoding: .utf8)
+        else {
             return nil
         }
 
@@ -99,7 +101,8 @@ enum SkillLoader {
     private static func readMcpSpec(from url: URL, baseDir: URL) -> SkillMcpSpec? {
         guard FileManager.default.fileExists(atPath: url.path),
               let data = try? Data(contentsOf: url),
-              var spec = try? JSONDecoder().decode(SkillMcpSpec.self, from: data) else {
+              var spec = try? JSONDecoder().decode(SkillMcpSpec.self, from: data)
+        else {
             return nil
         }
         spec.command = spec.command.map { resolveBaseDir($0, baseDir: baseDir) }
@@ -114,7 +117,8 @@ enum SkillLoader {
     private static func readToolSpec(from url: URL, baseDir: URL) -> SkillToolSpec? {
         guard FileManager.default.fileExists(atPath: url.path),
               let data = try? Data(contentsOf: url),
-              var spec = try? JSONDecoder().decode(SkillToolSpec.self, from: data) else {
+              var spec = try? JSONDecoder().decode(SkillToolSpec.self, from: data)
+        else {
             return nil
         }
         spec.command = resolveBaseDir(spec.command, baseDir: baseDir)
@@ -185,7 +189,7 @@ enum SkillLoader {
         let body = bodyLines.joined(separator: "\n")
         return (frontmatter, body)
     }
-    
+
     /// Parse a potentially multi-line value (for metadata JSON blocks)
     /// Returns the combined value and number of additional lines consumed
     private static func parseMultilineValue(
@@ -199,60 +203,60 @@ enum SkillLoader {
             // Single-line value without braces
             return (startValue, 0)
         }
-        
+
         if trimmed.isEmpty || trimmed == "{" {
             // Multi-line: collect lines until braces are balanced
             var collected: [String] = []
             if !trimmed.isEmpty {
                 collected.append(trimmed)
             }
-            var braceCount = trimmed.filter { $0 == "{" }.count - trimmed.filter { $0 == "}" }.count
+            var braceCount = trimmed.count(where: { $0 == "{" }) - trimmed.count(where: { $0 == "}" })
             var linesConsumed = 0
-            
-            for i in (startIndex + 1)..<lines.count {
+
+            for i in (startIndex + 1) ..< lines.count {
                 let nextLine = String(lines[i])
                 let nextTrimmed = nextLine.trimmingCharacters(in: .whitespaces)
-                
+
                 // Check if this line starts a new key (not indented, has colon)
-                if !nextLine.hasPrefix(" ") && !nextLine.hasPrefix("\t") && nextTrimmed.contains(":") && braceCount == 0 {
+                if !nextLine.hasPrefix(" "), !nextLine.hasPrefix("\t"), nextTrimmed.contains(":"), braceCount == 0 {
                     break
                 }
-                
+
                 collected.append(nextLine)
                 linesConsumed += 1
-                braceCount += nextLine.filter { $0 == "{" }.count - nextLine.filter { $0 == "}" }.count
-                
+                braceCount += nextLine.count(where: { $0 == "{" }) - nextLine.count(where: { $0 == "}" })
+
                 if braceCount <= 0 {
                     break
                 }
             }
-            
+
             return (collected.joined(separator: "\n"), linesConsumed)
         }
-        
+
         // Check if braces are already balanced
-        let openCount = trimmed.filter { $0 == "{" }.count
-        let closeCount = trimmed.filter { $0 == "}" }.count
+        let openCount = trimmed.count(where: { $0 == "{" })
+        let closeCount = trimmed.count(where: { $0 == "}" })
         if openCount == closeCount {
             return (startValue, 0)
         }
-        
+
         // Collect more lines until balanced
         var collected: [String] = [trimmed]
         var braceCount = openCount - closeCount
         var linesConsumed = 0
-        
-        for i in (startIndex + 1)..<lines.count {
+
+        for i in (startIndex + 1) ..< lines.count {
             let nextLine = String(lines[i])
             collected.append(nextLine)
             linesConsumed += 1
-            braceCount += nextLine.filter { $0 == "{" }.count - nextLine.filter { $0 == "}" }.count
-            
+            braceCount += nextLine.count(where: { $0 == "{" }) - nextLine.count(where: { $0 == "}" })
+
             if braceCount <= 0 {
                 break
             }
         }
-        
+
         return (collected.joined(separator: "\n"), linesConsumed)
     }
 
@@ -260,13 +264,12 @@ enum SkillLoader {
         guard let raw else { return nil }
         guard let object = JSON5Parser.parseObject(raw) else { return nil }
 
-        let metadataObject: [String: Any]
-        if let openclaw = object["openclaw"] as? [String: Any] {
-            metadataObject = openclaw
+        let metadataObject: [String: Any] = if let openclaw = object["openclaw"] as? [String: Any] {
+            openclaw
         } else if let motive = object["motive"] as? [String: Any] {
-            metadataObject = motive
+            motive
         } else {
-            metadataObject = object
+            object
         }
 
         var metadata = SkillMetadata()
@@ -296,7 +299,8 @@ enum SkillLoader {
 
     private static func parseInstallSpec(_ raw: [String: Any]) -> SkillInstallSpec? {
         guard let kindRaw = raw["kind"] as? String,
-              let kind = InstallKind(rawValue: kindRaw.lowercased()) else {
+              let kind = InstallKind(rawValue: kindRaw.lowercased())
+        else {
             return nil
         }
 
@@ -333,11 +337,11 @@ enum SkillLoader {
     private static func parseBool(_ value: String, defaultValue: Bool = false) -> Bool {
         switch value.lowercased() {
         case "true", "yes", "1":
-            return true
+            true
         case "false", "no", "0":
-            return false
+            false
         default:
-            return defaultValue
+            defaultValue
         }
     }
 }

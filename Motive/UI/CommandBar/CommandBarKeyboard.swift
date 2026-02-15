@@ -12,7 +12,7 @@ extension CommandBarView {
 
     func handleUpArrow() {
         // File completion takes priority
-        if showFileCompletion && !fileCompletion.items.isEmpty {
+        if showFileCompletion, !fileCompletion.items.isEmpty {
             if selectedFileIndex > 0 {
                 selectedFileIndex -= 1
             }
@@ -43,7 +43,7 @@ extension CommandBarView {
 
     func handleDownArrow() {
         // File completion takes priority
-        if showFileCompletion && !fileCompletion.items.isEmpty {
+        if showFileCompletion, !fileCompletion.items.isEmpty {
             if selectedFileIndex < fileCompletion.items.count - 1 {
                 selectedFileIndex += 1
             }
@@ -77,7 +77,7 @@ extension CommandBarView {
 
     func handleTab() {
         // File completion takes priority
-        if showFileCompletion && !fileCompletion.items.isEmpty {
+        if showFileCompletion, !fileCompletion.items.isEmpty {
             if selectedFileIndex < fileCompletion.items.count {
                 selectFileCompletion(fileCompletion.items[selectedFileIndex])
             }
@@ -94,12 +94,12 @@ extension CommandBarView {
         // Cmd+N to create new session (works in any mode)
         appState.startNewEmptySession()
         inputText = ""
-        mode = .completed  // Show "New Task" status
+        mode = .completed // Show "New Task" status
     }
 
     func handleCmdDelete() {
         // Cmd+Delete to delete selected session in history mode
-        if mode.isHistory && selectedHistoryIndex < filteredHistorySessions.count {
+        if mode.isHistory, selectedHistoryIndex < filteredHistorySessions.count {
             deleteCandidateIndex = selectedHistoryIndex
             deleteCandidateId = filteredHistorySessions[selectedHistoryIndex].id
             selectedHistoryId = filteredHistorySessions[selectedHistoryIndex].id

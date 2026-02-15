@@ -13,7 +13,9 @@ struct DrawerHeader: View {
     let onLoadSessions: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -120,7 +122,7 @@ struct DrawerHeader: View {
     private var runningOtherCount: Int {
         let running = appState.getRunningSessions()
         let currentId = appState.currentSession?.id
-        return running.filter { $0.id != currentId }.count
+        return running.count(where: { $0.id != currentId })
     }
 
     private var currentSessionTitle: String {

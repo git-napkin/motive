@@ -3,9 +3,9 @@
 //  Motive
 //
 
+import Combine
 import Foundation
 import SwiftUI
-import Combine
 
 @MainActor
 final class MessageStore: ObservableObject {
@@ -23,7 +23,7 @@ final class MessageStore: ObservableObject {
     /// Same logic as insertEventMessage but targets a passed-in array (for parallel sessions).
     func insertEventIntoBuffer(_ event: OpenCodeEvent, buffer: inout [ConversationMessage]) {
         // Skip empty/unparseable events
-        if event.kind == .unknown && event.text.isEmpty { return }
+        if event.kind == .unknown, event.text.isEmpty { return }
         guard let message = event.toMessage() else { return }
 
         // --- System / Finish deduplication ---
@@ -47,7 +47,8 @@ final class MessageStore: ObservableObject {
         // --- Assistant message streaming merge ---
         if message.type == .assistant {
             if let lastIndex = buffer.lastIndex(where: { $0.type == .assistant }),
-               lastIndex == buffer.count - 1 {
+               lastIndex == buffer.count - 1
+            {
                 buffer[lastIndex] = buffer[lastIndex].withContent(
                     buffer[lastIndex].content + message.content
                 )
@@ -81,7 +82,8 @@ final class MessageStore: ObservableObject {
     func processToolMessage(_ message: ConversationMessage, into buffer: inout [ConversationMessage]) {
         // Strategy 1: Merge by toolCallId (most reliable)
         if let toolCallId = message.toolCallId,
-           let idx = buffer.lastIndex(where: { $0.type == .tool && $0.toolCallId == toolCallId }) {
+           let idx = buffer.lastIndex(where: { $0.type == .tool && $0.toolCallId == toolCallId })
+        {
             Log.debug("Tool merge [callId]: \(buffer[idx].toolName ?? "?") \(buffer[idx].status.rawValue) -> \(message.toolOutput != nil ? "completed" : buffer[idx].status.rawValue)")
             buffer[idx] = buffer[idx].mergingToolData(from: message)
         }
@@ -90,7 +92,8 @@ final class MessageStore: ObservableObject {
                 lastIdx == buffer.count - 1,
                 buffer[lastIdx].toolOutput == nil,
                 message.toolOutput != nil,
-                (message.toolName == "Result" || message.toolName == buffer[lastIdx].toolName) {
+                message.toolName == "Result" || message.toolName == buffer[lastIdx].toolName
+        {
             Log.debug("Tool merge [consecutive]: \(buffer[lastIdx].toolName ?? "?") -> completed")
             buffer[lastIdx] = buffer[lastIdx].mergingToolData(from: message)
         }
@@ -183,7 +186,8 @@ final class MessageStore: ObservableObject {
 
         guard let data = event.rawJson.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let part = object["part"] as? [String: Any] else {
+              let part = object["part"] as? [String: Any]
+        else {
             return []
         }
 
@@ -191,7 +195,8 @@ final class MessageStore: ObservableObject {
             return parseTodoItemsFromDict(input)
         }
         if let state = part["state"] as? [String: Any],
-           let input = extractToolInput(from: state) {
+           let input = extractToolInput(from: state)
+        {
             return parseTodoItemsFromDict(input)
         }
 
@@ -204,14 +209,16 @@ final class MessageStore: ObservableObject {
         }
         guard let data = event.rawJson.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let part = object["part"] as? [String: Any] else {
+              let part = object["part"] as? [String: Any]
+        else {
             return false
         }
         if let input = extractToolInput(from: part) {
             return input["merge"] as? Bool ?? false
         }
         if let state = part["state"] as? [String: Any],
-           let input = extractToolInput(from: state) {
+           let input = extractToolInput(from: state)
+        {
             return input["merge"] as? Bool ?? false
         }
         return false
@@ -226,7 +233,8 @@ final class MessageStore: ObservableObject {
         for key in keys {
             if let str = container[key] as? String,
                let data = str.data(using: .utf8),
-               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            {
                 return dict
             }
         }
@@ -241,7 +249,7 @@ final class MessageStore: ObservableObject {
     }
 
     func todoSummary(_ items: [TodoItem]) -> String {
-        let completed = items.filter { $0.status == .completed }.count
+        let completed = items.count(where: { $0.status == .completed })
         let total = items.count
         return "\(completed)/\(total) tasks completed"
     }

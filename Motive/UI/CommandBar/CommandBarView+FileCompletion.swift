@@ -62,7 +62,7 @@ extension CommandBarView {
             // Return nil to exit completion mode (user typed "@path " with space)
             return nil
         } else {
-            let range = atIndex..<text.endIndex
+            let range = atIndex ..< text.endIndex
             let query = String(text[range])
             return (query, range)
         }
@@ -83,11 +83,10 @@ extension CommandBarView {
         Log.config("📂 Select: '\(item.name)' isDir:\(item.isDirectory) path:'\(item.path)'")
 
         // Build the replacement text
-        let replacement: String
-        if item.isDirectory {
-            replacement = "@\(item.path)/"
+        let replacement = if item.isDirectory {
+            "@\(item.path)/"
         } else {
-            replacement = "@\(item.path) " // Add space after file selection
+            "@\(item.path) " // Add space after file selection
         }
 
         Log.config("📂 Replacement: '\(replacement)'")
@@ -105,7 +104,7 @@ extension CommandBarView {
         if item.isDirectory {
             // Update atQueryRange to point to the new @ token
             if let newEndIndex = inputText.index(startIndex, offsetBy: replacement.count, limitedBy: inputText.endIndex) {
-                atQueryRange = startIndex..<newEndIndex
+                atQueryRange = startIndex ..< newEndIndex
 
                 // Directly load items for the new directory
                 let baseDir = fileCompletion.getBaseDirectory(for: configManager)

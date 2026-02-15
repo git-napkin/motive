@@ -30,9 +30,9 @@ final class SSESessionDelegate: NSObject, URLSessionDataDelegate, @unchecked Sen
             lock.lock()
             self.responseResolver = { result in
                 switch result {
-                case .success(let response):
+                case let .success(response):
                     continuation.resume(returning: response)
-                case .failure(let error):
+                case let .failure(error):
                     continuation.resume(throwing: error)
                 }
             }
@@ -40,7 +40,7 @@ final class SSESessionDelegate: NSObject, URLSessionDataDelegate, @unchecked Sen
         }
     }
 
-    // Called when the initial response headers arrive
+    /// Called when the initial response headers arrive
     func urlSession(
         _ session: URLSession,
         dataTask: URLSessionDataTask,
@@ -60,14 +60,14 @@ final class SSESessionDelegate: NSObject, URLSessionDataDelegate, @unchecked Sen
         completionHandler(.allow)
     }
 
-    // Called each time data arrives — no buffering, immediate delivery
+    /// Called each time data arrives — no buffering, immediate delivery
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         if let text = String(data: data, encoding: .utf8) {
             dataContinuation.yield(text)
         }
     }
 
-    // Called when the stream completes
+    /// Called when the stream completes
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
         dataContinuation.finish()
 

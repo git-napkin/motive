@@ -14,7 +14,8 @@ enum JSON5Parser {
             return nil
         }
         guard let object = try? JSONSerialization.jsonObject(with: data),
-              let dict = object as? [String: Any] else {
+              let dict = object as? [String: Any]
+        else {
             return nil
         }
         return dict

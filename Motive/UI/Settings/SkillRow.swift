@@ -15,28 +15,30 @@ struct SkillRow: View {
     let onToggle: (Bool) -> Void
     let onInstall: (SkillInstallOption) -> Void
     let onSaveApiKey: (String) -> Void
-    
+
     @State private var apiKeyInput: String = ""
     @State private var isEditingKey: Bool = false
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     /// Whether this skill needs an API key (has primaryEnv and it's missing)
     private var needsApiKey: Bool {
         guard let primaryEnv = status.entry.metadata?.primaryEnv else { return false }
         return status.missing.env.contains(primaryEnv)
     }
-    
+
     /// The primary env variable name
     private var primaryEnvName: String? {
         status.entry.metadata?.primaryEnv
     }
-    
+
     /// Whether the API key is currently configured
     private var hasApiKey: Bool {
         !currentApiKey.isEmpty
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center) {
@@ -50,23 +52,23 @@ struct SkillRow: View {
                             .font(.Aurora.body.weight(.medium))
                             .foregroundColor(Color.Aurora.textPrimary)
                     }
-                    
+
                     Text(status.entry.description)
                         .font(.Aurora.caption)
                         .foregroundColor(Color.Aurora.textMuted)
                         .lineLimit(2)
-                    
+
                     // Status chips
                     HStack(spacing: AuroraSpacing.space2) {
                         StatusChip(text: status.entry.source.rawValue)
-                        
+
                         // Dependency status: Ready (deps OK) or Blocked (missing deps)
                         if status.missing.isEmpty {
                             StatusChip(text: "ready", style: .success)
                         } else {
                             StatusChip(text: "blocked", style: .warning)
                         }
-                        
+
                         // Enabled status
                         if status.disabled {
                             StatusChip(text: "disabled", style: .default)
@@ -74,14 +76,14 @@ struct SkillRow: View {
                             StatusChip(text: "enabled", style: .success)
                         }
                     }
-                    
+
                     // Missing dependencies
                     if !status.missing.bins.isEmpty {
                         Text("Missing: \(status.missing.bins.joined(separator: ", "))")
                             .font(.Aurora.caption)
                             .foregroundColor(Color.Aurora.textMuted)
                     }
-                    
+
                     // Missing env (excluding primaryEnv which gets special treatment)
                     let otherMissingEnv = status.missing.env.filter { $0 != primaryEnvName }
                     if !otherMissingEnv.isEmpty {
@@ -90,9 +92,9 @@ struct SkillRow: View {
                             .foregroundColor(Color.Aurora.textMuted)
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // Right: Action buttons
                 HStack(spacing: AuroraSpacing.space3) {
                     // Install button - show when there are missing bins and install options exist
@@ -132,7 +134,7 @@ struct SkillRow: View {
                                 .foregroundColor(Color.Aurora.textMuted)
                         }
                     }
-                    
+
                     // Enable/disable toggle - disabled when skill is blocked
                     Toggle("", isOn: Binding(
                         get: { !status.disabled },
@@ -140,19 +142,19 @@ struct SkillRow: View {
                     ))
                     .toggleStyle(.switch)
                     .tint(Color.Aurora.accent)
-                    .disabled(!status.missing.isEmpty)  // Can't enable blocked skills
+                    .disabled(!status.missing.isEmpty) // Can't enable blocked skills
                 }
             }
             .padding(.horizontal, AuroraSpacing.space4)
             .padding(.vertical, AuroraSpacing.space3)
-            
+
             // API Key input section
             if let envName = primaryEnvName {
                 apiKeySection(envName: envName)
             }
-            
+
             // Install message
-            if let message = message {
+            if let message {
                 HStack {
                     Image(systemName: message.kind == .success ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .font(.system(size: 12))
@@ -174,22 +176,21 @@ struct SkillRow: View {
             }
         }
     }
-    
-    @ViewBuilder
+
     private func apiKeySection(envName: String) -> some View {
         VStack(alignment: .leading, spacing: AuroraSpacing.space2) {
             HStack(spacing: AuroraSpacing.space2) {
                 Text(envName)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(Color.Aurora.textMuted)
-                
-                if hasApiKey && !isEditingKey {
+
+                if hasApiKey, !isEditingKey {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 10))
                         .foregroundColor(Color.Aurora.success)
                 }
             }
-            
+
             HStack(spacing: AuroraSpacing.space2) {
                 if isEditingKey || !hasApiKey {
                     SecureField(L10n.Settings.skillsEnterApiKey, text: $apiKeyInput)
@@ -208,7 +209,7 @@ struct SkillRow: View {
                         .onSubmit {
                             saveApiKey()
                         }
-                    
+
                     Button {
                         saveApiKey()
                     } label: {
@@ -224,7 +225,7 @@ struct SkillRow: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(apiKeyInput.isEmpty)
-                    
+
                     if isEditingKey {
                         Button {
                             apiKeyInput = currentApiKey
@@ -241,9 +242,9 @@ struct SkillRow: View {
                     Text(maskedKey)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(Color.Aurora.textMuted)
-                    
+
                     Spacer()
-                    
+
                     Button {
                         isEditingKey = true
                         apiKeyInput = ""
@@ -259,7 +260,7 @@ struct SkillRow: View {
         .padding(.horizontal, AuroraSpacing.space4)
         .padding(.bottom, AuroraSpacing.space3)
     }
-    
+
     private var maskedKey: String {
         guard currentApiKey.count > 8 else {
             return String(repeating: "•", count: max(currentApiKey.count, 4))
@@ -268,7 +269,7 @@ struct SkillRow: View {
         let suffix = String(currentApiKey.suffix(4))
         return "\(prefix)••••••••\(suffix)"
     }
-    
+
     private func saveApiKey() {
         guard !apiKeyInput.isEmpty else { return }
         onSaveApiKey(apiKeyInput)
@@ -281,15 +282,15 @@ struct SkillRow: View {
 private struct StatusChip: View {
     let text: String
     var style: Style = .default
-    
+
     enum Style {
         case `default`
         case success
         case warning
     }
-    
+
     @Environment(\.colorScheme) private var colorScheme
-    
+
     var body: some View {
         Text(text)
             .font(.system(size: 10, weight: .medium))
@@ -299,26 +300,26 @@ private struct StatusChip: View {
             .foregroundColor(foregroundColor)
             .cornerRadius(4)
     }
-    
+
     private var backgroundColor: Color {
         switch style {
         case .default:
-            return colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)
+            colorScheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)
         case .success:
-            return Color.Aurora.success.opacity(0.15)
+            Color.Aurora.success.opacity(0.15)
         case .warning:
-            return Color.Aurora.warning.opacity(0.15)
+            Color.Aurora.warning.opacity(0.15)
         }
     }
-    
+
     private var foregroundColor: Color {
         switch style {
         case .default:
-            return Color.Aurora.textMuted
+            Color.Aurora.textMuted
         case .success:
-            return Color.Aurora.success
+            Color.Aurora.success
         case .warning:
-            return Color.Aurora.warning
+            Color.Aurora.warning
         }
     }
 }

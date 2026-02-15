@@ -54,7 +54,9 @@ struct AuroraSurface: View {
     var cornerRadius: CGFloat = AuroraRadius.md
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -149,15 +151,15 @@ struct AuroraStatusIndicator: View {
 
     private var stateColor: Color {
         switch state {
-        case .idle: return Color.Aurora.textMuted
-        case .reasoning: return Color.Aurora.primary
-        case .executing: return Color.Aurora.primaryLight
-        case .responding: return Color.Aurora.primaryLight
+        case .idle: Color.Aurora.textMuted
+        case .reasoning: Color.Aurora.primary
+        case .executing: Color.Aurora.primaryLight
+        case .responding: Color.Aurora.primaryLight
         }
     }
 }
 
-// Legacy StatusIndicator for compatibility
+/// Legacy StatusIndicator for compatibility
 struct StatusIndicator: View {
     let state: AppState.MenuBarState
 
@@ -170,9 +172,9 @@ struct StatusIndicator: View {
 
 struct AuroraButtonStyle: ButtonStyle {
     enum Style {
-        case primary    // Gradient fill
-        case secondary  // Outline
-        case ghost      // No background
+        case primary // Gradient fill
+        case secondary // Outline
+        case ghost // No background
     }
 
     var style: Style = .primary
@@ -183,25 +185,25 @@ struct AuroraButtonStyle: ButtonStyle {
 
         var horizontalPadding: CGFloat {
             switch self {
-            case .small: return AuroraSpacing.space3
-            case .medium: return AuroraSpacing.space4
-            case .large: return AuroraSpacing.space5
+            case .small: AuroraSpacing.space3
+            case .medium: AuroraSpacing.space4
+            case .large: AuroraSpacing.space5
             }
         }
 
         var verticalPadding: CGFloat {
             switch self {
-            case .small: return AuroraSpacing.space2
-            case .medium: return AuroraSpacing.space3
-            case .large: return AuroraSpacing.space4
+            case .small: AuroraSpacing.space2
+            case .medium: AuroraSpacing.space3
+            case .large: AuroraSpacing.space4
             }
         }
 
         var font: Font {
             switch self {
-            case .small: return .Aurora.caption
-            case .medium: return .Aurora.bodySmall
-            case .large: return .Aurora.body
+            case .small: .Aurora.caption
+            case .medium: .Aurora.bodySmall
+            case .large: .Aurora.body
             }
         }
     }
@@ -239,8 +241,8 @@ struct AuroraButtonStyle: ButtonStyle {
 
     private var foregroundColor: Color {
         switch style {
-        case .primary: return .white
-        case .secondary, .ghost: return Color.Aurora.textPrimary
+        case .primary: .white
+        case .secondary, .ghost: Color.Aurora.textPrimary
         }
     }
 
@@ -253,10 +255,10 @@ struct AuroraButtonStyle: ButtonStyle {
     }
 }
 
-
 // MARK: - Aurora Text Field Style
 
 // MARK: - Aurora Styled TextField (View-based component)
+
 // NOTE: TextFieldStyle cannot use .textFieldStyle(.plain) inside _body
 // Use this View component directly instead of TextFieldStyle
 
@@ -266,7 +268,9 @@ struct AuroraStyledTextField: View {
     var isFocused: Bool = false
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     private var backgroundColor: Color {
         isDark ? Color.Aurora.backgroundDeep : Color.Aurora.surface
@@ -294,14 +298,13 @@ struct AuroraStyledTextField: View {
     }
 }
 
-// Legacy TextFieldStyle (kept for compatibility, does nothing special)
+/// Legacy TextFieldStyle (kept for compatibility, does nothing special)
 struct AuroraTextFieldStyle: TextFieldStyle {
     var isFocused: Bool = false
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
     }
 }
-
 
 // MARK: - Aurora Card Component
 
@@ -321,12 +324,11 @@ struct AuroraCard<Content: View>: View {
     }
 }
 
-
 // MARK: - Aurora Section Header
 
 struct AuroraSectionHeader: View {
     let title: String
-    var icon: String? = nil
+    var icon: String?
 
     var body: some View {
         HStack(spacing: AuroraSpacing.space2) {
@@ -344,10 +346,10 @@ struct AuroraSectionHeader: View {
     }
 }
 
-// Legacy SectionHeader
+/// Legacy SectionHeader
 struct SectionHeader: View {
     let title: String
-    var icon: String? = nil
+    var icon: String?
 
     var body: some View {
         AuroraSectionHeader(title: title, icon: icon)
@@ -388,7 +390,7 @@ struct AuroraEmptyState: View {
     }
 }
 
-// Legacy EmptyStateView
+/// Legacy EmptyStateView
 struct EmptyStateView: View {
     let icon: String
     let title: String

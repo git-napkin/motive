@@ -15,11 +15,11 @@ actor OpenCodeBridge {
     struct Configuration: Sendable {
         let binaryURL: URL
         let environment: [String: String]
-        let model: String?  // Raw user model override (if any)
-        let modelProviderID: String?  // Selected provider ID for raw model names
-        let agent: String?  // e.g., "motive", "plan" — per-message agent override
+        let model: String? // Raw user model override (if any)
+        let modelProviderID: String? // Selected provider ID for raw model names
+        let agent: String? // e.g., "motive", "plan" — per-message agent override
         let debugMode: Bool
-        let projectDirectory: String  // Current project directory for server CWD
+        let projectDirectory: String // Current project directory for server CWD
     }
 
     // MARK: - Properties
@@ -31,7 +31,7 @@ actor OpenCodeBridge {
     private var eventTask: Task<Void, Never>?
 
     private var currentSessionId: String?
-    private var activeSessions: Set<String> = []  // Multi-session ready
+    private var activeSessions: Set<String> = [] // Multi-session ready
 
     /// SessionID -> directory mapping for deterministic routing.
     private var sessionDirectory: [String: String] = [:]
@@ -150,7 +150,7 @@ actor OpenCodeBridge {
 
     /// Get the current OpenCode session ID.
     func getSessionId() -> String? {
-        return currentSessionId
+        currentSessionId
     }
 
     /// Set the current session ID (for switching sessions / interrupt targeting).
@@ -316,54 +316,54 @@ actor OpenCodeBridge {
         case .heartbeat:
             break
 
-        case .textDelta(let info):
+        case let .textDelta(info):
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleTextDelta(info)
 
-        case .textComplete(let info):
+        case let .textComplete(info):
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleTextComplete(info)
 
-        case .reasoningDelta(let info):
+        case let .reasoningDelta(info):
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleReasoningDelta(info)
 
-        case .toolRunning(let info):
+        case let .toolRunning(info):
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleToolRunning(info)
 
-        case .toolCompleted(let info):
+        case let .toolCompleted(info):
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleToolCompleted(info)
 
-        case .toolError(let info):
+        case let .toolError(info):
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleToolError(info)
 
-        case .usageUpdated(let info):
+        case let .usageUpdated(info):
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleUsageUpdate(info)
 
-        case .sessionIdle(let sessionID):
+        case let .sessionIdle(sessionID):
             observeSessionDirectory(sessionID: sessionID, sourceDirectory: sourceDirectory)
             handleSessionIdle(sessionID)
 
-        case .sessionStatus(let info):
+        case let .sessionStatus(info):
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             guard isTrackedSession(info.sessionID) else { return }
             handleSessionStatus(info)
 
-        case .sessionError(let info):
+        case let .sessionError(info):
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleSessionError(info)
 
-        case .questionAsked(let request):
+        case let .questionAsked(request):
             handleQuestionSSEEvent(request, sourceDirectory: sourceDirectory)
 
-        case .permissionAsked(let request):
+        case let .permissionAsked(request):
             handlePermissionSSEEvent(request, sourceDirectory: sourceDirectory)
 
-        case .agentChanged(let info):
+        case let .agentChanged(info):
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleAgentChanged(info)
         }
@@ -403,14 +403,13 @@ actor OpenCodeBridge {
     private func handleToolRunning(_ info: SSEClient.ToolInfo) {
         guard isTrackedSession(info.sessionID) else { return }
         waitingForFirstOutput.remove(info.sessionID)
-        let inputDict = deserializeInputJSON(info.inputJSON)
         eventContinuation.yield(OpenCodeEvent(
             kind: .tool,
             rawJson: "",
             text: info.inputSummary ?? "",
             toolName: info.toolName,
             toolInput: info.inputSummary,
-            toolInputDict: inputDict,
+            toolInputJSON: info.inputJSON,
             toolCallId: info.toolCallID,
             sessionId: info.sessionID
         ))
@@ -419,14 +418,13 @@ actor OpenCodeBridge {
     private func handleToolCompleted(_ info: SSEClient.ToolCompletedInfo) {
         guard isTrackedSession(info.sessionID) else { return }
         waitingForFirstOutput.remove(info.sessionID)
-        let inputDict = deserializeInputJSON(info.inputJSON)
         eventContinuation.yield(OpenCodeEvent(
             kind: .tool,
             rawJson: "",
             text: info.inputSummary ?? "",
             toolName: info.toolName,
             toolInput: info.inputSummary,
-            toolInputDict: inputDict,
+            toolInputJSON: info.inputJSON,
             toolOutput: info.output,
             toolCallId: info.toolCallID,
             sessionId: info.sessionID,
@@ -555,7 +553,7 @@ actor OpenCodeBridge {
             text: request.questions.first?.question ?? "Question",
             toolName: "Question",
             toolInput: request.questions.first?.question,
-            toolInputDict: buildQuestionInputDict(request),
+            toolInputJSON: OpenCodeEvent.serializeJSON(buildQuestionInputDict(request)),
             sessionId: request.sessionID
         ))
     }
@@ -573,7 +571,7 @@ actor OpenCodeBridge {
             text: "Permission: \(request.permission) for \(request.patterns.joined(separator: ", "))",
             toolName: "Permission",
             toolInput: request.patterns.joined(separator: ", "),
-            toolInputDict: buildPermissionInputDict(request),
+            toolInputJSON: OpenCodeEvent.serializeJSON(buildPermissionInputDict(request)),
             sessionId: request.sessionID
         ))
     }
@@ -732,7 +730,8 @@ actor OpenCodeBridge {
         dict["questions"] = questions
 
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
-              let str = String(data: data, encoding: .utf8) else {
+              let str = String(data: data, encoding: .utf8)
+        else {
             return "{}"
         }
         return str
@@ -750,7 +749,8 @@ actor OpenCodeBridge {
         ]
 
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
-              let str = String(data: data, encoding: .utf8) else {
+              let str = String(data: data, encoding: .utf8)
+        else {
             return "{}"
         }
         return str
@@ -795,15 +795,5 @@ actor OpenCodeBridge {
             "metadata": request.metadata,
             "always": request.always,
         ]
-    }
-
-    /// Deserialize JSON string back to [String: Any] for tool input dict.
-    /// Used to pass full input through Sendable boundary (SSEClient → Bridge → AppState).
-    private func deserializeInputJSON(_ json: String?) -> [String: Any]? {
-        guard let json, let data = json.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        return dict
     }
 }

@@ -53,7 +53,7 @@ final class SkillRegistry: ObservableObject {
 
         let extraEntries = extraDirs.flatMap { SkillLoader.loadEntries(from: $0, source: .extra) }
         let managedEntriesAll = managedDir.map { SkillLoader.loadEntries(from: $0, source: .managed) } ?? []
-        let builtInNames = Set(builtIns.map { $0.name })
+        let builtInNames = Set(builtIns.map(\.name))
         let managedEntries = managedEntriesAll.filter { !builtInNames.contains($0.name) }
         let workspaceEntries = SkillLoader.loadEntries(from: workspaceDir, source: .workspace)
 
@@ -76,13 +76,13 @@ final class SkillRegistry: ObservableObject {
     }
 
     #if DEBUG
-    func setEntriesForTesting(_ entries: [SkillEntry]) {
-        self.entries = entries
-    }
+        func setEntriesForTesting(_ entries: [SkillEntry]) {
+            self.entries = entries
+        }
     #endif
 
     func eligibleEntries() -> [SkillEntry] {
-        entries.filter { $0.eligibility.isEligible }
+        entries.filter(\.eligibility.isEligible)
     }
 
     /// Check if a skill is enabled using the same logic as the permission whitelist:
@@ -100,7 +100,7 @@ final class SkillRegistry: ObservableObject {
 
     func mcpEntries() -> [SkillEntry] {
         eligibleEntries().filter {
-            if case .mcp(let spec) = $0.wiring {
+            if case let .mcp(spec) = $0.wiring {
                 return spec.enabled ?? true
             }
             return false
@@ -121,7 +121,8 @@ final class SkillRegistry: ObservableObject {
                 if let apiKey = entryConfig.apiKey,
                    !apiKey.isEmpty,
                    let primaryEnv = entry.metadata?.primaryEnv,
-                   overrides[primaryEnv]?.isEmpty ?? true {
+                   overrides[primaryEnv]?.isEmpty ?? true
+                {
                     overrides[primaryEnv] = apiKey
                 }
             }
@@ -143,12 +144,12 @@ final class SkillRegistry: ObservableObject {
         try? fm.createDirectory(at: skillsDir, withIntermediateDirectories: true)
 
         // Names managed by SkillManager.writeSkillFiles() — don't touch those
-        let managedBySkillManager = Set(SkillManager.shared.skills.map { $0.id })
+        let managedBySkillManager = Set(SkillManager.shared.skills.map(\.id))
 
         // Enabled skill names — the ground truth for what should exist on disk
         let enabledNames = Set(
             entries.filter { isSkillEnabled($0) && !managedBySkillManager.contains($0.name) }
-                   .map { $0.name }
+                .map(\.name)
         )
 
         // 1. Write / update enabled skills
@@ -197,7 +198,7 @@ final class SkillRegistry: ObservableObject {
     func buildMcpConfigEntries() -> [String: Any] {
         var mcp: [String: Any] = [:]
         for entry in mcpEntries() {
-            guard case .mcp(let spec) = entry.wiring else { continue }
+            guard case let .mcp(spec) = entry.wiring else { continue }
             let key = entry.name
             mcp[key] = [
                 "type": spec.type ?? "local",
@@ -217,7 +218,7 @@ final class SkillRegistry: ObservableObject {
         if let bundleURL = bundledSkillsURL() {
             entries.append(contentsOf: SkillLoader.loadEntries(from: bundleURL, source: .bundled))
         }
-        let bundledNames = Set(entries.map { $0.name })
+        let bundledNames = Set(entries.map(\.name))
 
         // Exclude bundled duplicates and capability skills (e.g. browser-automation)
         // which have their own dedicated section in Advanced settings.
@@ -225,14 +226,13 @@ final class SkillRegistry: ObservableObject {
             !bundledNames.contains($0.id) && $0.type != .capability
         }
         let skillEntries = builtIns.map { skill in
-            let skillPath: String
-            if let managedDir {
-                skillPath = managedDir
+            let skillPath: String = if let managedDir {
+                managedDir
                     .appendingPathComponent(skill.id)
                     .appendingPathComponent("SKILL.md")
                     .path
             } else {
-                skillPath = skill.id
+                skill.id
             }
             let frontmatter = SkillFrontmatter(
                 name: skill.id,
@@ -242,7 +242,7 @@ final class SkillRegistry: ObservableObject {
             // System skills are enabled by default
             var metadata = SkillMetadata()
             metadata.defaultEnabled = true
-            
+
             return SkillEntry(
                 name: skill.id,
                 description: skill.description,
@@ -307,26 +307,28 @@ final class SkillRegistry: ObservableObject {
 
     private func bundledSkillsURL() -> URL? {
         #if DEBUG
-        if let override = bundledSkillsURLOverride {
-            return override
-        }
+            if let override = bundledSkillsURLOverride {
+                return override
+            }
         #endif
         guard let bundleURL = Bundle.main.url(forResource: "Skills", withExtension: "bundle"),
-              let bundle = Bundle(url: bundleURL) else {
+              let bundle = Bundle(url: bundleURL)
+        else {
             return nil
         }
         return bundle.resourceURL
     }
 
     #if DEBUG
-    private var bundledSkillsURLOverride: URL? {
-        get { Self._bundledSkillsURLOverride }
-        set { Self._bundledSkillsURLOverride = newValue }
-    }
-    private static var _bundledSkillsURLOverride: URL?
+        private var bundledSkillsURLOverride: URL? {
+            get { Self._bundledSkillsURLOverride }
+            set { Self._bundledSkillsURLOverride = newValue }
+        }
 
-    func setBundledSkillsURLForTesting(_ url: URL?) {
-        bundledSkillsURLOverride = url
-    }
+        private static var _bundledSkillsURLOverride: URL?
+
+        func setBundledSkillsURLForTesting(_ url: URL?) {
+            bundledSkillsURLOverride = url
+        }
     #endif
 }

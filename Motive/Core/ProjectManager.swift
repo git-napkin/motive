@@ -89,7 +89,8 @@ final class ProjectManager {
         }
         set {
             if let data = try? JSONEncoder().encode(newValue),
-               let json = String(data: data, encoding: .utf8) {
+               let json = String(data: data, encoding: .utf8)
+            {
                 setRecentJSON(json)
             }
         }
@@ -100,7 +101,7 @@ final class ProjectManager {
     /// Set the current project directory
     @discardableResult
     func setProjectDirectory(_ path: String?) -> Bool {
-        guard let path = path, !path.isEmpty else {
+        guard let path, !path.isEmpty else {
             setCurrentPath("")
             Log.config("Project directory reset to default (~/.motive)")
             return true
@@ -114,7 +115,8 @@ final class ProjectManager {
 
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: expandedPath, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
+              isDirectory.boolValue
+        else {
             Log.config("Project directory does not exist: \(expandedPath)")
             return false
         }
@@ -131,7 +133,8 @@ final class ProjectManager {
 
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
+              isDirectory.boolValue
+        else {
             return
         }
 

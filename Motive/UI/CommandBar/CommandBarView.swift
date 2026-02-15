@@ -12,28 +12,30 @@ import SwiftUI
 // MARK: - CommandBar State
 
 enum CommandBarMode: Equatable {
-    case idle                           // Initial state, ready for input
-    case input                          // User is typing intent
-    case command(fromSession: Bool)     // User typed /, showing command suggestions
-    case history(fromSession: Bool)     // Showing /history list
-    case projects(fromSession: Bool)    // Showing /project list
-    case modes(fromSession: Bool)       // Showing /mode selection list
-    case running                        // Task is running
-    case completed                      // Task completed, showing summary
-    case error(String)                  // Error occurred
-    
-    var showsFooter: Bool { true }
-    
+    case idle // Initial state, ready for input
+    case input // User is typing intent
+    case command(fromSession: Bool) // User typed /, showing command suggestions
+    case history(fromSession: Bool) // Showing /history list
+    case projects(fromSession: Bool) // Showing /project list
+    case modes(fromSession: Bool) // Showing /mode selection list
+    case running // Task is running
+    case completed // Task completed, showing summary
+    case error(String) // Error occurred
+
+    var showsFooter: Bool {
+        true
+    }
+
     var isCommand: Bool {
         if case .command = self { return true }
         return false
     }
-    
+
     var isHistory: Bool {
         if case .history = self { return true }
         return false
     }
-    
+
     var isProjects: Bool {
         if case .projects = self { return true }
         return false
@@ -43,48 +45,48 @@ enum CommandBarMode: Equatable {
         if case .modes = self { return true }
         return false
     }
-    
+
     /// Whether this mode was triggered from a session state (completed/running)
     var isFromSession: Bool {
         switch self {
-        case .command(let fromSession), .history(let fromSession),
-             .projects(let fromSession), .modes(let fromSession):
-            return fromSession
+        case let .command(fromSession), let .history(fromSession),
+             let .projects(fromSession), let .modes(fromSession):
+            fromSession
         default:
-            return false
+            false
         }
     }
-    
+
     var dynamicHeight: CGFloat {
         // Layout: [status bar ~50] + input(52) + [list] + footer(40) + padding
         switch self {
-        case .idle, .input: 
-            return 100   // input + footer + padding
-        case .command(let fromSession): 
+        case .idle, .input:
+            100 // input + footer + padding
+        case let .command(fromSession):
             // Same height as history for consistency
-            return fromSession ? 450 : 400   // status(50) + input + footer + list(280) + padding
-        case .history(let fromSession): 
-            return fromSession ? 450 : 400   // status(50) + input + footer + list(280) + padding
-        case .projects(let fromSession):
-            return fromSession ? 450 : 400   // status(50) + input + footer + list(280) + padding
-        case .modes(let fromSession):
-            return fromSession ? 280 : 230   // Compact: only 2 items
-        case .running, .completed, .error: 
-            return 160   // status + input + footer + padding
+            fromSession ? 450 : 400 // status(50) + input + footer + list(280) + padding
+        case let .history(fromSession):
+            fromSession ? 450 : 400 // status(50) + input + footer + list(280) + padding
+        case let .projects(fromSession):
+            fromSession ? 450 : 400 // status(50) + input + footer + list(280) + padding
+        case let .modes(fromSession):
+            fromSession ? 280 : 230 // Compact: only 2 items
+        case .running, .completed, .error:
+            160 // status + input + footer + padding
         }
     }
-    
+
     var modeName: String {
         switch self {
-        case .idle: return "idle"
-        case .input: return "input"
-        case .command: return "command"
-        case .history: return "history"
-        case .projects: return "projects"
-        case .modes: return "modes"
-        case .running: return "running"
-        case .completed: return "completed"
-        case .error: return "error"
+        case .idle: "idle"
+        case .input: "input"
+        case .command: "command"
+        case .history: "history"
+        case .projects: "projects"
+        case .modes: "modes"
+        case .running: "running"
+        case .completed: "completed"
+        case .error: "error"
         }
     }
 }
@@ -97,7 +99,7 @@ struct CommandDefinition: Identifiable {
     let shortcut: String?
     let icon: String
     let description: String
-    
+
     static let allCommands: [CommandDefinition] = [
         CommandDefinition(id: "mode", name: "mode", shortcut: "m", icon: "arrow.triangle.2.circlepath", description: "Switch between agent and plan modes"),
         CommandDefinition(id: "project", name: "project", shortcut: "p", icon: "folder", description: "Switch project directory"),
@@ -106,7 +108,7 @@ struct CommandDefinition: Identifiable {
         CommandDefinition(id: "new", name: "new", shortcut: "n", icon: "plus.circle", description: "Start new session"),
         CommandDefinition(id: "clear", name: "clear", shortcut: nil, icon: "trash", description: "Clear current conversation"),
     ]
-    
+
     static func matching(_ query: String) -> [CommandDefinition] {
         let q = query.lowercased().trimmingCharacters(in: .whitespaces)
         if q.isEmpty { return allCommands }
@@ -142,7 +144,7 @@ struct CommandBarView: View {
     @State var showFileCompletion: Bool = false
     @State var selectedFileIndex: Int = 0
     @State var atQueryRange: Range<String.Index>? = nil
-    
+
     var body: some View {
         mainContent
             .onAppear(perform: handleOnAppear)

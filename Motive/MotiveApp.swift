@@ -5,9 +5,9 @@
 //  Created by geezerrrr on 2026/1/19.
 //
 
-import SwiftUI
-import SwiftData
 import AppKit
+import SwiftData
+import SwiftUI
 
 @main
 struct MotiveApp: App {
@@ -19,23 +19,23 @@ struct MotiveApp: App {
     init() {
         let configManager = ConfigManager()
         let container: ModelContainer
-        
+
         // Use local-only storage in Application Support/Motive/
         // Schema Version: 1.0 - Session (id, intent, createdAt, openCodeSessionId, status, projectPath, logs)
         //                     - LogEntry (id, rawJson, kind, createdAt)
         let schema = Schema([Session.self, LogEntry.self])
         let storeURL = Self.storeURL()
-        
+
         // Ensure the Motive directory exists
         let motiveDir = storeURL.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: motiveDir, withIntermediateDirectories: true)
-        
+
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             url: storeURL,
             cloudKitDatabase: .none
         )
-        
+
         do {
             container = try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
@@ -51,11 +51,11 @@ struct MotiveApp: App {
                 container = try! ModelContainer(for: schema, configurations: [modelConfiguration])
             }
         }
-        
+
         // Create AppState with modelContext directly (no need for SwiftUI environment)
         let appState = AppState(configManager: configManager)
         appState.attachModelContext(container.mainContext)
-        
+
         _configManager = StateObject(wrappedValue: configManager)
         _appState = StateObject(wrappedValue: appState)
         modelContainer = container
@@ -63,13 +63,13 @@ struct MotiveApp: App {
         // Note: appState.start() is called in AppDelegate.applicationDidFinishLaunching
         // to ensure GUI connection is fully established before creating NSStatusItem
     }
-    
+
     /// Get the SwiftData store URL in Application Support/Motive/
     private static func storeURL() -> URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         return appSupport.appendingPathComponent("Motive/motive.store")
     }
-    
+
     /// Delete corrupted SwiftData database files to allow recreation
     private static func deleteCorruptedDatabase() {
         let storeURL = Self.storeURL()
@@ -83,7 +83,7 @@ struct MotiveApp: App {
         }
         Log.warning("Deleted corrupted database files at \(storeURL.path)")
     }
-    
+
     /// Show a fatal error dialog and exit the application gracefully
     private static func showFatalErrorAndExit(error: Error) {
         let alert = NSAlert()
@@ -94,7 +94,7 @@ struct MotiveApp: App {
         alert.runModal()
         NSApplication.shared.terminate(nil)
     }
- 
+
     var body: some Scene {
         // Use Settings scene instead of WindowGroup to avoid creating a visible window
         // This is a menu bar only app - all UI is managed via AppKit windows
@@ -110,7 +110,7 @@ struct MotiveApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
-            
+
             // Custom Settings command using our window controller
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {

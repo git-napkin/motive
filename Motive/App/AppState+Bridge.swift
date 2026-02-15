@@ -103,11 +103,10 @@ extension AppState {
 
         // --- Explicit session binding from bridge ---
         if event.rawJson == "__session_bind__", let sid = event.sessionId, !sid.isEmpty {
-            let sessionToBind: Session?
-            if !pendingBindSessions.isEmpty {
-                sessionToBind = pendingBindSessions.removeFirst()
+            let sessionToBind: Session? = if !pendingBindSessions.isEmpty {
+                pendingBindSessions.removeFirst()
             } else {
-                sessionToBind = currentSession
+                currentSession
             }
             if let session = sessionToBind, session.openCodeSessionId == nil {
                 session.openCodeSessionId = sid
@@ -116,7 +115,8 @@ extension AppState {
                     runningSessionMessages[sid] = messages
                 } else {
                     if let data = session.messagesData,
-                       let saved = ConversationMessage.deserializeMessages(data) {
+                       let saved = ConversationMessage.deserializeMessages(data)
+                    {
                         runningSessionMessages[sid] = saved
                     } else {
                         runningSessionMessages[sid] = []
@@ -129,17 +129,16 @@ extension AppState {
         }
 
         // --- Resolve target session ---
-        let targetSession: Session?
-        if let sid = event.sessionId, !sid.isEmpty {
+        let targetSession: Session? = if let sid = event.sessionId, !sid.isEmpty {
             if let running = runningSessions[sid] {
-                targetSession = running
+                running
             } else if currentSession?.openCodeSessionId == sid {
-                targetSession = currentSession
+                currentSession
             } else {
-                targetSession = nil
+                nil
             }
         } else {
-            targetSession = currentSession
+            currentSession
         }
 
         guard let target = targetSession else {
@@ -174,6 +173,7 @@ extension AppState {
     }
 
     // MARK: - Unified Event Processor
+
     //
     // EVERY session (foreground or background) goes through this SINGLE method.
     // `isCurrentSession` controls ONLY transient UI state updates.
@@ -190,14 +190,14 @@ extension AppState {
         if let agent = event.agent, !agent.isEmpty {
             if isCurrentSession { updateSessionAgent(agent) }
             // Pure agent-change carrier (empty text) — skip message processing
-            if event.kind == .assistant && event.text.isEmpty {
+            if event.kind == .assistant, event.text.isEmpty {
                 logEvent(event, session: session)
                 return
             }
         }
 
         // --- Stale finish guard (current session only, after resume) ---
-        if isCurrentSession && awaitingFirstResponseAfterResume {
+        if isCurrentSession, awaitingFirstResponseAfterResume {
             if event.kind == .finish {
                 Log.debug("Ignoring stale finish event (awaiting first response after resume)")
                 logEvent(event, session: session)
@@ -249,7 +249,8 @@ extension AppState {
 
             // Native question interception (all sessions)
             if let inputDict = event.toolInputDict,
-               inputDict["_isNativeQuestion"] as? Bool == true {
+               inputDict["_isNativeQuestion"] as? Bool == true
+            {
                 if let planFilePath = inputDict["_planFilePath"] as? String {
                     updatePlanFilePath(planFilePath, for: event.sessionId)
                 }
@@ -259,14 +260,16 @@ extension AppState {
             }
             // Native permission interception (all sessions)
             if let inputDict = event.toolInputDict,
-               inputDict["_isNativePermission"] as? Bool == true {
+               inputDict["_isNativePermission"] as? Bool == true
+            {
                 nativePromptHandler.handleNativePermission(inputDict: inputDict, event: event)
                 logEvent(event, session: session)
                 return
             }
             // Named question/permission result — skip
             if let toolName = event.toolName?.lowercased(),
-               toolName == "question" || toolName == "permission" {
+               toolName == "question" || toolName == "permission"
+            {
                 logEvent(event, session: session)
                 return
             }
@@ -438,7 +441,6 @@ extension AppState {
         }
     }
 
-
     // MARK: - Auto-Promote Next Running Session
 
     /// After the current foreground session finishes (completed/error), wait for the
@@ -458,7 +460,8 @@ extension AppState {
     private func promoteNextRunningSession() {
         // Find the first running session (most recently started)
         guard let nextEntry = runningSessions.first(where: { $0.value.sessionStatus == .running }),
-              nextEntry.value.id != currentSession?.id else {
+              nextEntry.value.id != currentSession?.id
+        else {
             return
         }
         let nextSession = nextEntry.value

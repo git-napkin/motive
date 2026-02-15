@@ -1,9 +1,9 @@
-import Testing
 @testable import Motive
+import Testing
 
 @MainActor
 struct SkillGatingTests {
-    @Test func disabledSkillIsExcluded() async throws {
+    @Test func disabledSkillIsExcluded() async {
         let entry = makeEntry(name: "slack", source: .bundled)
         var config = SkillsConfig()
         config.entries["slack"] = SkillEntryConfig(enabled: false)
@@ -13,7 +13,7 @@ struct SkillGatingTests {
         #expect(result.reasons.contains("disabled"))
     }
 
-    @Test func allowBundledBlocksWhenNotListed() async throws {
+    @Test func allowBundledBlocksWhenNotListed() async {
         let entry = makeEntry(name: "some-skill", source: .bundled)
         var config = SkillsConfig()
         config.allowBundled = ["another-skill"]
@@ -23,7 +23,7 @@ struct SkillGatingTests {
         #expect(result.reasons.contains("bundled_not_allowed"))
     }
 
-    @Test func osMismatchExcludes() async throws {
+    @Test func osMismatchExcludes() async {
         var entry = makeEntry(name: "linux-only", source: .managed)
         entry.metadata = SkillMetadata(always: false, os: ["linux"], primaryEnv: nil, emoji: nil, homepage: nil, requires: nil, skillKey: nil)
 
@@ -32,7 +32,7 @@ struct SkillGatingTests {
         #expect(result.reasons.contains("os_mismatch"))
     }
 
-    @Test func requiresEnvIsSatisfiedByConfig() async throws {
+    @Test func requiresEnvIsSatisfiedByConfig() async {
         var entry = makeEntry(name: "slack", source: .managed)
         var req = SkillRequirements()
         req.env = ["SLACK_TOKEN"]
@@ -45,7 +45,7 @@ struct SkillGatingTests {
         #expect(result.isEligible == true)
     }
 
-    @Test func alwaysBypassesRequires() async throws {
+    @Test func alwaysBypassesRequires() async {
         var entry = makeEntry(name: "always", source: .managed)
         var req = SkillRequirements()
         req.env = ["MISSING_ENV"]
@@ -55,7 +55,7 @@ struct SkillGatingTests {
         #expect(result.isEligible == true)
     }
 
-    @Test func requiresConfigChecksTruthy() async throws {
+    @Test func requiresConfigChecksTruthy() async {
         var entry = makeEntry(name: "config-skill", source: .managed)
         var req = SkillRequirements()
         req.config = ["feature.enabled"]
@@ -68,7 +68,7 @@ struct SkillGatingTests {
         #expect(result.isEligible == true)
     }
 
-    @Test func requiresAnyBinsFailsWhenMissing() async throws {
+    @Test func requiresAnyBinsFailsWhenMissing() async {
         var entry = makeEntry(name: "any-bin", source: .managed)
         var req = SkillRequirements()
         req.anyBins = ["definitely_missing_bin_123"]

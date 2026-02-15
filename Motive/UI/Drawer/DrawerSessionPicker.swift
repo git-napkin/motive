@@ -78,7 +78,9 @@ struct SessionPickerItem: View {
     @State private var isHovering = false
     @State private var isPulsing = false
 
-    private var isRunning: Bool { session.sessionStatus == .running }
+    private var isRunning: Bool {
+        session.sessionStatus == .running
+    }
 
     var body: some View {
         HStack(spacing: AuroraSpacing.space3) {
@@ -99,7 +101,7 @@ struct SessionPickerItem: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             // Delete button (separate hit target, only on hover, not for running sessions)
-            if isHovering && !isRunning {
+            if isHovering, !isRunning {
                 Button(action: {
                     showDeleteConfirmation()
                 }) {
@@ -182,11 +184,11 @@ struct SessionPickerItem: View {
 
     private var statusColor: Color {
         switch session.sessionStatus {
-        case .running: return Color.Aurora.success
-        case .completed: return Color.Aurora.accent
-        case .failed: return Color.Aurora.error
-        case .interrupted: return Color.Aurora.warning
-        default: return Color.Aurora.textMuted
+        case .running: Color.Aurora.success
+        case .completed: Color.Aurora.accent
+        case .failed: Color.Aurora.error
+        case .interrupted: Color.Aurora.warning
+        default: Color.Aurora.textMuted
         }
     }
 
@@ -197,7 +199,7 @@ struct SessionPickerItem: View {
         if diff < 60 { return L10n.Time.justNow }
         if diff < 3600 { return String(format: L10n.Time.minutesAgo, Int(diff / 60)) }
         if diff < 86400 { return String(format: L10n.Time.hoursAgo, Int(diff / 3600)) }
-        if diff < 604800 { return String(format: L10n.Time.daysAgo, Int(diff / 86400)) }
+        if diff < 604_800 { return String(format: L10n.Time.daysAgo, Int(diff / 86400)) }
 
         let formatter = DateFormatter()
         formatter.dateStyle = .short

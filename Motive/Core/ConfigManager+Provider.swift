@@ -9,7 +9,7 @@ import Foundation
 
 extension ConfigManager {
     // MARK: - Per-Provider Configuration Accessors
-    
+
     /// Base URL for current provider (stored in Keychain per-provider)
     var baseURL: String {
         get {
@@ -38,7 +38,7 @@ extension ConfigManager {
         get { providerConfigStore.modelName(for: provider) }
         set { providerConfigStore.setModelName(newValue, for: provider) }
     }
-    
+
     /// API Key for current provider (stored in Keychain per-provider)
     var apiKey: String {
         get {
@@ -71,20 +71,20 @@ extension ConfigManager {
         // Fall back to full check (will trigger Keychain if needed)
         return !apiKey.isEmpty
     }
-    
+
     /// Check if current provider is properly configured
     var isProviderConfigured: Bool {
         switch provider {
         case .ollama:
-            return !baseURL.isEmpty
+            !baseURL.isEmpty
         case .lmstudio:
             // LM Studio only needs local base URL
-            return !baseURL.isEmpty
+            !baseURL.isEmpty
         default:
-            return hasAPIKey
+            hasAPIKey
         }
     }
-    
+
     /// Get configuration error message for current provider
     var providerConfigurationError: String? {
         if let urlError = validateBaseURLFormat() {
@@ -97,13 +97,13 @@ extension ConfigManager {
         case .lmstudio:
             if baseURL.isEmpty { return "LM Studio Base URL not configured" }
         default:
-            if provider.requiresAPIKey && apiKey.isEmpty {
+            if provider.requiresAPIKey, apiKey.isEmpty {
                 return "\(provider.displayName) API Key not configured"
             }
         }
         return nil
     }
-    
+
     /// Get user-specified model override for OpenCode.
     /// - Returns: Raw user input if provided; otherwise `nil` so OpenCode can choose defaults.
     func getModelString() -> String? {
@@ -119,8 +119,9 @@ extension ConfigManager {
 
         guard let components = URLComponents(string: raw),
               let scheme = components.scheme?.lowercased(),
-              (scheme == "http" || scheme == "https"),
-              components.host != nil else {
+              scheme == "http" || scheme == "https",
+              components.host != nil
+        else {
             return "Invalid Base URL format. Use a full URL like https://api.example.com/v1"
         }
 

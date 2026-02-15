@@ -58,7 +58,7 @@ struct OpenCodeConfigGenerator {
         // deny all, then explicitly allow enabled skills.
         // Skills are synced to $OPENCODE_CONFIG_DIR/skills/<name>/SKILL.md so
         // OpenCode's native `skill` tool discovers them; permissions gate access.
-        var skillPermissions: [String: String] = ["*": "deny"]
+        var skillPermissions = ["*": "deny"]
         for entry in skillRegistry.entries where skillRegistry.isSkillEnabled(entry) {
             skillPermissions[entry.name] = "allow"
             Log.config(" Skill '\(entry.name)' is enabled -> allow")

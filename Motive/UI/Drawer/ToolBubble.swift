@@ -107,10 +107,10 @@ struct ToolBubble: View {
     /// Border color that reflects tool status
     private var toolBorderColor: Color {
         switch message.status {
-        case .running: return Color.Aurora.primary
-        case .completed: return Color.Aurora.border
-        case .failed: return Color.Aurora.error
-        case .pending: return Color.Aurora.border
+        case .running: Color.Aurora.primary
+        case .completed: Color.Aurora.border
+        case .failed: Color.Aurora.error
+        case .pending: Color.Aurora.border
         }
     }
 }

@@ -18,10 +18,10 @@ enum HotkeyParser {
     /// Modifier symbol/name → flag, ordered longest-name-first so prefix
     /// matching doesn't collide (e.g. "Control" before "Ctrl").
     private static let modifierTable: [(symbols: [String], flag: NSEvent.ModifierFlags)] = [
-        (["⌘", "Cmd"],                       .command),
-        (["⌥", "Option", "Alt"],             .option),
-        (["⇧", "Shift"],                     .shift),
-        (["⌃", "Control", "Ctrl"],           .control),
+        (["⌘", "Cmd"], .command),
+        (["⌥", "Option", "Alt"], .option),
+        (["⇧", "Shift"], .shift),
+        (["⌃", "Control", "Ctrl"], .control),
     ]
 
     // MARK: - Key Code Mapping
@@ -41,13 +41,13 @@ enum HotkeyParser {
         "↑": 126, "up": 126,
         // Function keys
         "f1": 122, "f2": 120, "f3": 99, "f4": 118,
-        "f5": 96,  "f6": 97,  "f7": 98, "f8": 100,
+        "f5": 96, "f6": 97, "f7": 98, "f8": 100,
         "f9": 101, "f10": 109, "f11": 103, "f12": 111,
         // Letters
-        "a": 0,  "b": 11, "c": 8,  "d": 2,  "e": 14, "f": 3,
-        "g": 5,  "h": 4,  "i": 34, "j": 38, "k": 40, "l": 37,
+        "a": 0, "b": 11, "c": 8, "d": 2, "e": 14, "f": 3,
+        "g": 5, "h": 4, "i": 34, "j": 38, "k": 40, "l": 37,
         "m": 46, "n": 45, "o": 31, "p": 35, "q": 12, "r": 15,
-        "s": 1,  "t": 17, "u": 32, "v": 9,  "w": 13, "x": 7,
+        "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7,
         "y": 16, "z": 6,
         // Numbers
         "0": 29, "1": 18, "2": 19, "3": 20, "4": 21,

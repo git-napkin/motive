@@ -16,7 +16,9 @@ struct MessageBubble: View {
     /// Unified expand/collapse for tool output, diff details, and error details.
     @State private var isDetailExpanded = false
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         HStack {
@@ -24,7 +26,7 @@ struct MessageBubble: View {
                 Spacer(minLength: 60)
             }
 
-        VStack(alignment: message.type == .user ? .trailing : .leading, spacing: 0) {
+            VStack(alignment: message.type == .user ? .trailing : .leading, spacing: 0) {
                 ZStack(alignment: message.type == .user ? .topTrailing : .topLeading) {
                     // Message content
                     Group {

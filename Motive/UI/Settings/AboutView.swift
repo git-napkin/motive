@@ -9,26 +9,28 @@ import SwiftUI
 
 struct AboutView: View {
     @Environment(\.colorScheme) private var colorScheme
-    
-    private var isDark: Bool { colorScheme == .dark }
-    
+
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
     }
-    
+
     private var buildNumber: String {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
                 // Hero: Logo + Name + Version
                 heroSection
-                
+
                 // Open Source Acknowledgments
                 acknowledgementsSection
-                
+
                 // Action buttons
                 actionButtons
             }
@@ -36,9 +38,9 @@ struct AboutView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
+
     // MARK: - Hero Section
-    
+
     private var heroSection: some View {
         VStack(spacing: 14) {
             // App Logo
@@ -61,28 +63,28 @@ struct AboutView: View {
                 }
             }
             .shadow(color: Color.black.opacity(0.12), radius: 12, y: 4)
-            
+
             VStack(spacing: 4) {
                 // App Name
                 Text(L10n.appName)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(Color.Aurora.textPrimary)
-                
+
                 // Version
                 Text("\(L10n.Settings.version) \(appVersion) (\(buildNumber))")
                     .font(.system(size: 12))
                     .foregroundColor(Color.Aurora.textSecondary)
             }
-            
+
             // Copyright
             Text(L10n.Settings.allRightsReserved)
                 .font(.system(size: 11))
                 .foregroundColor(Color.Aurora.textMuted)
         }
     }
-    
+
     // MARK: - Acknowledgements Section
-    
+
     private var acknowledgementsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.Settings.poweredBy)
@@ -91,7 +93,7 @@ struct AboutView: View {
                 .textCase(.uppercase)
                 .tracking(0.5)
                 .padding(.leading, 4)
-            
+
             VStack(spacing: 0) {
                 // OpenCode
                 AcknowledgementRow(
@@ -100,10 +102,10 @@ struct AboutView: View {
                     license: "MIT",
                     url: "https://github.com/anomalyco/opencode"
                 )
-                
+
                 Divider()
                     .padding(.leading, 16)
-                
+
                 // Browser-use
                 AcknowledgementRow(
                     name: "Browser Use",
@@ -124,9 +126,9 @@ struct AboutView: View {
         }
         .frame(maxWidth: 400)
     }
-    
+
     // MARK: - Action Buttons
-    
+
     private var actionButtons: some View {
         HStack(spacing: 10) {
             AboutActionButton(
@@ -138,7 +140,7 @@ struct AboutView: View {
                     }
                 }
             )
-            
+
             AboutActionButton(
                 title: "Feedback",
                 icon: "bubble.left",
@@ -148,7 +150,7 @@ struct AboutView: View {
                     }
                 }
             )
-            
+
             AboutActionButton(
                 title: "License",
                 icon: "doc.text",
@@ -170,11 +172,13 @@ private struct AcknowledgementRow: View {
     let license: String
     let url: String
     var showDivider: Bool = true
-    
+
     @State private var isHovering = false
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     var body: some View {
         Button {
             if let url = URL(string: url) {
@@ -187,7 +191,7 @@ private struct AcknowledgementRow: View {
                         Text(name)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(Color.Aurora.textPrimary)
-                        
+
                         Text(license)
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(Color.Aurora.primary)
@@ -198,14 +202,14 @@ private struct AcknowledgementRow: View {
                                     .fill(Color.Aurora.primary.opacity(0.12))
                             )
                     }
-                    
+
                     Text(description)
                         .font(.system(size: 11))
                         .foregroundColor(Color.Aurora.textMuted)
                 }
-                
+
                 Spacer()
-                
+
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(Color.Aurora.textMuted)
@@ -224,13 +228,15 @@ private struct AcknowledgementRow: View {
 
 private struct AboutActionButton: View {
     let title: String
-    var icon: String? = nil
+    var icon: String?
     let action: () -> Void
-    
+
     @State private var isHovering = false
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -256,14 +262,14 @@ private struct AboutActionButton: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
     }
-    
+
     private var backgroundColor: Color {
         if isHovering {
             return isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
         }
         return isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)
     }
-    
+
     private var borderColor: Color {
         isDark ? Color.white.opacity(0.08) : SettingsUIStyle.borderColor
     }

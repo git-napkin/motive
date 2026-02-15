@@ -18,7 +18,9 @@ struct AuroraAIProviderStep: View {
     @State private var baseURL: String = ""
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         VStack(spacing: AuroraSpacing.space4) {

@@ -17,11 +17,11 @@ struct SettingsView: View {
         self.initialTab = initialTab
         _selectedTab = State(initialValue: initialTab)
     }
-    
+
     private var activeTab: SettingsTab {
         selectedTab ?? .general
     }
-    
+
     var body: some View {
         NavigationSplitView {
             List(SettingsTab.allCases, selection: $selectedTab) { tab in
@@ -52,55 +52,57 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case advanced
     case about
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var title: String {
         switch self {
-        case .general: return L10n.Settings.general
-        case .persona: return L10n.Settings.persona
-        case .model: return L10n.Settings.aiProvider
-        case .usage: return L10n.Settings.usage
-        case .skills: return L10n.Settings.skills
-        case .memory: return L10n.Settings.memory
-        case .permissions: return L10n.Settings.permissions
-        case .advanced: return L10n.Settings.advanced
-        case .about: return L10n.Settings.about
+        case .general: L10n.Settings.general
+        case .persona: L10n.Settings.persona
+        case .model: L10n.Settings.aiProvider
+        case .usage: L10n.Settings.usage
+        case .skills: L10n.Settings.skills
+        case .memory: L10n.Settings.memory
+        case .permissions: L10n.Settings.permissions
+        case .advanced: L10n.Settings.advanced
+        case .about: L10n.Settings.about
         }
     }
 
     var subtitle: String {
         switch self {
-        case .general: return L10n.Settings.generalSubtitle
-        case .persona: return L10n.Settings.personaSubtitle
-        case .model: return L10n.Settings.aiProviderSubtitle
-        case .usage: return L10n.Settings.usageSubtitle
-        case .skills: return L10n.Settings.skillsSubtitle
-        case .memory: return L10n.Settings.memorySubtitle
-        case .permissions: return L10n.Settings.permissionsSubtitle
-        case .advanced: return L10n.Settings.advancedSubtitle
-        case .about: return L10n.Settings.aboutSubtitle
+        case .general: L10n.Settings.generalSubtitle
+        case .persona: L10n.Settings.personaSubtitle
+        case .model: L10n.Settings.aiProviderSubtitle
+        case .usage: L10n.Settings.usageSubtitle
+        case .skills: L10n.Settings.skillsSubtitle
+        case .memory: L10n.Settings.memorySubtitle
+        case .permissions: L10n.Settings.permissionsSubtitle
+        case .advanced: L10n.Settings.advancedSubtitle
+        case .about: L10n.Settings.aboutSubtitle
         }
     }
 
     var icon: String {
         switch self {
-        case .general: return "gearshape.fill"
-        case .persona: return "person.fill"
-        case .model: return "cpu.fill"
-        case .usage: return "chart.bar.fill"
-        case .skills: return "sparkles"
-        case .memory: return "brain.fill"
-        case .permissions: return "lock.shield.fill"
-        case .advanced: return "wrench.and.screwdriver.fill"
-        case .about: return "info.circle.fill"
+        case .general: "gearshape.fill"
+        case .persona: "person.fill"
+        case .model: "cpu.fill"
+        case .usage: "chart.bar.fill"
+        case .skills: "sparkles"
+        case .memory: "brain.fill"
+        case .permissions: "lock.shield.fill"
+        case .advanced: "wrench.and.screwdriver.fill"
+        case .about: "info.circle.fill"
         }
     }
-    
+
     /// Fixed window size for all tabs
     var windowSize: CGSize {
         CGSize(width: 920, height: 640)
     }
-    
+
     @ViewBuilder
     var contentView: some View {
         switch self {
@@ -177,12 +179,12 @@ private struct SettingsDetailView: View {
 struct SettingSection<Content: View>: View {
     let title: String
     let content: Content
-    
+
     init(_ title: String, @ViewBuilder content: () -> Content) {
         self.title = title
         self.content = content()
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
@@ -211,17 +213,17 @@ struct SettingSection<Content: View>: View {
 
 struct SettingRow<Content: View>: View {
     let label: String
-    var description: String? = nil
+    var description: String?
     let content: Content
     var showDivider: Bool = true
-    
+
     init(_ label: String, description: String? = nil, showDivider: Bool = true, @ViewBuilder content: () -> Content) {
         self.label = label
         self.description = description
         self.showDivider = showDivider
         self.content = content()
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 16) {
@@ -230,7 +232,7 @@ struct SettingRow<Content: View>: View {
                     Text(label)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(Color.Aurora.textPrimary)
-                    
+
                     if let description {
                         Text(description)
                             .font(.system(size: 12))
@@ -238,15 +240,15 @@ struct SettingRow<Content: View>: View {
                             .lineLimit(2)
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // Control
                 content
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            
+
             // Divider
             if showDivider {
                 Rectangle()
@@ -262,18 +264,18 @@ struct SettingRow<Content: View>: View {
 
 struct CollapsibleSection<Content: View>: View {
     let title: String
-    var icon: String? = nil
+    var icon: String?
     let content: Content
-    
+
     @State private var isExpanded: Bool = true
-    
+
     init(_ title: String, icon: String? = nil, expanded: Bool = true, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self._isExpanded = State(initialValue: expanded)
         self.content = content()
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header (clickable)
@@ -288,15 +290,15 @@ struct CollapsibleSection<Content: View>: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color.Aurora.primary)
                     }
-                    
+
                     Text(title)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(Color.Aurora.textSecondary)
                         .textCase(.uppercase)
                         .tracking(0.5)
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Color.Aurora.textMuted)
@@ -307,7 +309,7 @@ struct CollapsibleSection<Content: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            
+
             // Content
             if isExpanded {
                 VStack(spacing: 0) {

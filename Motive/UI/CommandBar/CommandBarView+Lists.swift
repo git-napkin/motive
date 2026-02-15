@@ -169,6 +169,6 @@ extension CommandBarView {
                 }
             }
         }
-        .frame(maxHeight: .infinity)  // Fill available space
+        .frame(maxHeight: .infinity) // Fill available space
     }
 }

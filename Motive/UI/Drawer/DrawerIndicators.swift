@@ -30,7 +30,9 @@ struct ToolRunningIndicator: View {
 struct ThinkingIndicator: View {
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         // Metallic shimmer text — matches menu bar animation style.
@@ -55,7 +57,7 @@ struct AuroraLoadingDots: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            ForEach(0..<3) { index in
+            ForEach(0 ..< 3) { index in
                 Circle()
                     .fill(Color.Aurora.primary)
                     .frame(width: 4, height: 4)
@@ -103,7 +105,9 @@ struct TransientReasoningBubble: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var previewScrollTask: Task<Void, Never>?
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

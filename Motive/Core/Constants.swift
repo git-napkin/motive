@@ -29,10 +29,12 @@ nonisolated enum MotiveConstants: Sendable {
         /// Server health check interval (seconds)
         static let serverHealthCheck: TimeInterval = 0.5
     }
+
     nonisolated enum SSE: Sendable {
         /// Maximum reconnection backoff delay (seconds)
         static let reconnectMaxDelay: TimeInterval = 30
     }
+
     nonisolated enum Limits: Sendable {
         /// Maximum number of recent projects to keep
         static let maxRecentProjects = 10

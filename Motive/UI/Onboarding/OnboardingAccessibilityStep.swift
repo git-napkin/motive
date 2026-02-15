@@ -17,7 +17,9 @@ struct AuroraAccessibilityStep: View {
     @State private var checkTask: Task<Void, Never>?
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         VStack(spacing: AuroraSpacing.space5) {

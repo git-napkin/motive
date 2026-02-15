@@ -20,11 +20,11 @@ enum SessionStatus: String, Codable, Sendable {
 
     var displayName: String {
         switch self {
-        case .idle: return "Idle"
-        case .running: return "Running"
-        case .completed: return "Completed"
-        case .failed: return "Failed"
-        case .interrupted: return "Interrupted"
+        case .idle: "Idle"
+        case .running: "Running"
+        case .completed: "Completed"
+        case .failed: "Failed"
+        case .interrupted: "Interrupted"
         }
     }
 
@@ -40,9 +40,9 @@ final class Session {
     var id: UUID
     var intent: String
     var createdAt: Date
-    var openCodeSessionId: String?  // OpenCode CLI session ID for resuming
+    var openCodeSessionId: String? // OpenCode CLI session ID for resuming
     /// Raw status string for persistence (use sessionStatus computed property for type-safe access)
-    var status: String = "completed"  // running, completed, failed, interrupted (default for migration)
+    var status: String = "completed" // running, completed, failed, interrupted (default for migration)
     /// Project directory used when the session was created (resolved path)
     var projectPath: String = ""
     @Relationship(deleteRule: .cascade) var logs: [LogEntry]
@@ -51,7 +51,7 @@ final class Session {
     var messagesData: Data?
     /// Latest known context size (input tokens) for this session.
     var contextTokens: Int?
-    
+
     /// Type-safe accessor for session status
     var sessionStatus: SessionStatus {
         get {

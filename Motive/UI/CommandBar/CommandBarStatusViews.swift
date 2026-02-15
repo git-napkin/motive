@@ -65,7 +65,7 @@ extension CommandBarView {
 
     /// Title for running status - overall task state
     private var runningStatusTitle: String {
-        L10n.CommandBar.running  // Always "Running" as the task is in progress
+        L10n.CommandBar.running // Always "Running" as the task is in progress
     }
 
     /// Detail for running status - current action (thinking or tool execution)

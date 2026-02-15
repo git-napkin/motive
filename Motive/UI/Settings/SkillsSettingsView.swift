@@ -5,9 +5,9 @@
 //  Compact skills management with split-pane layout
 //
 
-import SwiftUI
 import Foundation
 import MarkdownUI
+import SwiftUI
 
 struct SkillsSettingsView: View {
     @EnvironmentObject private var configManager: ConfigManager
@@ -20,7 +20,6 @@ struct SkillsSettingsView: View {
     @State private var isMarkdownLoading: Bool = false
     @State private var showSkillBrowser: Bool = false
 
-
     /// Filtered skills based on search
     private var filteredSkills: [SkillStatusEntry] {
         if searchText.isEmpty {
@@ -29,7 +28,7 @@ struct SkillsSettingsView: View {
         let lowercasedSearch = searchText.lowercased()
         return viewModel.statusEntries.filter { status in
             status.entry.name.lowercased().contains(lowercasedSearch) ||
-            status.entry.description.lowercased().contains(lowercasedSearch)
+                status.entry.description.lowercased().contains(lowercasedSearch)
         }
     }
 
@@ -90,7 +89,8 @@ struct SkillsSettingsView: View {
         }
         .onChange(of: selectedSkillId) { _, newValue in
             guard let id = newValue,
-                  let entry = viewModel.statusEntries.first(where: { $0.entry.name == id })?.entry else {
+                  let entry = viewModel.statusEntries.first(where: { $0.entry.name == id })?.entry
+            else {
                 return
             }
             loadMarkdown(for: entry)
@@ -237,7 +237,7 @@ struct SkillsSettingsView: View {
 
     private var skillsList: some View {
         Group {
-            if viewModel.isLoading && viewModel.statusEntries.isEmpty {
+            if viewModel.isLoading, viewModel.statusEntries.isEmpty {
                 VStack {
                     Spacer()
                     ProgressView()
@@ -350,7 +350,7 @@ struct SkillsSettingsView: View {
         let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
         guard lines.count > 2 else { return content }
         var endIndex: Int?
-        for i in 1..<lines.count {
+        for i in 1 ..< lines.count {
             if lines[i].trimmingCharacters(in: .whitespacesAndNewlines) == "---" {
                 endIndex = i
                 break

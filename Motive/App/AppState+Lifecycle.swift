@@ -23,7 +23,7 @@ extension AppState {
         // Detect and reset stale UserDefaults if user deleted data directories
         // MUST run BEFORE ensureDefaultProjectDirectory() which creates ~/.motive/
         configManager.detectAndResetStaleState()
-        
+
         // Ensure workspace exists (creates bootstrap files for fresh install)
         Task { @MainActor in
             do {
@@ -32,7 +32,7 @@ extension AppState {
                 Log.config("Failed to ensure workspace: \(error)")
             }
         }
-        
+
         // Ensure default project directory exists
         configManager.ensureDefaultProjectDirectory()
         configManager.ensureCurrentProjectInRecents()
@@ -111,5 +111,4 @@ extension AppState {
         // No pre-warm needed - window uses defer:true and alpha:0
         // First show will be slightly slower but avoids visual glitches
     }
-
 }

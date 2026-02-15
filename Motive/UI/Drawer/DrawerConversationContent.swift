@@ -77,9 +77,10 @@ struct DrawerConversationContent: View {
                     }
                     // Thinking indicator — only show when genuinely waiting for OpenCode
                     // with no active output (not during assistant text streaming).
-                    else if appState.sessionStatus == .running
-                                && appState.currentToolName == nil
-                                && appState.menuBarState != .responding {
+                    else if appState.sessionStatus == .running,
+                            appState.currentToolName == nil,
+                            appState.menuBarState != .responding
+                    {
                         ThinkingIndicator()
                             .id("thinking-indicator")
                             .transition(.opacity.combined(with: .move(edge: .bottom)))

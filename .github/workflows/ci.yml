@@ -54,3 +54,15 @@ jobs:
 
       - name: Run SwiftLint
         run: swiftlint lint --reporter github-actions-logging
+
+  format-check:
+    name: SwiftFormat
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftFormat
+        run: brew install swiftformat
+
+      - name: Check formatting
+        run: swiftformat --lint Motive/ MotiveTests/

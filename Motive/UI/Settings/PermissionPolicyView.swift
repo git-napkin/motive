@@ -14,20 +14,22 @@ struct PermissionPolicyView: View {
     @State private var configs: [ToolPermission: ToolPermissionConfig] = [:]
     @State private var showAdvanced = false
     @State private var newRuleSheet: NewRuleSheet?
-    
-    private var isDark: Bool { colorScheme == .dark }
-    
+
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Trust Level selector
             trustLevelSection
-            
+
             // Primary tools
             toolPermissionsSection(
                 title: L10n.Settings.permissions,
                 tools: ToolPermission.allCases.filter(\.isPrimary)
             )
-            
+
             // Advanced tools (collapsible)
             DisclosureGroup(isExpanded: $showAdvanced) {
                 toolPermissionsSection(
@@ -41,10 +43,10 @@ struct PermissionPolicyView: View {
                     .textCase(.uppercase)
                     .tracking(0.5)
             }
-            
+
             // Risk Legend
             riskLegend
-            
+
             // Reset Button
             HStack {
                 Spacer()
@@ -71,9 +73,9 @@ struct PermissionPolicyView: View {
             }
         }
     }
-    
+
     // MARK: - Trust Level Section
-    
+
     private var trustLevelSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L10n.Settings.trustLevel)
@@ -82,13 +84,13 @@ struct PermissionPolicyView: View {
                 .textCase(.uppercase)
                 .tracking(0.5)
                 .padding(.leading, 4)
-            
+
             HStack(spacing: 8) {
                 ForEach(TrustLevel.allCases, id: \.self) { level in
                     trustLevelCard(level)
                 }
             }
-            
+
             // YOLO warning
             if configManager.trustLevel == .yolo {
                 HStack(spacing: 8) {
@@ -112,10 +114,10 @@ struct PermissionPolicyView: View {
             }
         }
     }
-    
+
     private func trustLevelCard(_ level: TrustLevel) -> some View {
         let isSelected = configManager.trustLevel == level
-        
+
         return Button(action: {
             withAnimation(.auroraFast) {
                 configManager.trustLevel = level
@@ -126,11 +128,11 @@ struct PermissionPolicyView: View {
                 Image(systemName: level.systemSymbol)
                     .font(.system(size: 22, weight: .medium))
                     .foregroundColor(isSelected ? .white : Color.Aurora.textSecondary)
-                
+
                 Text(level.displayName)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(isSelected ? .white : Color.Aurora.textPrimary)
-                
+
                 Text(level.description)
                     .font(.system(size: 10))
                     .foregroundColor(isSelected ? .white.opacity(0.8) : Color.Aurora.textMuted)
@@ -156,9 +158,9 @@ struct PermissionPolicyView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
     // MARK: - Tool Permissions Section
-    
+
     private func toolPermissionsSection(title: String?, tools: [ToolPermission]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if let title {
@@ -169,11 +171,11 @@ struct PermissionPolicyView: View {
                     .tracking(0.5)
                     .padding(.leading, 4)
             }
-            
+
             VStack(spacing: 0) {
                 ForEach(Array(tools.enumerated()), id: \.element) { index, tool in
                     toolRow(tool)
-                    
+
                     if index < tools.count - 1 {
                         Rectangle()
                             .fill(SettingsUIStyle.dividerColor)
@@ -192,7 +194,7 @@ struct PermissionPolicyView: View {
             )
         }
     }
-    
+
     private func toolRow(_ tool: ToolPermission) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
@@ -201,25 +203,25 @@ struct PermissionPolicyView: View {
                     .font(.system(size: 14))
                     .foregroundColor(Color.Aurora.textSecondary)
                     .frame(width: 20)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tool.displayName)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(Color.Aurora.textPrimary)
-                    
+
                     Text(tool.localizedDescription)
                         .font(.system(size: 11))
                         .foregroundColor(Color.Aurora.textMuted)
                         .lineLimit(1)
                 }
-                
+
                 Spacer()
-                
+
                 // Risk indicator
                 Circle()
                     .fill(riskColor(for: tool.riskLevel))
                     .frame(width: 8, height: 8)
-                
+
                 // Default action picker
                 Picker("", selection: Binding(
                     get: { configs[tool]?.defaultAction ?? .ask },
@@ -238,7 +240,7 @@ struct PermissionPolicyView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            
+
             // Pattern rules for this tool
             let rules = configs[tool]?.rules ?? []
             if !rules.isEmpty {
@@ -248,16 +250,16 @@ struct PermissionPolicyView: View {
                             Text(rule.pattern)
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(Color.Aurora.textPrimary)
-                            
+
                             if let desc = rule.description {
                                 Text(desc)
                                     .font(.system(size: 11))
                                     .foregroundColor(Color.Aurora.textMuted)
                                     .lineLimit(1)
                             }
-                            
+
                             Spacer()
-                            
+
                             Text(rule.action.displayName)
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(actionColor(for: rule.action))
@@ -265,7 +267,7 @@ struct PermissionPolicyView: View {
                                 .padding(.vertical, 2)
                                 .background(actionColor(for: rule.action).opacity(0.1))
                                 .clipShape(RoundedRectangle(cornerRadius: 4))
-                            
+
                             Button(action: {
                                 ToolPermissionPolicy.shared.removeRule(id: rule.id, from: tool)
                                 loadCurrentConfigs()
@@ -282,7 +284,7 @@ struct PermissionPolicyView: View {
                     }
                 }
             }
-            
+
             // Add rule button
             Button(action: {
                 newRuleSheet = NewRuleSheet(tool: tool)
@@ -301,9 +303,9 @@ struct PermissionPolicyView: View {
             .padding(.bottom, 4)
         }
     }
-    
+
     // MARK: - Risk Legend
-    
+
     private var riskLegend: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L10n.Settings.riskLevels)
@@ -312,7 +314,7 @@ struct PermissionPolicyView: View {
                 .textCase(.uppercase)
                 .tracking(0.5)
                 .padding(.leading, 4)
-            
+
             HStack(spacing: 20) {
                 legendItem(color: .green, label: L10n.Settings.riskLow)
                 legendItem(color: .yellow, label: L10n.Settings.riskMedium)
@@ -330,7 +332,7 @@ struct PermissionPolicyView: View {
             )
         }
     }
-    
+
     private func legendItem(color: Color, label: String) -> some View {
         HStack(spacing: 8) {
             Circle()
@@ -341,33 +343,33 @@ struct PermissionPolicyView: View {
                 .foregroundColor(Color.Aurora.textSecondary)
         }
     }
-    
+
     // MARK: - Helpers
-    
+
     private func loadCurrentConfigs() {
         for tool in ToolPermission.allCases {
             configs[tool] = ToolPermissionPolicy.shared.config(for: tool)
         }
     }
-    
+
     private func regenerateConfig() {
         configManager.generateOpenCodeConfig()
     }
-    
+
     private func riskColor(for level: RiskLevel) -> Color {
         switch level {
-        case .low: return .green
-        case .medium: return .yellow
-        case .high: return .orange
-        case .critical: return .red
+        case .low: .green
+        case .medium: .yellow
+        case .high: .orange
+        case .critical: .red
         }
     }
-    
+
     private func actionColor(for action: PermissionAction) -> Color {
         switch action {
-        case .allow: return .green
-        case .ask: return .yellow
-        case .deny: return .red
+        case .allow: .green
+        case .ask: .yellow
+        case .deny: .red
         }
     }
 }
@@ -382,31 +384,31 @@ private struct NewRuleSheet: Identifiable {
 private struct AddRuleView: View {
     let tool: ToolPermission
     let onAdd: (ToolPermissionRule) -> Void
-    
+
     @Environment(\.dismiss) private var dismiss
     @State private var pattern = ""
     @State private var action: PermissionAction = .allow
     @State private var description = ""
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(String(format: L10n.Settings.addRuleFor, tool.displayName))
                 .font(.headline)
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.Settings.pattern)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                
+
                 TextField("e.g., *.ts, git *, /System/**", text: $pattern)
                     .textFieldStyle(.roundedBorder)
             }
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.Settings.action)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                
+
                 Picker(L10n.Settings.action, selection: $action) {
                     ForEach(PermissionAction.allCases, id: \.self) { action in
                         Text(action.displayName).tag(action)
@@ -414,16 +416,16 @@ private struct AddRuleView: View {
                 }
                 .pickerStyle(.segmented)
             }
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.Settings.descriptionOptional)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                
+
                 TextField(L10n.Settings.whatRuleDoes, text: $description)
                     .textFieldStyle(.roundedBorder)
             }
-            
+
             HStack {
                 Spacer()
                 Button(L10n.cancel) {

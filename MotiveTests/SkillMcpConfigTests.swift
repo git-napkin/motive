@@ -1,8 +1,8 @@
-import Testing
 @testable import Motive
+import Testing
 
 struct SkillMcpConfigTests {
-    @Test @MainActor func buildsMcpEntriesOnlyForMcpSkills() async throws {
+    @Test @MainActor func buildsMcpEntriesOnlyForMcpSkills() {
         let registry = SkillRegistry.shared
         let mcpEntry = SkillEntry(
             name: "slack",

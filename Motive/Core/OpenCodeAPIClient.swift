@@ -19,15 +19,15 @@ actor OpenCodeAPIClient {
 
     /// Reply types for native permission requests.
     enum PermissionReply: Sendable {
-        case once           // Allow this single request
-        case always         // Allow and remember for future matching
+        case once // Allow this single request
+        case always // Allow and remember for future matching
         case reject(String?) // Deny with optional message
 
         var wireValue: String {
             switch self {
-            case .once: return "once"
-            case .always: return "always"
-            case .reject: return "reject"
+            case .once: "once"
+            case .always: "always"
+            case .reject: "reject"
             }
         }
     }
@@ -48,13 +48,13 @@ actor OpenCodeAPIClient {
             switch self {
             case .noBaseURL:
                 return "API client has no base URL configured"
-            case .httpError(let code, let body):
+            case let .httpError(code, body):
                 let friendly = Self.friendlyServerMessage(from: body)
                 let detail = friendly ?? body ?? "Unknown server error"
                 return "HTTP \(code): \(detail)"
-            case .decodingError(let msg):
+            case let .decodingError(msg):
                 return "Response decoding failed: \(msg)"
-            case .networkError(let error):
+            case let .networkError(error):
                 return "Network error: \(error.localizedDescription)"
             }
         }
@@ -63,7 +63,8 @@ actor OpenCodeAPIClient {
             guard let body, !body.isEmpty else { return nil }
 
             if let data = body.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            {
                 // OpenAI-compatible error payload: {"error":{"message":"...","code":"..."}}
                 if let err = json["error"] as? [String: Any] {
                     if let message = err["message"] as? String, !message.isEmpty {
@@ -72,7 +73,8 @@ actor OpenCodeAPIClient {
                 }
                 // OpenCode payload style: {"name":"...","data":{"message":"..."}}
                 if let dataObj = json["data"] as? [String: Any],
-                   let message = dataObj["message"] as? String, !message.isEmpty {
+                   let message = dataObj["message"] as? String, !message.isEmpty
+                {
                     return message
                 }
             }
@@ -120,7 +122,8 @@ actor OpenCodeAPIClient {
         let responseData = try await post(path: "/session", body: body)
 
         guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
-              let id = json["id"] as? String else {
+              let id = json["id"] as? String
+        else {
             throw APIError.decodingError("Missing session ID in response")
         }
 
@@ -175,7 +178,8 @@ actor OpenCodeAPIClient {
                         "modelID": String(components[1]),
                     ]
                 } else if let providerID = modelProviderID?.trimmingCharacters(in: .whitespacesAndNewlines),
-                          !providerID.isEmpty {
+                          !providerID.isEmpty
+                {
                     body["model"] = [
                         "providerID": providerID,
                         "modelID": trimmedModel,
@@ -227,7 +231,7 @@ actor OpenCodeAPIClient {
             "reply": reply.wireValue
         ]
 
-        if case .reject(let message) = reply, let message {
+        if case let .reject(message) = reply, let message {
             body["message"] = message
         }
 
@@ -280,7 +284,7 @@ actor OpenCodeAPIClient {
                 throw APIError.httpError(statusCode: status, body: bodyStr)
             }
         } else {
-            guard (200...299).contains(status) else {
+            guard (200 ... 299).contains(status) else {
                 let bodyStr = String(data: data, encoding: .utf8)
                 throw APIError.httpError(statusCode: status, body: bodyStr)
             }

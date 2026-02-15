@@ -5,10 +5,10 @@
 //  Tests for AppState event handling logic.
 //
 
-import Testing
 import Foundation
-import SwiftData
 @testable import Motive
+import SwiftData
+import Testing
 
 @MainActor
 struct AppStateEventTests {

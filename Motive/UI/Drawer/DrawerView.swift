@@ -26,7 +26,9 @@ struct DrawerView: View {
     @State private var atQueryRange: Range<String.Index>? = nil
     @State private var streamingScrollTask: Task<Void, Never>?
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         ZStack {
@@ -73,7 +75,7 @@ struct DrawerView: View {
             }
 
             // File completion overlay
-            if showFileCompletion && !fileCompletion.items.isEmpty {
+            if showFileCompletion, !fileCompletion.items.isEmpty {
                 fileCompletionView
             }
 
@@ -101,7 +103,7 @@ struct DrawerView: View {
             loadSessions()
         }
         .onKeyPress(.upArrow) {
-            if showFileCompletion && !fileCompletion.items.isEmpty {
+            if showFileCompletion, !fileCompletion.items.isEmpty {
                 if selectedFileIndex > 0 {
                     selectedFileIndex -= 1
                 }
@@ -110,7 +112,7 @@ struct DrawerView: View {
             return .ignored
         }
         .onKeyPress(.downArrow) {
-            if showFileCompletion && !fileCompletion.items.isEmpty {
+            if showFileCompletion, !fileCompletion.items.isEmpty {
                 if selectedFileIndex < fileCompletion.items.count - 1 {
                     selectedFileIndex += 1
                 }
@@ -119,7 +121,7 @@ struct DrawerView: View {
             return .ignored
         }
         .onKeyPress(.tab) {
-            if showFileCompletion && !fileCompletion.items.isEmpty {
+            if showFileCompletion, !fileCompletion.items.isEmpty {
                 if selectedFileIndex < fileCompletion.items.count {
                     selectFileCompletion(fileCompletion.items[selectedFileIndex])
                 }
@@ -243,7 +245,7 @@ struct DrawerView: View {
 
     private func handleInputSubmit() {
         // File completion: select item on Enter
-        if showFileCompletion && !fileCompletion.items.isEmpty {
+        if showFileCompletion, !fileCompletion.items.isEmpty {
             if selectedFileIndex < fileCompletion.items.count {
                 selectFileCompletion(fileCompletion.items[selectedFileIndex])
             }
@@ -300,11 +302,10 @@ struct DrawerView: View {
     private func selectFileCompletion(_ item: FileCompletionItem) {
         guard let range = atQueryRange else { return }
 
-        let replacement: String
-        if item.isDirectory {
-            replacement = "@\(item.path)/"
+        let replacement = if item.isDirectory {
+            "@\(item.path)/"
         } else {
-            replacement = "@\(item.path) "
+            "@\(item.path) "
         }
 
         // Calculate the new @ range after replacement
@@ -318,7 +319,7 @@ struct DrawerView: View {
         if item.isDirectory {
             // Update atQueryRange to point to the new @ token
             if let newEndIndex = inputText.index(startIndex, offsetBy: replacement.count, limitedBy: inputText.endIndex) {
-                atQueryRange = startIndex..<newEndIndex
+                atQueryRange = startIndex ..< newEndIndex
 
                 // Directly load items for the new directory
                 let baseDir = fileCompletion.getBaseDirectory(for: configManager)
@@ -335,4 +336,3 @@ struct DrawerView: View {
         }
     }
 }
-

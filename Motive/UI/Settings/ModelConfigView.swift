@@ -14,7 +14,7 @@ struct ModelConfigView: View {
     @State private var showSavedFeedback = false
     @State private var showAPIKey = false
     @FocusState private var focusedField: Field?
-    
+
     enum Field: Hashable {
         case baseURL, apiKey, modelName
     }
@@ -30,15 +30,15 @@ struct ModelConfigView: View {
                         .foregroundColor(Color.Aurora.textMuted)
                         .textCase(.uppercase)
                         .tracking(0.5)
-                    
+
                     Spacer()
-                    
+
                     // Warning badge - always reserve space
                     HStack(spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 11))
                             .foregroundColor(Color.Aurora.warning)
-                        
+
                         Text(configManager.providerConfigurationError ?? "")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(Color.Aurora.warning)
@@ -53,11 +53,11 @@ struct ModelConfigView: View {
                 }
                 .frame(height: 28)
                 .padding(.leading, 4)
-                
+
                 // Compact provider picker
                 providerPicker
             }
-            
+
             // Configuration
             SettingSection(L10n.Settings.configuration) {
                 // API Key (only for providers that require it)
@@ -72,7 +72,7 @@ struct ModelConfigView: View {
                                         .font(.system(size: 12))
                                         .foregroundColor(Color.Aurora.success)
                                 }
-                                
+
                                 Group {
                                     if showAPIKey {
                                         TextField(apiKeyPlaceholder, text: Binding(
@@ -92,7 +92,7 @@ struct ModelConfigView: View {
                             .padding(.leading, 12)
                             .padding(.trailing, 32)
                             .padding(.vertical, 8)
-                            
+
                             // Eye toggle button
                             Button {
                                 showAPIKey.toggle()
@@ -111,21 +111,21 @@ struct ModelConfigView: View {
                         )
                     }
                 }
-                
+
                 // Base URL (stored in Keychain alongside API key)
                 SettingRow(configManager.provider == .ollama ? L10n.Settings.ollamaHost : L10n.Settings.baseURL) {
                     TextField(baseURLPlaceholder, text: Binding(
                         get: { configManager.baseURL },
                         set: { configManager.baseURL = $0 }
                     ))
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13, design: .monospaced))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .frame(width: 220)
-                        .settingsInputField(cornerRadius: 6)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, design: .monospaced))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(width: 220)
+                    .settingsInputField(cornerRadius: 6)
                 }
-                
+
                 // Model Name
                 SettingRow(L10n.Settings.model, showDivider: false) {
                     TextField(modelPlaceholder, text: $configManager.modelName)
@@ -141,7 +141,7 @@ struct ModelConfigView: View {
             // Action Bar (no Spacer - keep content compact)
             HStack {
                 Spacer()
-                
+
                 if showSavedFeedback {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
@@ -153,7 +153,7 @@ struct ModelConfigView: View {
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
-                
+
                 Button(action: saveAndRestart) {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.clockwise")
@@ -172,9 +172,9 @@ struct ModelConfigView: View {
         }
         .animation(.auroraFast, value: showSavedFeedback)
     }
-    
+
     // MARK: - Provider Picker
-    
+
     private var providerPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -200,19 +200,19 @@ struct ModelConfigView: View {
                 .stroke(SettingsUIStyle.borderColor, lineWidth: SettingsUIStyle.borderWidth)
         )
     }
-    
+
     private var modelPlaceholder: String {
         configManager.provider.defaultModel
     }
-    
+
     private var apiKeyPlaceholder: String {
         configManager.provider.apiKeyPlaceholder
     }
-    
+
     private var baseURLPlaceholder: String {
         configManager.provider.baseURLPlaceholder
     }
-    
+
     private func saveAndRestart() {
         appState.restartAgent()
         showSavedFeedback = true
@@ -223,7 +223,6 @@ struct ModelConfigView: View {
             }
         }
     }
-
 }
 
 // MARK: - Compact Provider Card
@@ -232,12 +231,14 @@ private struct CompactProviderCard: View {
     let provider: ConfigManager.Provider
     let isSelected: Bool
     let action: () -> Void
-    
+
     @State private var isHovering = false
     @Environment(\.colorScheme) private var colorScheme
-    
-    private var isDark: Bool { colorScheme == .dark }
-    
+
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
@@ -245,7 +246,7 @@ private struct CompactProviderCard: View {
                 providerIcon
                     .frame(width: 22, height: 22)
                     .foregroundColor(isSelected ? Color.Aurora.primary : Color.Aurora.textSecondary)
-                
+
                 Text(provider.displayName)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(isSelected ? Color.Aurora.textPrimary : Color.Aurora.textSecondary)
@@ -269,7 +270,7 @@ private struct CompactProviderCard: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
     }
-    
+
     @ViewBuilder
     private var providerIcon: some View {
         if provider.usesCustomIcon {
@@ -282,7 +283,7 @@ private struct CompactProviderCard: View {
                 .font(.system(size: 18, weight: .medium))
         }
     }
-    
+
     private var backgroundColor: Color {
         if isSelected {
             return Color.Aurora.primary.opacity(isDark ? 0.12 : 0.08)
@@ -299,7 +300,7 @@ struct AuroraProviderCard: View {
     let provider: ConfigManager.Provider
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         CompactProviderCard(provider: provider, isSelected: isSelected, action: action)
     }
@@ -310,7 +311,7 @@ struct ProviderCard: View {
     let isSelected: Bool
     var isDark: Bool = true
     let action: () -> Void
-    
+
     var body: some View {
         CompactProviderCard(provider: provider, isSelected: isSelected, action: action)
     }
@@ -352,7 +353,7 @@ struct SettingsSecureField: View {
     }
 }
 
-// Legacy compatibility
+/// Legacy compatibility
 struct AuroraModernTextFieldStyle: TextFieldStyle {
     var isFocused: Bool = false
     func _body(configuration: TextField<_Label>) -> some View {
@@ -373,98 +374,98 @@ extension ConfigManager.Provider {
     var iconAsset: String {
         switch self {
         // Primary providers with custom icons
-        case .claude: return "anthropic"
-        case .openai: return "open-ai"
-        case .gemini: return "gemini-ai"
-        case .ollama: return "ollama"
+        case .claude: "anthropic"
+        case .openai: "open-ai"
+        case .gemini: "gemini-ai"
+        case .ollama: "ollama"
         // Cloud providers (use SF Symbols)
         case .openrouter, .mistral, .groq, .xai, .cohere, .deepinfra, .togetherai, .alibaba, .moonshotai, .zhipuai, .perplexity, .cerebras:
-            return ""  // Will use SF Symbol
+            "" // Will use SF Symbol
         // Enterprise / Cloud (use SF Symbols)
         case .azure, .bedrock, .googleVertex:
-            return ""  // Will use SF Symbol
+            "" // Will use SF Symbol
         // OpenAI-compatible
         case .lmstudio:
-            return ""  // Will use SF Symbol
+            "" // Will use SF Symbol
         }
     }
-    
+
     /// SF Symbol name for providers without custom icons
     var sfSymbol: String {
         switch self {
-        case .claude, .openai, .gemini, .ollama: return ""  // Use custom icon
-        case .openrouter: return "arrow.triangle.branch"
-        case .mistral: return "wind"
-        case .groq: return "bolt.fill"
-        case .xai: return "x.circle.fill"
-        case .cohere: return "circle.hexagongrid.fill"
-        case .deepinfra: return "server.rack"
-        case .togetherai: return "person.2.fill"
-        case .alibaba: return "shippingbox.fill"
-        case .moonshotai: return "moon.stars.fill"
-        case .zhipuai: return "sparkles.rectangle.stack.fill"
-        case .perplexity: return "sparkle.magnifyingglass"
-        case .cerebras: return "brain.head.profile"
-        case .azure: return "cloud.fill"
-        case .bedrock: return "square.3.layers.3d.down.right"
-        case .googleVertex: return "triangle.fill"
-        case .lmstudio: return "desktopcomputer"
+        case .claude, .openai, .gemini, .ollama: "" // Use custom icon
+        case .openrouter: "arrow.triangle.branch"
+        case .mistral: "wind"
+        case .groq: "bolt.fill"
+        case .xai: "x.circle.fill"
+        case .cohere: "circle.hexagongrid.fill"
+        case .deepinfra: "server.rack"
+        case .togetherai: "person.2.fill"
+        case .alibaba: "shippingbox.fill"
+        case .moonshotai: "moon.stars.fill"
+        case .zhipuai: "sparkles.rectangle.stack.fill"
+        case .perplexity: "sparkle.magnifyingglass"
+        case .cerebras: "brain.head.profile"
+        case .azure: "cloud.fill"
+        case .bedrock: "square.3.layers.3d.down.right"
+        case .googleVertex: "triangle.fill"
+        case .lmstudio: "desktopcomputer"
         }
     }
-    
+
     /// Whether this provider uses a custom asset or SF Symbol
     var usesCustomIcon: Bool {
         !iconAsset.isEmpty
     }
-    
+
     /// API key placeholder text
     var apiKeyPlaceholder: String {
         switch self {
-        case .claude: return "sk-ant-..."
-        case .openai: return "sk-..."
-        case .gemini: return "AIza..."
-        case .ollama, .lmstudio: return ""
-        case .openrouter: return "sk-or-..."
-        case .mistral: return "..."
-        case .groq: return "gsk_..."
-        case .xai: return "xai-..."
-        case .cohere: return "..."
-        case .deepinfra: return "..."
-        case .togetherai: return "..."
-        case .alibaba: return "sk-..."
-        case .moonshotai: return "sk-..."
-        case .zhipuai: return "..."
-        case .perplexity: return "pplx-..."
-        case .cerebras: return "csk-..."
-        case .azure: return "..."
-        case .bedrock: return "AKIA..."
-        case .googleVertex: return "project-id"
+        case .claude: "sk-ant-..."
+        case .openai: "sk-..."
+        case .gemini: "AIza..."
+        case .ollama, .lmstudio: ""
+        case .openrouter: "sk-or-..."
+        case .mistral: "..."
+        case .groq: "gsk_..."
+        case .xai: "xai-..."
+        case .cohere: "..."
+        case .deepinfra: "..."
+        case .togetherai: "..."
+        case .alibaba: "sk-..."
+        case .moonshotai: "sk-..."
+        case .zhipuai: "..."
+        case .perplexity: "pplx-..."
+        case .cerebras: "csk-..."
+        case .azure: "..."
+        case .bedrock: "AKIA..."
+        case .googleVertex: "project-id"
         }
     }
-    
+
     /// Base URL placeholder text
     var baseURLPlaceholder: String {
         switch self {
-        case .claude: return "https://api.anthropic.com"
-        case .openai: return "https://api.openai.com"
-        case .gemini: return "https://generativelanguage.googleapis.com"
-        case .ollama: return "http://localhost:11434"
-        case .openrouter: return "https://openrouter.ai/api"
-        case .mistral: return "https://api.mistral.ai"
-        case .groq: return "https://api.groq.com"
-        case .xai: return "https://api.x.ai"
-        case .cohere: return "https://api.cohere.ai"
-        case .deepinfra: return "https://api.deepinfra.com"
-        case .togetherai: return "https://api.together.xyz"
-        case .alibaba: return "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-        case .moonshotai: return "https://api.moonshot.ai/v1"
-        case .zhipuai: return "https://open.bigmodel.cn/api/paas/v4"
-        case .perplexity: return "https://api.perplexity.ai"
-        case .cerebras: return "https://api.cerebras.ai"
-        case .azure: return "https://<resource>.openai.azure.com"
-        case .bedrock: return "https://bedrock-runtime.<region>.amazonaws.com"
-        case .googleVertex: return "https://<region>-aiplatform.googleapis.com"
-        case .lmstudio: return "http://127.0.0.1:1234/v1"
+        case .claude: "https://api.anthropic.com"
+        case .openai: "https://api.openai.com"
+        case .gemini: "https://generativelanguage.googleapis.com"
+        case .ollama: "http://localhost:11434"
+        case .openrouter: "https://openrouter.ai/api"
+        case .mistral: "https://api.mistral.ai"
+        case .groq: "https://api.groq.com"
+        case .xai: "https://api.x.ai"
+        case .cohere: "https://api.cohere.ai"
+        case .deepinfra: "https://api.deepinfra.com"
+        case .togetherai: "https://api.together.xyz"
+        case .alibaba: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+        case .moonshotai: "https://api.moonshot.ai/v1"
+        case .zhipuai: "https://open.bigmodel.cn/api/paas/v4"
+        case .perplexity: "https://api.perplexity.ai"
+        case .cerebras: "https://api.cerebras.ai"
+        case .azure: "https://<resource>.openai.azure.com"
+        case .bedrock: "https://bedrock-runtime.<region>.amazonaws.com"
+        case .googleVertex: "https://<region>-aiplatform.googleapis.com"
+        case .lmstudio: "http://127.0.0.1:1234/v1"
         }
     }
 }

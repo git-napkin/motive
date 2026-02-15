@@ -25,7 +25,7 @@ extension CommandBarView {
         if inputText.isEmpty {
             return Array(historySessions.prefix(20))
         }
-        return historySessions.filter { $0.intent.localizedCaseInsensitiveContains(inputText) }.prefix(20).map { $0 }
+        return historySessions.filter { $0.intent.localizedCaseInsensitiveContains(inputText) }.prefix(20).map(\.self)
     }
 
     func loadHistorySessions() {
@@ -42,7 +42,8 @@ extension CommandBarView {
         }
 
         if let selectedHistoryId,
-           let index = list.firstIndex(where: { $0.id == selectedHistoryId }) {
+           let index = list.firstIndex(where: { $0.id == selectedHistoryId })
+        {
             selectedHistoryIndex = index
             return
         }
@@ -55,7 +56,8 @@ extension CommandBarView {
 
         // Select current session if exists, otherwise default to first
         if let currentSession = appState.currentSessionRef,
-           let index = list.firstIndex(where: { $0.id == currentSession.id }) {
+           let index = list.firstIndex(where: { $0.id == currentSession.id })
+        {
             selectedHistoryIndex = index
             selectedHistoryId = currentSession.id
         } else {

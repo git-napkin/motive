@@ -110,12 +110,12 @@ struct CommandBarTextField: NSViewRepresentable {
 
         func setupKeyboardMonitor() {
             keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard let self = self else { return event }
+                guard let self else { return event }
 
                 // ESC key (keyCode 53) - no modifier required
                 if event.keyCode == 53 {
                     self.onEscape?()
-                    return nil  // Consume the event
+                    return nil // Consume the event
                 }
 
                 // Check for Cmd modifier for other shortcuts
@@ -124,19 +124,19 @@ struct CommandBarTextField: NSViewRepresentable {
                 // Cmd+Delete (backspace, keyCode 51)
                 if event.keyCode == 51 {
                     self.onCmdDelete?()
-                    return nil  // Consume the event
+                    return nil // Consume the event
                 }
 
                 // Cmd+N (keyCode 45)
                 if event.keyCode == 45 {
                     self.onCmdN?()
-                    return nil  // Consume the event
+                    return nil // Consume the event
                 }
 
                 // Cmd+Return (keyCode 36)
                 if event.keyCode == 36 {
                     self.onCmdReturn?()
-                    return nil  // Consume the event
+                    return nil // Consume the event
                 }
 
                 return event

@@ -18,10 +18,10 @@ extension SSEClient {
         case textDelta(TextDeltaInfo)
         case textComplete(TextCompleteInfo)
 
-        // Reasoning streaming
+        /// Reasoning streaming
         case reasoningDelta(ReasoningDeltaInfo)
 
-        // Token usage
+        /// Token usage
         case usageUpdated(UsageInfo)
 
         // Tool lifecycle
@@ -38,7 +38,7 @@ extension SSEClient {
         case questionAsked(QuestionRequest)
         case permissionAsked(NativePermissionRequest)
 
-        // Agent mode
+        /// Agent mode
         case agentChanged(AgentChangeInfo)
 
         // Connection
@@ -102,6 +102,7 @@ extension SSEClient {
             }
         }
     }
+
     struct ToolCompletedInfo: Sendable {
         let sessionID: String
         let toolName: String
@@ -176,14 +177,15 @@ extension SSEClient {
     struct NativePermissionRequest: Sendable {
         let id: String
         let sessionID: String
-        let permission: String   // "edit", "bash", "read", etc.
-        let patterns: [String]   // File paths or command patterns
+        let permission: String // "edit", "bash", "read", etc.
+        let patterns: [String] // File paths or command patterns
         let metadata: [String: String] // "filepath", "diff", etc.
-        let always: [String]     // Patterns to remember if "always" is chosen
+        let always: [String] // Patterns to remember if "always" is chosen
     }
+
     /// Agent mode change detected from SSE events (e.g. plan → build).
     struct AgentChangeInfo: Sendable {
         let sessionID: String
-        let agent: String  // "plan", "build", etc.
+        let agent: String // "plan", "build", etc.
     }
 }

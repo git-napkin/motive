@@ -15,31 +15,33 @@ struct CommandBarCompletedView: View {
     let onSendFollowUp: () -> Void
     let onOpenDrawer: () -> Void
     let onDismiss: () -> Void
-    
+
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded: Bool = false
-    
-    private var isDark: Bool { colorScheme == .dark }
-    
+
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header with completion status
             headerView
-            
+
             Divider().background(Color.Aurora.border)
-            
+
             // Summary content
             summaryView
-            
+
             Divider().background(Color.Aurora.border)
-            
+
             // Follow-up input
             followUpInputView
         }
     }
-    
+
     // MARK: - Header
-    
+
     private var headerView: some View {
         HStack(spacing: AuroraSpacing.space3) {
             // Completed icon
@@ -47,24 +49,24 @@ struct CommandBarCompletedView: View {
                 Circle()
                     .fill(Color.Aurora.accent.opacity(0.15))
                     .frame(width: 36, height: 36)
-                
+
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(Color.Aurora.accent)
             }
-            
+
             VStack(alignment: .leading, spacing: AuroraSpacing.space1) {
                 Text(L10n.CommandBar.completed)
                     .font(.Aurora.bodySmall.weight(.semibold))
                     .foregroundColor(Color.Aurora.textPrimary)
-                
+
                 Text(completionSummary)
                     .font(.Aurora.caption)
                     .foregroundColor(Color.Aurora.textSecondary)
             }
-            
+
             Spacer()
-            
+
             // Expand/Drawer button
             Button(action: onOpenDrawer) {
                 HStack(spacing: AuroraSpacing.space2) {
@@ -87,9 +89,9 @@ struct CommandBarCompletedView: View {
         .padding(.horizontal, AuroraSpacing.space5)
         .padding(.vertical, AuroraSpacing.space4)
     }
-    
+
     // MARK: - Summary View
-    
+
     private var summaryView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AuroraSpacing.space3) {
@@ -100,20 +102,20 @@ struct CommandBarCompletedView: View {
                         .foregroundColor(Color.Aurora.textPrimary)
                         .lineLimit(isExpanded ? nil : 4)
                 }
-                
+
                 // Show modified files if any
                 if !modifiedFiles.isEmpty {
                     VStack(alignment: .leading, spacing: AuroraSpacing.space2) {
                         Text(L10n.CommandBar.modifiedFiles)
                             .font(.Aurora.caption.weight(.medium))
                             .foregroundColor(Color.Aurora.textSecondary)
-                        
+
                         ForEach(modifiedFiles.prefix(5), id: \.self) { file in
                             HStack(spacing: AuroraSpacing.space2) {
                                 Image(systemName: "doc.text")
                                     .font(.system(size: 10))
                                     .foregroundColor(Color.Aurora.accent)
-                                
+
                                 Text(file)
                                     .font(.Aurora.monoSmall)
                                     .foregroundColor(Color.Aurora.textMuted)
@@ -121,7 +123,7 @@ struct CommandBarCompletedView: View {
                                     .truncationMode(.middle)
                             }
                         }
-                        
+
                         if modifiedFiles.count > 5 {
                             Text(String(format: L10n.CommandBar.moreFiles, modifiedFiles.count - 5))
                                 .font(.Aurora.caption)
@@ -138,9 +140,9 @@ struct CommandBarCompletedView: View {
         }
         .frame(maxHeight: 120)
     }
-    
+
     // MARK: - Follow-up Input
-    
+
     private var followUpInputView: some View {
         HStack(spacing: AuroraSpacing.space3) {
             TextField(L10n.CommandBar.followUp, text: $followUpText)
@@ -153,7 +155,7 @@ struct CommandBarCompletedView: View {
                         onSendFollowUp()
                     }
                 }
-            
+
             // Send button
             Button(action: onSendFollowUp) {
                 Image(systemName: "arrow.up.circle.fill")
@@ -170,21 +172,21 @@ struct CommandBarCompletedView: View {
         .padding(.horizontal, AuroraSpacing.space5)
         .padding(.vertical, AuroraSpacing.space4)
     }
-    
+
     // MARK: - Computed Properties
-    
+
     private var completionSummary: String {
-        let toolCount = messages.filter { $0.type == .tool }.count
+        let toolCount = messages.count(where: { $0.type == .tool })
         if toolCount > 0 {
             return String(format: L10n.CommandBar.toolsExecuted, toolCount)
         }
         return L10n.CommandBar.taskFinished
     }
-    
+
     private var lastAssistantMessage: ConversationMessage? {
         messages.last { $0.type == .assistant }
     }
-    
+
     private var modifiedFiles: [String] {
         // Extract file paths from tool messages
         var files: [String] = []
@@ -197,7 +199,7 @@ struct CommandBarCompletedView: View {
                         // Simple extraction - take the first path-like string
                         let words = content.components(separatedBy: .whitespaces)
                         for word in words {
-                            if word.contains("/") && !word.hasPrefix("http") {
+                            if word.contains("/"), !word.hasPrefix("http") {
                                 let cleanPath = word.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`,;:"))
                                 if !cleanPath.isEmpty {
                                     files.append(shortenPath(cleanPath))
@@ -211,7 +213,7 @@ struct CommandBarCompletedView: View {
         }
         return Array(Set(files)) // Remove duplicates
     }
-    
+
     private func shortenPath(_ path: String) -> String {
         let components = path.split(separator: "/")
         if components.count > 3 {

@@ -212,9 +212,17 @@ extension Color {
 
         // MARK: - Status Colors
 
-        static var idle: Color { textMuted }
-        static var reasoning: Color { primary }
-        static var executing: Color { primary }
+        static var idle: Color {
+            textMuted
+        }
+
+        static var reasoning: Color {
+            primary
+        }
+
+        static var executing: Color {
+            primary
+        }
     }
 }
 

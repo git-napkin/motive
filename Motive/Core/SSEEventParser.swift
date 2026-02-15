@@ -17,7 +17,8 @@ extension SSEClient {
     func parseSSEData(_ dataString: String) -> SSEEvent? {
         guard let data = dataString.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let eventType = json["type"] as? String else {
+              let eventType = json["type"] as? String
+        else {
             return nil
         }
 
@@ -88,7 +89,8 @@ extension SSEClient {
               JSONSerialization.isValidJSONObject(payload),
               let payloadData = try? JSONSerialization.data(withJSONObject: payload),
               let payloadString = String(data: payloadData, encoding: .utf8),
-              let event = parseSSEData(payloadString) else {
+              let event = parseSSEData(payloadString)
+        else {
             return nil
         }
         let directory = json["directory"] as? String
@@ -214,7 +216,8 @@ extension SSEClient {
         // Usage update emitted in message.info (tokens/cost/model).
         if let info,
            let usage = parseTokenUsage(from: info),
-           usage.total > 0 {
+           usage.total > 0
+        {
             let model = parseModelName(from: info) ?? "unknown"
             let cost = parseDouble(from: info["cost"]) ?? 0
             let messageID = parseString(from: info, keys: ["id", "messageID", "messageId"])
@@ -250,7 +253,8 @@ extension SSEClient {
                 return s
             }
             if let modelDict = metadata["model"] as? [String: Any],
-               let mid = modelDict["modelID"] as? String ?? modelDict["modelId"] as? String {
+               let mid = modelDict["modelID"] as? String ?? modelDict["modelId"] as? String
+            {
                 let pid = modelDict["providerID"] as? String ?? modelDict["providerId"] as? String
                 if let pid, !pid.isEmpty {
                     return "\(pid)/\(mid)"
@@ -260,7 +264,7 @@ extension SSEClient {
         }
         return nil
     }
-// PLACEHOLDER_PARSERS_CONTINUE
+    // PLACEHOLDER_PARSERS_CONTINUE
 }
 
 // MARK: - Tool & Session Parsers
@@ -273,17 +277,16 @@ extension SSEClient {
         let status = state["status"] as? String ?? ""
         let toolCallID = state["id"] as? String ?? part["id"] as? String
 
-        let inputDict: [String: Any]?
-        if let dict = state["input"] as? [String: Any] {
-            inputDict = dict
+        let inputDict: [String: Any]? = if let dict = state["input"] as? [String: Any] {
+            dict
         } else if let str = state["input"] as? String, !str.isEmpty {
-            inputDict = ["_rawInput": str]
+            ["_rawInput": str]
         } else if let dict = part["input"] as? [String: Any] {
-            inputDict = dict
+            dict
         } else if let str = part["input"] as? String, !str.isEmpty {
-            inputDict = ["_rawInput": str]
+            ["_rawInput": str]
         } else {
-            inputDict = nil
+            nil
         }
 
         switch status {
@@ -343,15 +346,14 @@ extension SSEClient {
         let statusType = status["type"] as? String ?? ""
         let attempt = parseInt(from: status["attempt"])
         let message = parseString(from: status, keys: ["message", "error"])
-        let nextRetryUnixMS: Int64?
-        if let intValue = parseInt(from: status["next"]) {
-            nextRetryUnixMS = Int64(intValue)
+        let nextRetryUnixMS: Int64? = if let intValue = parseInt(from: status["next"]) {
+            Int64(intValue)
         } else if let number = status["next"] as? NSNumber {
-            nextRetryUnixMS = number.int64Value
+            number.int64Value
         } else if let string = status["next"] as? String, let int64 = Int64(string) {
-            nextRetryUnixMS = int64
+            int64
         } else {
-            nextRetryUnixMS = nil
+            nil
         }
 
         if statusType == "idle" {
@@ -375,7 +377,8 @@ extension SSEClient {
             errorMessage = errorStr
         } else if let errorObj = properties["error"] as? [String: Any] {
             if let data = errorObj["data"] as? [String: Any],
-               let message = data["message"] as? String {
+               let message = data["message"] as? String
+            {
                 let name = errorObj["name"] as? String ?? "Error"
                 let statusCode = data["statusCode"] as? Int
                 if let statusCode {
@@ -512,30 +515,30 @@ extension SSEClient {
     func parseInt(from value: Any?) -> Int? {
         switch value {
         case let int as Int:
-            return int
+            int
         case let double as Double:
-            return Int(double)
+            Int(double)
         case let number as NSNumber:
-            return number.intValue
+            number.intValue
         case let string as String:
-            return Int(string)
+            Int(string)
         default:
-            return nil
+            nil
         }
     }
 
     func parseDouble(from value: Any?) -> Double? {
         switch value {
         case let double as Double:
-            return double
+            double
         case let int as Int:
-            return Double(int)
+            Double(int)
         case let number as NSNumber:
-            return number.doubleValue
+            number.doubleValue
         case let string as String:
-            return Double(string)
+            Double(string)
         default:
-            return nil
+            nil
         }
     }
 
@@ -580,10 +583,11 @@ extension SSEClient {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
                 continue
             }
-            let nsRange = NSRange(question.startIndex..<question.endIndex, in: question)
+            let nsRange = NSRange(question.startIndex ..< question.endIndex, in: question)
             guard let match = regex.firstMatch(in: question, options: [], range: nsRange),
                   match.numberOfRanges > 1,
-                  let range = Range(match.range(at: 1), in: question) else {
+                  let range = Range(match.range(at: 1), in: question)
+            else {
                 continue
             }
             let path = question[range].trimmingCharacters(in: .whitespacesAndNewlines)

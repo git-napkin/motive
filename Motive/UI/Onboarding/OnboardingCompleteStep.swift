@@ -14,7 +14,9 @@ struct AuroraCompleteStep: View {
     let onFinish: () -> Void
     @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { colorScheme == .dark }
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     var body: some View {
         VStack(spacing: AuroraSpacing.space6) {

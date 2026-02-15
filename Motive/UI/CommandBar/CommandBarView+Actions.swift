@@ -110,9 +110,9 @@ extension CommandBarView {
             // Exiting command mode — return to previous state
             mode = (mode.isFromSession || !appState.messages.isEmpty) ? .completed : (newValue.isEmpty ? .idle : .input)
         } else if case .completed = mode {
-            return  // Stay in completed for follow-up
+            return // Stay in completed for follow-up
         } else if case .error = mode {
-            return  // Stay in error for follow-up
+            return // Stay in error for follow-up
         } else {
             mode = newValue.isEmpty ? .idle : .input
         }
@@ -185,7 +185,7 @@ extension CommandBarView {
         case .failed:
             mode = .error(appState.lastErrorMessage ?? "An error occurred")
         case .idle, .interrupted:
-            if appState.currentSessionRef != nil && !appState.messages.isEmpty {
+            if appState.currentSessionRef != nil, !appState.messages.isEmpty {
                 mode = .completed
             } else {
                 mode = .idle
