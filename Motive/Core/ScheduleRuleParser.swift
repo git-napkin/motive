@@ -39,19 +39,19 @@ enum ScheduleRuleParser {
     static func parse(task: ScheduledTask) throws -> ScheduleRule {
         switch task.scheduleKind {
         case .once:
-            return .once(try decode(task.schedulePayload, as: OnceSchedulePayload.self))
+            try .once(decode(task.schedulePayload, as: OnceSchedulePayload.self))
         case .interval:
-            return .interval(try decode(task.schedulePayload, as: IntervalSchedulePayload.self))
+            try .interval(decode(task.schedulePayload, as: IntervalSchedulePayload.self))
         case .daily:
-            return .daily(try decode(task.schedulePayload, as: DailySchedulePayload.self))
+            try .daily(decode(task.schedulePayload, as: DailySchedulePayload.self))
         case .weekly:
-            return .weekly(try decode(task.schedulePayload, as: WeeklySchedulePayload.self))
+            try .weekly(decode(task.schedulePayload, as: WeeklySchedulePayload.self))
         case .cron:
-            return .cron(try decode(task.schedulePayload, as: CronSchedulePayload.self))
+            try .cron(decode(task.schedulePayload, as: CronSchedulePayload.self))
         }
     }
 
-    static func encode<T: Encodable>(_ payload: T) throws -> String {
+    static func encode(_ payload: some Encodable) throws -> String {
         let data = try JSONEncoder().encode(payload)
         return String(decoding: data, as: UTF8.self)
     }
@@ -209,7 +209,7 @@ private struct CronExpression: Sendable {
 
         let dayMatches = dayField.matches(day)
         let weekdayMatches = weekdayField.matches(weekday)
-        if !dayIsWildcard && !weekdayIsWildcard {
+        if !dayIsWildcard, !weekdayIsWildcard {
             return dayMatches || weekdayMatches
         }
         return dayMatches && weekdayMatches
@@ -280,4 +280,3 @@ private struct CronField: Sendable {
         values.contains(value)
     }
 }
-

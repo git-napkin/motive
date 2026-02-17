@@ -136,4 +136,3 @@ final class ScheduledTaskRun {
         self.durationMs = durationMs
     }
 }
-

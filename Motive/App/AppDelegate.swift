@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingController: OnboardingWindowController?
 
     /// Parsed hotkey components from ConfigManager
-    private var expectedModifiers: NSEvent.ModifierFlags = .option 
+    private var expectedModifiers: NSEvent.ModifierFlags = .option
     private var expectedKeyCode: UInt16 = 49 // Space key
 
     func applicationDidFinishLaunching(_ notification: Notification) {

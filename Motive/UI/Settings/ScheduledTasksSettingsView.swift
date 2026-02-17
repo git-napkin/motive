@@ -91,7 +91,6 @@ struct ScheduledTasksSettingsView: View {
         }
     }
 
-    @ViewBuilder
     private func scheduledTaskRow(task: ScheduledTask, showDivider: Bool) -> some View {
         SettingRow(
             task.name,
@@ -551,4 +550,3 @@ private extension String {
         trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self
     }
 }
-

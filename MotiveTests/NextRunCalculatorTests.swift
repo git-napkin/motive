@@ -61,4 +61,3 @@ struct NextRunCalculatorTests {
         #expect(next > reference)
     }
 }
-

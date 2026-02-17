@@ -8,7 +8,7 @@ import Foundation
 import Testing
 
 struct TaskSchedulerTests {
-    @Test func scheduler_executesDueTask() async throws {
+    @Test func scheduler_executesDueTask() async {
         let dueID = UUID()
         let fakeExecutor = FakeScheduledTaskExecutor(
             snapshots: [ScheduledTaskSnapshot(id: dueID, nextRunAt: Date().addingTimeInterval(-1), isEnabled: true)]
@@ -27,7 +27,7 @@ struct TaskSchedulerTests {
         #expect(executed.contains(dueID))
     }
 
-    @Test func scheduler_runNow_executesImmediately() async throws {
+    @Test func scheduler_runNow_executesImmediately() async {
         let taskID = UUID()
         let fakeExecutor = FakeScheduledTaskExecutor(snapshots: [])
         let scheduler = TaskScheduler(
@@ -62,4 +62,3 @@ private actor FakeScheduledTaskExecutor: ScheduledTaskExecuting {
         executedTaskIDs.append(taskID)
     }
 }
-

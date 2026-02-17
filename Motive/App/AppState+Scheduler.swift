@@ -32,4 +32,3 @@ extension AppState {
         Task { await taskScheduler?.runNow(taskID: taskID) }
     }
 }
-
