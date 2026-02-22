@@ -15,9 +15,9 @@ struct ConfigManagerConfigTests {
         #expect(ConfigManager.Provider.gemini.openCodeProviderName == "google")
         #expect(ConfigManager.Provider.ollama.openCodeProviderName == "ollama")
         #expect(ConfigManager.Provider.openrouter.openCodeProviderName == "openrouter")
-        #expect(ConfigManager.Provider.azure.openCodeProviderName == "azure")
         #expect(ConfigManager.Provider.bedrock.openCodeProviderName == "amazon-bedrock")
-        #expect(ConfigManager.Provider.googleVertex.openCodeProviderName == "google-vertex")
+        #expect(ConfigManager.Provider.deepseek.openCodeProviderName == "deepseek")
+        #expect(ConfigManager.Provider.minimax.openCodeProviderName == "minimax")
     }
 
     @Test func providerRequiresAPIKey() {

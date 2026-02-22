@@ -26,17 +26,15 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
         case xai
         case cohere
         case deepinfra
-        case togetherai
+        case deepseek
+        case minimax
         case alibaba
         case moonshotai
         case zhipuai
         case perplexity
-        case cerebras
 
-        // Enterprise / Cloud
-        case azure
+        /// Enterprise / Cloud
         case bedrock
-        case googleVertex
 
         /// Local OpenAI-compatible endpoint
         case lmstudio
@@ -57,15 +55,13 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .xai: "xAI"
             case .cohere: "Cohere"
             case .deepinfra: "DeepInfra"
-            case .togetherai: "Together"
+            case .deepseek: "DeepSeek"
+            case .minimax: "MiniMax"
             case .alibaba: "Alibaba"
             case .moonshotai: "Moonshot"
             case .zhipuai: "Zhipu"
             case .perplexity: "Perplexity"
-            case .cerebras: "Cerebras"
-            case .azure: "Azure"
             case .bedrock: "Bedrock"
-            case .googleVertex: "Vertex AI"
             case .lmstudio: "LM Studio"
             }
         }
@@ -83,15 +79,13 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .xai: "xai"
             case .cohere: "cohere"
             case .deepinfra: "deepinfra"
-            case .togetherai: "togetherai"
+            case .deepseek: "deepseek"
+            case .minimax: "minimax"
             case .alibaba: "alibaba"
             case .moonshotai: "moonshotai"
             case .zhipuai: "zhipuai"
             case .perplexity: "perplexity"
-            case .cerebras: "cerebras"
-            case .azure: "azure"
             case .bedrock: "amazon-bedrock"
-            case .googleVertex: "google-vertex"
             case .lmstudio: "lmstudio"
             }
         }
@@ -110,15 +104,13 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .xai: ["xai"]
             case .cohere: ["cohere"]
             case .deepinfra: ["deepinfra"]
-            case .togetherai: ["togetherai", "together"]
+            case .deepseek: ["deepseek"]
+            case .minimax: ["minimax"]
             case .alibaba: ["alibaba", "dashscope"]
             case .moonshotai: ["moonshotai", "moonshotai-cn", "kimi-for-coding"]
             case .zhipuai: ["zhipuai", "zai", "zai-coding-plan", "zhipuai-coding-plan"]
             case .perplexity: ["perplexity"]
-            case .cerebras: ["cerebras"]
-            case .azure: ["azure", "azure-openai"]
             case .bedrock: ["amazon-bedrock", "bedrock"]
-            case .googleVertex: ["google-vertex", "vertex", "googlevertex"]
             case .lmstudio: ["lmstudio", "openai-compatible", "openai"]
             }
         }
@@ -144,15 +136,13 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .xai: "XAI_API_KEY"
             case .cohere: "COHERE_API_KEY"
             case .deepinfra: "DEEPINFRA_API_KEY"
-            case .togetherai: "TOGETHER_API_KEY"
+            case .deepseek: "DEEPSEEK_API_KEY"
+            case .minimax: "MINIMAX_API_KEY"
             case .alibaba: "DASHSCOPE_API_KEY"
             case .moonshotai: "MOONSHOT_API_KEY"
             case .zhipuai: "ZHIPU_API_KEY"
             case .perplexity: "PERPLEXITY_API_KEY"
-            case .cerebras: "CEREBRAS_API_KEY"
-            case .azure: "AZURE_OPENAI_API_KEY"
             case .bedrock: "AWS_ACCESS_KEY_ID"
-            case .googleVertex: "GOOGLE_CLOUD_PROJECT"
             case .lmstudio: ""
             }
         }
@@ -170,15 +160,13 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .xai: "grok-3-mini"
             case .cohere: "command-r-plus"
             case .deepinfra: "meta-llama/Llama-3.3-70B-Instruct"
-            case .togetherai: "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+            case .deepseek: "deepseek-chat"
+            case .minimax: "MiniMax-M1"
             case .alibaba: "qwen3-coder-480b-a35b-instruct"
             case .moonshotai: "kimi-k2.5"
             case .zhipuai: "glm-5"
             case .perplexity: "llama-3.1-sonar-large-128k-online"
-            case .cerebras: "llama3.1-70b"
-            case .azure: "gpt-4o"
             case .bedrock: "anthropic.claude-3-5-sonnet-20241022-v2:0"
-            case .googleVertex: "gemini-2.0-flash-001"
             case .lmstudio: "default"
             }
         }

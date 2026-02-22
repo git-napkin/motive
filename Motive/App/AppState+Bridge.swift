@@ -103,8 +103,8 @@ extension AppState {
 
         // --- Explicit bind failure before session ID was created ---
         if event.rawJson == "__session_bind_failed__" {
-            if !pendingBindSessions.isEmpty {
-                let session = pendingBindSessions.removeFirst()
+            let session = findPendingSession(correlationId: event.toolCallId)
+            if let session {
                 let reason = event.text.isEmpty
                     ? "Task failed to start before session binding."
                     : "Task failed to start: \(event.text)"
@@ -115,11 +115,7 @@ extension AppState {
 
         // --- Explicit session binding from bridge ---
         if event.rawJson == "__session_bind__", let sid = event.sessionId, !sid.isEmpty {
-            let sessionToBind: Session? = if !pendingBindSessions.isEmpty {
-                pendingBindSessions.removeFirst()
-            } else {
-                currentSession
-            }
+            let sessionToBind = findPendingSession(correlationId: event.toolCallId) ?? currentSession
             if let session = sessionToBind, session.openCodeSessionId == nil {
                 session.openCodeSessionId = sid
                 runningSessions[sid] = session

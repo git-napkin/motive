@@ -370,52 +370,38 @@ struct ModernTextFieldStyle: TextFieldStyle {
 // MARK: - Provider Extension
 
 extension ConfigManager.Provider {
-    /// Asset Catalog icon name (SF Symbol for providers without custom icon)
+    /// Asset Catalog icon name (all providers have custom icons in `icons/`)
     var iconAsset: String {
         switch self {
-        // Primary providers with custom icons
         case .claude: "anthropic"
         case .openai: "open-ai"
         case .gemini: "gemini-ai"
         case .ollama: "ollama"
-        // Cloud providers (use SF Symbols)
-        case .openrouter, .mistral, .groq, .xai, .cohere, .deepinfra, .togetherai, .alibaba, .moonshotai, .zhipuai, .perplexity, .cerebras:
-            "" // Will use SF Symbol
-        // Enterprise / Cloud (use SF Symbols)
-        case .azure, .bedrock, .googleVertex:
-            "" // Will use SF Symbol
-        // OpenAI-compatible
-        case .lmstudio:
-            "" // Will use SF Symbol
+        case .openrouter: "openrouter"
+        case .mistral: "Mistral"
+        case .groq: "Groq"
+        case .xai: "xai"
+        case .cohere: "cohere"
+        case .deepinfra: "deepinfra"
+        case .deepseek: "deepseek"
+        case .minimax: "MiniMax"
+        case .alibaba: "Qwen"
+        case .moonshotai: "moonshot"
+        case .zhipuai: "zhipu"
+        case .perplexity: "perplexity"
+        case .bedrock: "bedrock"
+        case .lmstudio: "lmstudio"
         }
     }
 
-    /// SF Symbol name for providers without custom icons
+    /// SF Symbol fallback (unused — all providers have custom icons)
     var sfSymbol: String {
-        switch self {
-        case .claude, .openai, .gemini, .ollama: "" // Use custom icon
-        case .openrouter: "arrow.triangle.branch"
-        case .mistral: "wind"
-        case .groq: "bolt.fill"
-        case .xai: "x.circle.fill"
-        case .cohere: "circle.hexagongrid.fill"
-        case .deepinfra: "server.rack"
-        case .togetherai: "person.2.fill"
-        case .alibaba: "shippingbox.fill"
-        case .moonshotai: "moon.stars.fill"
-        case .zhipuai: "sparkles.rectangle.stack.fill"
-        case .perplexity: "sparkle.magnifyingglass"
-        case .cerebras: "brain.head.profile"
-        case .azure: "cloud.fill"
-        case .bedrock: "square.3.layers.3d.down.right"
-        case .googleVertex: "triangle.fill"
-        case .lmstudio: "desktopcomputer"
-        }
+        ""
     }
 
     /// Whether this provider uses a custom asset or SF Symbol
     var usesCustomIcon: Bool {
-        !iconAsset.isEmpty
+        true
     }
 
     /// API key placeholder text
@@ -431,15 +417,13 @@ extension ConfigManager.Provider {
         case .xai: "xai-..."
         case .cohere: "..."
         case .deepinfra: "..."
-        case .togetherai: "..."
+        case .deepseek: "sk-..."
+        case .minimax: "..."
         case .alibaba: "sk-..."
         case .moonshotai: "sk-..."
         case .zhipuai: "..."
         case .perplexity: "pplx-..."
-        case .cerebras: "csk-..."
-        case .azure: "..."
         case .bedrock: "AKIA..."
-        case .googleVertex: "project-id"
         }
     }
 
@@ -456,15 +440,13 @@ extension ConfigManager.Provider {
         case .xai: "https://api.x.ai"
         case .cohere: "https://api.cohere.ai"
         case .deepinfra: "https://api.deepinfra.com"
-        case .togetherai: "https://api.together.xyz"
+        case .deepseek: "https://api.deepseek.com"
+        case .minimax: "https://api.minimax.chat/v1"
         case .alibaba: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
         case .moonshotai: "https://api.moonshot.ai/v1"
         case .zhipuai: "https://open.bigmodel.cn/api/paas/v4"
         case .perplexity: "https://api.perplexity.ai"
-        case .cerebras: "https://api.cerebras.ai"
-        case .azure: "https://<resource>.openai.azure.com"
         case .bedrock: "https://bedrock-runtime.<region>.amazonaws.com"
-        case .googleVertex: "https://<region>-aiplatform.googleapis.com"
         case .lmstudio: "http://127.0.0.1:1234/v1"
         }
     }

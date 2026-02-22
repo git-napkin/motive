@@ -29,7 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // of whether onboarding is shown or skipped.
         appState?.ensureStatusBar()
 
-        // Clean up any stale browser-sidecar processes from previous runs
+        // Clean up stale child processes from previous runs
+        OpenCodeServer.terminateStaleProcess()
         cleanupBrowserSidecar()
 
         // Apply saved appearance mode
@@ -103,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.removeObserver(observer)
         }
 
-        // Clean up browser-use-sidecar processes
+        appState?.bridge.terminateServerImmediately()
         cleanupBrowserSidecar()
     }
 

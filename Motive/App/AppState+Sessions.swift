@@ -55,13 +55,16 @@ extension AppState {
         if let session = currentSession {
             enqueuePendingBind(session)
         }
-        // forceNewSession: true makes the bridge clear currentSessionId and create a new session
-        // ATOMICALLY within a single actor method call. This prevents the race condition where
-        // multiple Tasks interleave their calls on the bridge actor:
-        //   Task1.setSessionId(nil) → Task2.setSessionId(nil) → Task1.submitIntent(reuses!) → BUG
+        let sessionCorrelationId = currentSession?.id.uuidString
         bridgeTask?.cancel()
         bridgeTask = Task {
-            await bridge.submitIntent(text: trimmed, cwd: cwd, agent: agent, forceNewSession: true)
+            await bridge.submitIntent(
+                text: trimmed,
+                cwd: cwd,
+                agent: agent,
+                forceNewSession: true,
+                correlationId: sessionCorrelationId
+            )
         }
     }
 
@@ -95,8 +98,15 @@ extension AppState {
         enqueuePendingBind(session)
         trySaveContext()
 
+        let correlationId = session.id.uuidString
         Task {
-            await bridge.submitIntent(text: trimmed, cwd: cwd, agent: agent, forceNewSession: true)
+            await bridge.submitIntent(
+                text: trimmed,
+                cwd: cwd,
+                agent: agent,
+                forceNewSession: true,
+                correlationId: correlationId
+            )
         }
         return session
     }

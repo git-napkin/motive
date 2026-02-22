@@ -258,6 +258,20 @@ final class AppState: ObservableObject {
 
     // MARK: - Bind Queue Management
 
+    /// Find and remove a pending session by its correlation ID.
+    /// Falls back to FIFO if no correlation ID is provided (backward compatibility).
+    func findPendingSession(correlationId: String?) -> Session? {
+        if let correlationId, let uuid = UUID(uuidString: correlationId),
+           let idx = pendingBindSessions.firstIndex(where: { $0.id == uuid })
+        {
+            return pendingBindSessions.remove(at: idx)
+        }
+        if !pendingBindSessions.isEmpty {
+            return pendingBindSessions.removeFirst()
+        }
+        return nil
+    }
+
     /// Add a session to the pending bind queue with overflow protection.
     func enqueuePendingBind(_ session: Session) {
         if pendingBindSessions.count >= Self.maxPendingBindSessions {

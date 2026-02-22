@@ -79,11 +79,11 @@ final class EnvironmentBuilderTests: XCTestCase {
         XCTAssertEqual(env["OPENROUTER_API_KEY"], "or-key-456")
     }
 
-    func testAPIKeySetForAzure() {
-        let inputs = makeInputs(provider: .azure, apiKey: "azure-key-789")
+    func testAPIKeySetForDeepSeek() {
+        let inputs = makeInputs(provider: .deepseek, apiKey: "sk-deepseek-789")
         let env = EnvironmentBuilder.build(from: inputs, baseEnvironment: emptyBase)
 
-        XCTAssertEqual(env["AZURE_OPENAI_API_KEY"], "azure-key-789")
+        XCTAssertEqual(env["DEEPSEEK_API_KEY"], "sk-deepseek-789")
     }
 
     // MARK: - API Key Not Set When Empty
