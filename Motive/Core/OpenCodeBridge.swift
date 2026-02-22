@@ -69,6 +69,12 @@ actor OpenCodeBridge {
 
     // MARK: - Server Lifecycle
 
+    /// Synchronous server termination — safe to call from `applicationWillTerminate`.
+    /// Bypasses actor isolation via the server's lock-protected PID.
+    nonisolated func terminateServerImmediately() {
+        server.terminateImmediately()
+    }
+
     /// Start the HTTP server and connect SSE if not already running.
     func startIfNeeded() async {
         guard let configuration else {
@@ -184,7 +190,13 @@ actor OpenCodeBridge {
     /// - Parameter forceNewSession: If true, clears `currentSessionId` atomically before creating
     ///   a new session. This prevents the race condition where multiple concurrent Tasks
     ///   interleave their setSessionId(nil) + submitIntent calls on the bridge actor.
-    func submitIntent(text: String, cwd: String, agent: String? = nil, forceNewSession: Bool = false) async {
+    func submitIntent(
+        text: String,
+        cwd: String,
+        agent: String? = nil,
+        forceNewSession: Bool = false,
+        correlationId: String? = nil
+    ) async {
         if forceNewSession {
             currentSessionId = nil
         }
@@ -208,15 +220,20 @@ actor OpenCodeBridge {
         }
 
         do {
-            try await submitPrompt(text: text, cwd: cwd, agentOverride: agent)
+            try await submitPrompt(
+                text: text,
+                cwd: cwd,
+                agentOverride: agent,
+                forceNewSession: forceNewSession,
+                correlationId: correlationId
+            )
         } catch {
             Log.error("Failed to submit intent: \(error.localizedDescription)")
-            // Explicit pre-bind failure signal. AppState can fail the queued session immediately
-            // instead of waiting for bind-queue timeout.
             eventContinuation.yield(OpenCodeEvent(
                 kind: .unknown,
                 rawJson: "__session_bind_failed__",
-                text: error.localizedDescription
+                text: error.localizedDescription,
+                toolCallId: correlationId
             ))
             eventContinuation.yield(OpenCodeEvent(
                 kind: .error,
@@ -654,10 +671,19 @@ actor OpenCodeBridge {
         return currentWorkingDirectory()
     }
 
-    private func submitPrompt(text: String, cwd: String, agentOverride: String? = nil) async throws {
-        // Create or reuse session
+    private func submitPrompt(
+        text: String,
+        cwd: String,
+        agentOverride: String? = nil,
+        forceNewSession: Bool = false,
+        correlationId: String? = nil
+    ) async throws {
+        // Create or reuse session.
+        // When forceNewSession is true, ALWAYS create a new OC session.
+        // This prevents actor reentrancy from causing a concurrent call
+        // to accidentally reuse another call's freshly-created session.
         let sessionID: String
-        if let existing = currentSessionId {
+        if !forceNewSession, let existing = currentSessionId {
             sessionID = existing
             Log.bridge("Reusing existing session: \(sessionID)")
         } else {
@@ -670,13 +696,11 @@ actor OpenCodeBridge {
             waitingForFirstOutput.insert(sessionID)
             Log.bridge("Created new session: \(sessionID)")
 
-            // Notify AppState of the new session ID BEFORE sending the prompt.
-            // The `await` ensures the MainActor processes this binding before any
-            // SSE events can arrive, preventing stale events from corrupting the ID.
             eventContinuation.yield(OpenCodeEvent(
                 kind: .unknown,
                 rawJson: "__session_bind__",
                 text: "",
+                toolCallId: correlationId,
                 sessionId: sessionID
             ))
         }
