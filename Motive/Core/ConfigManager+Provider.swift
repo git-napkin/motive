@@ -33,6 +33,32 @@ extension ConfigManager {
         }
     }
 
+    /// Returns a normalized version of the base URL for use in API calls.
+    /// Ensures OpenAI-compatible endpoints include the required /v1 suffix if missing.
+    var normalizedBaseURL: String {
+        let raw = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return raw }
+
+        // Only normalize for OpenAI-compatible providers (openai, lmstudio, etc.)
+        // list taken from Provider.isOpenAICompatible or similar if it exists
+        // Looking at the use cases, if it's an OpenAI/LM Studio provider and it's a custom URL.
+        let isOpenAICompatible = provider == .openai || provider == .lmstudio || provider == .deepseek
+        
+        if isOpenAICompatible {
+            // If it ends in a port and has no path, or ends in just the host, append /v1
+            if let components = URLComponents(string: raw) {
+                let path = components.path
+                if path.isEmpty || path == "/" {
+                    var normalized = components
+                    normalized.path = "/v1"
+                    return normalized.url?.absoluteString ?? raw
+                }
+            }
+        }
+        
+        return raw
+    }
+
     /// Model name for current provider
     var modelName: String {
         get { providerConfigStore.modelName(for: provider) }
@@ -62,14 +88,30 @@ extension ConfigManager {
     }
 
     var hasAPIKey: Bool {
-        // Check if provider requires API key
-        if !provider.requiresAPIKey { return true }
-        // Check cache first to avoid Keychain prompt
-        if let cached = cachedAPIKeys[provider] {
-            return !cached.isEmpty
+        let isCustomURL = !baseURL.isEmpty && !isDefaultBaseURL(for: provider)
+        
+        // If provider allows optional keys (LM Studio, Ollama), it's only truly optional
+        // if we are using the default local/unauthenticated endpoint.
+        if provider.allowsOptionalAPIKey && !isCustomURL {
+            return true
         }
-        // Fall back to full check (will trigger Keychain if needed)
-        return !apiKey.isEmpty
+
+        // Otherwise, if the provider requires an API key, we must have one.
+        if provider.requiresAPIKey {
+            // Check cache first to avoid Keychain prompt
+            if let cached = cachedAPIKeys[provider] {
+                return !cached.isEmpty
+            }
+            return !apiKey.isEmpty
+        }
+        
+        return true
+    }
+
+    /// Returns true if the stored base URL is the provider's default (unmodified) URL.
+    private func isDefaultBaseURL(for p: Provider) -> Bool {
+        let stored = cachedBaseURLs[p] ?? KeychainStore.read(service: keychainService, account: "opencode.base.url.\(p.rawValue)") ?? ""
+        return stored.isEmpty || stored == providerConfigStore.defaultBaseURL(for: p)
     }
 
     /// Check if current provider is properly configured
@@ -78,7 +120,7 @@ extension ConfigManager {
         case .ollama:
             !baseURL.isEmpty
         case .lmstudio:
-            // LM Studio only needs local base URL
+            // LM Studio only needs a base URL; API token is optional (but required if auth enabled)
             !baseURL.isEmpty
         default:
             hasAPIKey
@@ -97,6 +139,11 @@ extension ConfigManager {
         case .lmstudio:
             if baseURL.isEmpty { return "LM Studio Base URL not configured" }
         default:
+            // For providers with a non-default custom base URL (OpenAI-compatible mode),
+            // skip the API key check — the endpoint may not require one.
+            if !baseURL.isEmpty, !isDefaultBaseURL(for: provider) {
+                return nil
+            }
             if provider.requiresAPIKey, apiKey.isEmpty {
                 return "\(provider.displayName) API Key not configured"
             }

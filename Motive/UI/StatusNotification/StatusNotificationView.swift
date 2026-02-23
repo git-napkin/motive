@@ -40,6 +40,7 @@ enum StatusNotificationType {
 struct StatusNotificationView: View {
     let type: StatusNotificationType
     let onDismiss: () -> Void
+    var glassMode: ConfigManager.LiquidGlassMode = .clear
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var showContent = false
@@ -49,8 +50,8 @@ struct StatusNotificationView: View {
     }
 
     var body: some View {
-        HStack(spacing: AuroraSpacing.space3) {
-            // Icon with gradient background
+        HStack(spacing: AuroraSpacing.space4) {
+            // High-end icon layout
             ZStack {
                 Circle()
                     .fill(
@@ -58,12 +59,12 @@ struct StatusNotificationView: View {
                             colors: type.gradientColors,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
-                        ).opacity(0.15)
+                        ).opacity(isDark ? 0.2 : 0.15)
                     )
-                    .frame(width: 28, height: 28)
+                    .frame(width: 32, height: 32)
 
                 Image(systemName: type.icon)
-                    .font(.Aurora.bodySmall.weight(.medium))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
                             colors: type.gradientColors,
@@ -73,40 +74,24 @@ struct StatusNotificationView: View {
                     )
             }
 
-            Text(type.title)
-                .font(.Aurora.bodySmall.weight(.medium))
-                .foregroundColor(Color.Aurora.textPrimary)
-                .fixedSize(horizontal: true, vertical: false)
-        }
-        .padding(.horizontal, AuroraSpacing.space4)
-        .padding(.vertical, AuroraSpacing.space3)
-        .fixedSize()
-        .background(
-            ZStack {
-                // Blur effect
-                VisualEffectView(material: .hudWindow, blendingMode: .behindWindow, state: .active)
-
-                // Base color
-                Color.Aurora.background.opacity(0.95)
-
-                // Subtle gradient tint
-                if isDark {
-                    LinearGradient(
-                        colors: type.gradientColors.map { $0.opacity(0.03) },
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(type.title)
+                    .font(.Aurora.bodySmall.weight(.bold))
+                    .foregroundColor(Color.Aurora.textPrimary)
+                
+                Text(type == .success ? "Task finished" : "Check logs")
+                    .font(.Aurora.micro)
+                    .foregroundColor(Color.Aurora.textMuted)
             }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
-                .stroke(Color.Aurora.border, lineWidth: 0.5)
-        )
-        .shadow(color: type.color.opacity(isDark ? 0.15 : 0.1), radius: 16, y: 8)
-        .shadow(color: Color.black.opacity(isDark ? 0.25 : 0.1), radius: 12, x: 0, y: 6)
-        .scaleEffect(showContent ? 1.0 : 0.9)
+        }
+        .padding(.leading, AuroraSpacing.space4)
+        .padding(.trailing, AuroraSpacing.space6)
+        .padding(.vertical, AuroraSpacing.space3)
+        .background {
+            LiquidGlassBackground(mode: glassMode, cornerRadius: 100, showBorder: true)
+        }
+        .shadow(color: Color.black.opacity(isDark ? 0.3 : 0.15), radius: 20, x: 0, y: 10)
+        .scaleEffect(showContent ? 1.0 : 0.95)
         .opacity(showContent ? 1.0 : 0)
         .onAppear {
             withAnimation(.auroraSpring) {

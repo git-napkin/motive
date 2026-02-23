@@ -73,6 +73,12 @@ enum EnvironmentBuilder {
             } else {
                 Log.config(" WARNING - No API key configured for \(inputs.provider.displayName)!")
             }
+        } else if inputs.provider.allowsOptionalAPIKey, !apiKeyValue.isEmpty {
+            // Local providers (LM Studio, Ollama) may have authentication enabled
+            // Pass the key both as OPENAI_API_KEY (for OpenAI-compatible endpoint recognition) and
+            // via the config file options.apiKey (handled by OpenCodeConfigGenerator)
+            environment["OPENAI_API_KEY"] = apiKeyValue
+            Log.config(" Using \(inputs.provider.displayName) optional API token (server auth enabled)")
         } else {
             Log.config(" Using \(inputs.provider.displayName) (no API key needed)")
         }

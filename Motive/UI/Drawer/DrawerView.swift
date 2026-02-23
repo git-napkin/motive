@@ -158,20 +158,7 @@ struct DrawerView: View {
     // MARK: - Background
 
     private var drawerBackground: some View {
-        ZStack {
-            // Layer 1: System vibrancy blur (primary translucency)
-            VisualEffectView(
-                material: .popover,
-                blendingMode: .behindWindow,
-                state: .active,
-                cornerRadius: AuroraRadius.xl,
-                masksToBounds: true
-            )
-
-            // Layer 2: Tint overlay — translucent to let the glass show through
-            RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .fill(Color.Aurora.background.opacity(isDark ? 0.6 : 0.7))
-        }
+        LiquidGlassBackgroundAuto(cornerRadius: AuroraRadius.xl, showBorder: true)
     }
 
     // MARK: - Empty State

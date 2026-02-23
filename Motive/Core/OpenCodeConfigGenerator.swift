@@ -14,6 +14,7 @@ struct OpenCodeConfigGenerator {
         let provider: ConfigManager.Provider
         let baseURL: String
         let modelName: String
+        let apiKey: String
         let workspaceDirectory: URL
         let skillsSystemEnabled: Bool
         let compactionEnabled: Bool
@@ -56,7 +57,7 @@ struct OpenCodeConfigGenerator {
 
         // Build skill permissions using WHITELIST approach:
         // deny all, then explicitly allow enabled skills.
-        // Skills are synced to $OPENCODE_CONFIG_DIR/skills/<name>/SKILL.md so
+        // Skills are synced to $OPENCODE_CONFIG_DIR/skills/<n>/SKILL.md so
         // OpenCode's native `skill` tool discovers them; permissions gate access.
         var skillPermissions = ["*": "deny"]
         for entry in skillRegistry.entries where skillRegistry.isSkillEnabled(entry) {
@@ -149,20 +150,39 @@ struct OpenCodeConfigGenerator {
         switch inputs.provider {
         case .lmstudio:
             let lmBaseURL = baseURLValue.isEmpty ? "http://127.0.0.1:1234/v1" : baseURLValue
-            config["provider"] = [
-                "lmstudio": [
-                    "models": [
-                        "default": [
-                            "name": "Default",
-                            "tool_call": true,
-                        ] as [String: Any],
-                    ],
-                    "options": [
-                        "baseURL": lmBaseURL,
-                    ],
-                ] as [String: Any],
-            ]
-            Log.config(" Provider 'lmstudio' configured with baseURL: \(lmBaseURL)")
+            // Use the user-specified model or fall back to "default" which LM Studio
+            // maps to whatever model is currently loaded.
+            let lmModelID = inputs.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+            var lmOptions: [String: Any] = ["baseURL": lmBaseURL]
+            let lmAPIKey = inputs.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !lmAPIKey.isEmpty {
+                lmOptions["apiKey"] = lmAPIKey
+                Log.config(" LM Studio API key configured (required by server auth)")
+            }
+
+            if lmModelID.isEmpty {
+                // No model specified — omit models dict so LM Studio uses whichever is loaded.
+                // Do NOT send "default" as model ID; it confuses some LM Studio versions.
+                config["provider"] = [
+                    "lmstudio": [
+                        "options": lmOptions,
+                    ] as [String: Any],
+                ]
+                Log.config(" Provider 'lmstudio' configured with baseURL: \(lmBaseURL) (model auto-selected by server)")
+            } else {
+                config["provider"] = [
+                    "lmstudio": [
+                        "models": [
+                            lmModelID: [
+                                "name": lmModelID,
+                                "tool_call": true,
+                            ] as [String: Any],
+                        ],
+                        "options": lmOptions,
+                    ] as [String: Any],
+                ]
+                Log.config(" Provider 'lmstudio' configured with baseURL: \(lmBaseURL), model: \(lmModelID)")
+            }
 
         case .ollama:
             let ollamaURL = baseURLValue.isEmpty ? "http://localhost:11434/v1" : baseURLValue
@@ -186,14 +206,40 @@ struct OpenCodeConfigGenerator {
 
         default:
             if !baseURLValue.isEmpty {
-                config["provider"] = [
-                    providerName: [
-                        "options": [
-                            "baseURL": baseURLValue,
-                        ],
-                    ],
-                ]
-                Log.config(" Provider '\(providerName)' configured with baseURL: \(baseURLValue)")
+                // Build options dict with baseURL, and include apiKey if set.
+                // IMPORTANT: For OpenAI-compatible endpoints (e.g. LM Studio via openai provider)
+                // that require server authentication, the API key must be in provider options AND
+                // as the OPENAI_API_KEY env var. Some opencode provider adapters only read from
+                // the config options dict, not the environment.
+                var customOptions: [String: Any] = ["baseURL": baseURLValue]
+                let customAPIKey = inputs.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !customAPIKey.isEmpty {
+                    customOptions["apiKey"] = customAPIKey
+                    Log.config(" Provider '\(providerName)' custom baseURL API key configured in options")
+                }
+
+                let modelIDForProvider = inputs.modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !modelIDForProvider.isEmpty {
+                    config["provider"] = [
+                        providerName: [
+                            "models": [
+                                modelIDForProvider: [
+                                    "name": modelIDForProvider,
+                                    "tool_call": true,
+                                ] as [String: Any],
+                            ],
+                            "options": customOptions,
+                        ] as [String: Any],
+                    ]
+                    Log.config(" Provider '\(providerName)' configured with baseURL: \(baseURLValue), model: \(modelIDForProvider)")
+                } else {
+                    config["provider"] = [
+                        providerName: [
+                            "options": customOptions,
+                        ] as [String: Any],
+                    ]
+                    Log.config(" Provider '\(providerName)' configured with baseURL: \(baseURLValue) (no model override)")
+                }
             }
         }
 

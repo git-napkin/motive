@@ -37,6 +37,29 @@ struct GeneralSettingsView: View {
                     )
                 }
 
+                SettingRow(L10n.Settings.commandBarPosition, description: L10n.Settings.commandBarPositionDesc) {
+                    menuPicker(
+                        selection: Binding(
+                            get: { configManager.commandBarPosition },
+                            set: { configManager.commandBarPosition = $0 }
+                        ),
+                        options: ConfigManager.CommandBarPosition.allCases,
+                        label: { $0.displayName }
+                    )
+                }
+
+                SettingRow("Glass Effect", description: "Choose between clear or tinted glass") {
+                    menuPicker(
+                        selection: Binding(
+                            get: { configManager.liquidGlassMode },
+                            set: { configManager.liquidGlassMode = $0 }
+                        ),
+                        options: ConfigManager.LiquidGlassMode.allCases,
+                        label: { $0.displayName }
+                    )
+                }
+
+
                 SettingRow(L10n.Settings.language, description: L10n.Settings.languageDesc, showDivider: false) {
                     menuPicker(
                         selection: Binding(

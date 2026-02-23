@@ -21,9 +21,14 @@ enum CommandBarMode: Equatable {
     case running // Task is running
     case completed // Task completed, showing summary
     case error(String) // Error occurred
+    case chat // Inline conversation panel
 
     var showsFooter: Bool {
         true
+    }
+
+    var isChat: Bool {
+        self == .chat
     }
 
     var isCommand: Bool {
@@ -73,6 +78,8 @@ enum CommandBarMode: Equatable {
             fromSession ? 280 : 230 // Compact: only 2 items
         case .running, .completed, .error:
             160 // status + input + footer + padding
+        case .chat:
+            520 // Full conversation panel
         }
     }
 
@@ -87,6 +94,7 @@ enum CommandBarMode: Equatable {
         case .running: "running"
         case .completed: "completed"
         case .error: "error"
+        case .chat: "chat"
         }
     }
 }

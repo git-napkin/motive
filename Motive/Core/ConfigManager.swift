@@ -118,8 +118,16 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
         /// Whether this provider requires an API key
         var requiresAPIKey: Bool {
             switch self {
-            case .ollama, .lmstudio: false
+            case .ollama: false
             default: true
+            }
+        }
+
+        /// Whether this provider supports an optional API key (e.g. LM Studio/Ollama with auth enabled)
+        var allowsOptionalAPIKey: Bool {
+            switch self {
+            case .lmstudio, .ollama: true
+            default: false
             }
         }
 
@@ -130,6 +138,7 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .openai: "OPENAI_API_KEY"
             case .gemini: "GOOGLE_GENERATIVE_AI_API_KEY"
             case .ollama: ""
+            case .lmstudio: "OPENAI_API_KEY"
             case .openrouter: "OPENROUTER_API_KEY"
             case .mistral: "MISTRAL_API_KEY"
             case .groq: "GROQ_API_KEY"
@@ -206,6 +215,52 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
         }
     }
 
+    enum LiquidGlassMode: String, CaseIterable, Identifiable {
+        case clear
+        case tinted
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .clear: "Clear"
+            case .tinted: "Tinted"
+            }
+        }
+    }
+
+
+    enum CommandBarPosition: String, CaseIterable, Identifiable {
+        case center
+        case topLeading
+        case topMiddle
+        case topTrailing
+        case bottomLeading
+        case bottomMiddle
+        case bottomTrailing
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .center: "Center"
+            case .topLeading: "Top Left"
+            case .topMiddle: "Top Middle"
+            case .topTrailing: "Top Right"
+            case .bottomLeading: "Bottom Left"
+            case .bottomMiddle: "Bottom Middle"
+            case .bottomTrailing: "Bottom Right"
+            }
+        }
+
+        var isBottom: Bool {
+            switch self {
+            case .bottomLeading, .bottomMiddle, .bottomTrailing: true
+            default: false
+            }
+        }
+    }
+
     @AppStorage("provider") var providerRawValue: String = Provider.claude.rawValue
 
     @AppStorage("openCodeBinarySourcePath") var openCodeBinarySourcePath: String = ""
@@ -240,6 +295,13 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
     /// Token usage totals (per model)
     @AppStorage("tokenUsageTotalsJSON") var tokenUsageTotalsJSON: String = "{}"
 
+    @AppStorage("commandBarPosition") var commandBarPositionRaw: String = CommandBarPosition.center.rawValue
+
+    var commandBarPosition: CommandBarPosition {
+        get { CommandBarPosition(rawValue: commandBarPositionRaw) ?? .center }
+        set { commandBarPositionRaw = newValue.rawValue }
+    }
+
     var trustLevel: TrustLevel {
         get { TrustLevel(rawValue: trustLevelRawValue) ?? .balanced }
         set {
@@ -251,6 +313,12 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
 
     @AppStorage("hotkey") var hotkey: String = "⌥Space"
     @AppStorage("appearanceMode") var appearanceModeRawValue: String = AppearanceMode.system.rawValue
+    @AppStorage("liquidGlassMode") var liquidGlassModeRaw: String = LiquidGlassMode.clear.rawValue
+
+    var liquidGlassMode: LiquidGlassMode {
+        get { LiquidGlassMode(rawValue: liquidGlassModeRaw) ?? .clear }
+        set { liquidGlassModeRaw = newValue.rawValue }
+    }
 
     /// Onboarding
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false

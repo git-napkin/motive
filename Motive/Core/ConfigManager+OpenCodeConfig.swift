@@ -25,7 +25,8 @@ extension ConfigManager {
 
         // Use the cached apiKey property instead of direct keychain read
         let apiKeyValue = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !apiKeyValue.isEmpty, provider.requiresAPIKey {
+        // Sync API key for providers that require it, OR for providers with optional auth (e.g. LM Studio with auth enabled)
+        if !apiKeyValue.isEmpty, provider.requiresAPIKey || provider.allowsOptionalAPIKey {
             auth[providerName] = [
                 "type": "api",
                 "key": apiKeyValue
@@ -85,8 +86,9 @@ extension ConfigManager {
         let inputs = OpenCodeConfigGenerator.Inputs(
             providerName: provider.openCodeProviderName,
             provider: provider,
-            baseURL: baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            baseURL: normalizedBaseURL,
             modelName: modelName.trimmingCharacters(in: .whitespacesAndNewlines),
+            apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines),
             workspaceDirectory: workspaceDirectory,
             skillsSystemEnabled: skillsSystemEnabled,
             compactionEnabled: compactionEnabled,

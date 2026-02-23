@@ -24,10 +24,8 @@ Packages/
 Package.resolved
 *.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 
-# CocoaPods (if used)
+# CocoaPods / Carthage
 Pods/
-
-# Carthage (if used)
 Carthage/Build/
 
 # macOS
@@ -35,58 +33,39 @@ Carthage/Build/
 .AppleDouble
 .LSOverride
 ._*
-
-# Thumbnails
-Thumbs.db
-ehthumbs.db
-
-# IDE
-.idea/
-.cursorrules
 *.swp
 *.swo
 *~
 
-# VS Code (optional - remove if you want to keep settings)
-# .vscode/
+# IDE & Editor specific
+.idea/
+.cursorrules
+.vscode/
+.cursor/
+.sourcekit-lsp/
+buildServer.json
+.claude/
 
-# OpenCode binary (user must provide)
+# App Specific binaries & Sensitive info
 Motive/Resources/opencode
-
-# Sensitive files
 *.p12
 *.cer
 *.mobileprovision
 AuthKey_*.p8
 
-# Debug
+# Build & Debug
 *.dSYM.zip
 *.dSYM
-
-# Archives
 *.ipa
-*.app.dSYM.zip
 *.xcarchive
+build.log
+dist/
 
-# Playgrounds
-timeline.xctimeline
-playground.xcworkspace
-
-# Fastlane (if used)
-fastlane/report.xml
-fastlane/Preview.html
-fastlane/screenshots/**/*.png
-fastlane/test_output
-
-# Environment files
+# Scripts & Environment
 .env
 .env.local
-.vscode/
 Scripts/browser-use-sidecar/.venv/
-dist/
-.cursor/
-.sourcekit-lsp/
-buildServer.json
-Socials/
-Docs/
-.claude/
+
+# Misc Stuff
+.acf/
+tasks-table.md

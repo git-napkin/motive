@@ -119,6 +119,8 @@ enum L10n {
         static let themeSystem = "settings.general.theme.system".localized
         static let themeLight = "settings.general.theme.light".localized
         static let themeDark = "settings.general.theme.dark".localized
+        static let commandBarPosition = "settings.general.command_bar_position".localized
+        static let commandBarPositionDesc = "settings.general.command_bar_position.desc".localized
 
         // Language
         static let language = "settings.general.language".localized

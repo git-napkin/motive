@@ -20,6 +20,7 @@ final class DrawerWindowController {
     private let window: KeyablePanel
     private var statusBarButtonFrame: NSRect?
     private var resignKeyObserver: Any?
+    private var lastShowTime: Date = .distantPast
     var isVisible: Bool {
         window.isVisible
     }
@@ -31,6 +32,7 @@ final class DrawerWindowController {
         let hostingView = NSHostingView(rootView: AnyView(rootView))
         hostingView.safeAreaRegions = []
         hostingView.wantsLayer = true
+        hostingView.layerContentsRedrawPolicy = .onSetNeedsDisplay
         hostingView.layer?.masksToBounds = false
 
         window = KeyablePanel(
@@ -51,7 +53,8 @@ final class DrawerWindowController {
             queue: .main
         ) { [weak self] _ in
             guard let self else { return }
-            if !self.suppressAutoHide {
+            // Guard: don't auto-hide if we just showed (prevents focus-race glitches)
+            if !self.suppressAutoHide && Date().timeIntervalSince(self.lastShowTime) > 0.3 {
                 self.hide()
             }
         }
@@ -67,6 +70,7 @@ final class DrawerWindowController {
     }
 
     func show() {
+        lastShowTime = Date()
         positionBelowStatusBar()
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)

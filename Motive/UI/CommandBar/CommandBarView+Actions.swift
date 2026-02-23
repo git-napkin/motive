@@ -18,6 +18,17 @@ extension CommandBarView {
         }
     }
 
+    /// Open the chat inline in the Command Bar popup
+    func enterChatMode() {
+        withAnimation { mode = .chat }
+    }
+
+    /// Pop the conversation out to the floating Drawer window and close the popup
+    func popOutToDrawer() {
+        appState.showDrawer()
+        appState.hideCommandBar()
+    }
+
     func confirmDeleteSession() {
         guard selectedHistoryIndex < filteredHistorySessions.count else { return }
         let deleteId = filteredHistorySessions[selectedHistoryIndex].id
@@ -162,6 +173,7 @@ extension CommandBarView {
     /// Called ONLY when commandBarResetTrigger fires (hidden → visible transition).
     /// MUST unconditionally reset ALL stale state from previous interactions.
     func recenterAndFocus() {
+
         // 1. Reset stale file completion state
         //    (@State persists across show/hide cycles in the long-lived NSHostingView)
         showFileCompletion = false
