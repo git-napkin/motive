@@ -152,7 +152,6 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
             case .zhipuai: "ZHIPU_API_KEY"
             case .perplexity: "PERPLEXITY_API_KEY"
             case .bedrock: "AWS_ACCESS_KEY_ID"
-            case .lmstudio: ""
             }
         }
 
