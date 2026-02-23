@@ -19,31 +19,46 @@ extension CommandBarView {
     }
 
     var mainContent: some View {
-        VStack(spacing: 0) {
-            if showsAboveContent {
-                aboveInputContent
-                Rectangle()
-                    .fill(Color.Aurora.glassOverlay.opacity(0.06))
-                    .frame(height: 0.5)
-            }
-            inputAreaView
-            if showsBelowContent {
-                Rectangle()
-                    .fill(Color.Aurora.glassOverlay.opacity(0.06))
-                    .frame(height: 0.5)
-                belowInputContent
-            } else {
-                // Only use spacer when no list content
-                Spacer(minLength: 0)
-            }
-            footerView
+        if mode.isChat {
+            // Inline chat panel — fills the entire popup
+            AnyView(
+                ZStack {
+                    commandBarBackground
+                    CommandBarChatView(
+                        onPopOut: { popOutToDrawer() },
+                        onDismiss: { mode = appState.messages.isEmpty ? .idle : .completed }
+                    )
+                }
+                .frame(width: 680, height: mode.dynamicHeight)
+                .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous))
+            )
+        } else {
+            // Standard command bar layout
+            AnyView(
+                VStack(spacing: 0) {
+                    if showsAboveContent {
+                        aboveInputContent
+                        Rectangle()
+                            .fill(Color.Aurora.glassOverlay.opacity(0.06))
+                            .frame(height: 0.5)
+                    }
+                    inputAreaView
+                    if showsBelowContent {
+                        Rectangle()
+                            .fill(Color.Aurora.glassOverlay.opacity(0.06))
+                            .frame(height: 0.5)
+                        belowInputContent
+                    } else {
+                        Spacer(minLength: 0)
+                    }
+                    footerView
+                }
+                .frame(width: 680, height: currentHeight)
+                .background(commandBarBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous))
+                .overlay(borderOverlay)
+            )
         }
-        .frame(width: 680, height: currentHeight)
-        .background(commandBarBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous))
-        .overlay(borderOverlay)
-        // Note: Window-level fade animation is handled by CommandBarWindowController
-        // Removed SwiftUI-level entrance animation to prevent double animation
     }
 
     /// Content ABOVE input (session status)
@@ -61,8 +76,8 @@ extension CommandBarView {
 
     /// Content BELOW input (lists)
     var showsBelowContent: Bool {
-        mode.isCommand || mode.isHistory || mode.isProjects || mode.isModes
-            || isFileCompletionActive
+        !mode.isChat && (mode.isCommand || mode.isHistory || mode.isProjects || mode.isModes
+            || isFileCompletionActive)
     }
 
     /// Height to use when file completion is showing (matches command list)
@@ -80,7 +95,7 @@ extension CommandBarView {
 
     /// Current command bar height
     var currentHeight: CGFloat {
-        isFileCompletionActive ? fileCompletionHeight : mode.dynamicHeight
+        mode.isChat ? mode.dynamicHeight : (isFileCompletionActive ? fileCompletionHeight : mode.dynamicHeight)
     }
 
     // MARK: - Above Input Content (Session Status)

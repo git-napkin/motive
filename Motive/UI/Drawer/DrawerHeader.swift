@@ -33,12 +33,12 @@ struct DrawerHeader: View {
                             .foregroundColor(Color.Aurora.textSecondary)
 
                         Text(currentSessionTitle)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.Aurora.bodySmall.weight(.semibold))
                             .foregroundColor(Color.Aurora.textPrimary)
                             .lineLimit(1)
 
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.Aurora.micro.weight(.bold))
                             .foregroundColor(Color.Aurora.textMuted)
                             .rotationEffect(.degrees(showSessionPicker ? 180 : 0))
                     }
@@ -77,11 +77,15 @@ struct DrawerHeader: View {
                     onLoadSessions()
                 }) {
                     Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.Aurora.micro.weight(.bold))
                         .foregroundColor(Color.Aurora.textSecondary)
                         .frame(width: 28, height: 28)
                         .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.08 : 0.10))
                         .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
+                                .strokeBorder(Color.Aurora.glassOverlay.opacity(0.1), lineWidth: 0.5)
+                        )
                 }
                 .buttonStyle(.plain)
                 .help(L10n.Drawer.newChat)
@@ -90,11 +94,15 @@ struct DrawerHeader: View {
                 // Close button
                 Button(action: { appState.hideDrawer() }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.Aurora.micro.weight(.bold))
                         .foregroundColor(Color.Aurora.textMuted)
                         .frame(width: 28, height: 28)
                         .background(Color.Aurora.glassOverlay.opacity(isDark ? 0.08 : 0.10))
                         .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
+                                .strokeBorder(Color.Aurora.glassOverlay.opacity(0.1), lineWidth: 0.5)
+                        )
                 }
                 .buttonStyle(.plain)
                 .help(L10n.Drawer.close)

@@ -104,24 +104,24 @@ struct DrawerChatInput: View {
                         .accessibilityLabel(L10n.CommandBar.submit)
                     }
                 }
-                .padding(.horizontal, AuroraSpacing.space3)
-                .padding(.vertical, AuroraSpacing.space2)
+                .padding(.horizontal, AuroraSpacing.space4)
+                .padding(.vertical, 10)
                 .background(
-                    RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
+                    Capsule(style: .continuous)
                         .fill(
                             isInputFocused.wrappedValue && !isRunning
-                                ? Color.Aurora.microAccentSoft.opacity(isDark ? 0.35 : 0.22)
-                                : (isDark ? Color.Aurora.glassOverlay.opacity(0.06) : Color.white.opacity(0.55))
+                                ? Color.Aurora.microAccentSoft.opacity(isDark ? 0.25 : 0.15)
+                                : (isDark ? Color.Aurora.glassOverlay.opacity(0.04) : Color.white.opacity(0.5))
                         )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous))
+                .clipShape(Capsule(style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
+                    Capsule(style: .continuous)
                         .strokeBorder(
                             isInputFocused.wrappedValue && !isRunning
-                                ? Color.Aurora.borderFocus.opacity(0.8)
+                                ? Color.Aurora.microAccent.opacity(0.4)
                                 : Color.Aurora.glassOverlay.opacity(isDark ? 0.1 : 0.15),
-                            lineWidth: isInputFocused.wrappedValue && !isRunning ? 1 : 0.5
+                            lineWidth: 0.5
                         )
                 )
                 .animation(.auroraFast, value: isInputFocused.wrappedValue)

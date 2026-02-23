@@ -45,7 +45,7 @@ extension CommandBarView {
 
             // Open drawer button
             Button(action: {
-                appState.toggleDrawer()
+                appState.showDrawer()
                 appState.hideCommandBar()
             }) {
                 Image(systemName: "rectangle.expand.vertical")
@@ -126,7 +126,7 @@ extension CommandBarView {
 
             // Open drawer button
             Button(action: {
-                appState.toggleDrawer()
+                appState.showDrawer()
                 appState.hideCommandBar()
             }) {
                 HStack(spacing: 4) {

@@ -103,6 +103,8 @@
 "settings.general.theme.system" = "System";
 "settings.general.theme.light" = "Light";
 "settings.general.theme.dark" = "Dark";
+"settings.general.command_bar_position" = "Position";
+"settings.general.command_bar_position.desc" = "Choose where the command bar appears on screen";
 
 // Language Settings
 "settings.general.language" = "Language";

@@ -10,15 +10,10 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var appState: AppState?
-    private var globalMonitor: Any?
-    private var localMonitor: Any?
+    private let hotkeyManager = CarbonHotkeyManager()
     private var permissionCheckTask: Task<Void, Never>?
     private var hotkeyObserver: NSObjectProtocol?
     private var onboardingController: OnboardingWindowController?
-
-    /// Parsed hotkey components from ConfigManager
-    private var expectedModifiers: NSEvent.ModifierFlags = .option
-    private var expectedKeyCode: UInt16 = 49 // Space key
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon - we're a menu bar app
@@ -147,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard onboardingController == nil else { return }
 
         // Check if permission was granted while app was in background
-        if globalMonitor == nil, AccessibilityHelper.hasPermission {
+        if AccessibilityHelper.hasPermission {
             registerHotkey()
         }
         appState?.ensureStatusBar()
@@ -241,69 +236,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func reregisterHotkey() {
         // Only re-parse if the hotkey string changed
-        guard let configManager = appState?.configManagerRef else { return }
-        let newHotkey = configManager.hotkey
-
-        // Parse and update
-        let (modifiers, keyCode) = HotkeyParser.parseToKeyCode(newHotkey)
-        if modifiers != expectedModifiers || keyCode != expectedKeyCode {
-            expectedModifiers = modifiers
-            expectedKeyCode = keyCode
-            Log.debug("Hotkey updated to: \(newHotkey) (keyCode: \(keyCode))")
-        }
+        registerHotkey()
     }
 
     private func registerHotkey() {
-        guard globalMonitor == nil else { return } // Already registered
+        guard let configManager = appState?.configManagerRef else { return }
+        let (modifiers, keyCode) = HotkeyParser.parseToKeyCode(configManager.hotkey)
 
-        // Parse the hotkey from settings
-        if let configManager = appState?.configManagerRef {
-            let parsed = HotkeyParser.parseToKeyCode(configManager.hotkey)
-            expectedModifiers = parsed.modifiers
-            expectedKeyCode = parsed.keyCode
+        hotkeyManager.onKeyDown = { [weak self] in
+            self?.toggleCommandBar()
         }
 
-        // Global monitor for when app is not active
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleKeyEvent(event)
+        if hotkeyManager.register(modifiers: modifiers, keyCode: keyCode) {
+            Log.debug("Hotkey \(configManager.hotkey) registered successfully via Carbon")
+        } else {
+            Log.error("Failed to register hotkey \(configManager.hotkey)")
         }
-
-        // Local monitor for when app is active
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if self?.handleKeyEvent(event) == true {
-                return nil // Consume the event
-            }
-            return event
-        }
-
-        let hotkeyStr = appState?.configManagerRef.hotkey ?? "⌥Space"
-        Log.debug("Hotkey \(hotkeyStr) registered successfully (keyCode: \(expectedKeyCode))")
     }
 
     private func unregisterHotkey() {
-        removeMonitor(&globalMonitor)
-        removeMonitor(&localMonitor)
-    }
-
-    private func removeMonitor(_ monitor: inout Any?) {
-        if let m = monitor {
-            NSEvent.removeMonitor(m)
-            monitor = nil
-        }
-    }
-
-    @discardableResult
-    private func handleKeyEvent(_ event: NSEvent) -> Bool {
-        // Check if the pressed key matches our expected hotkey
-        let pressedModifiers = event.modifierFlags.intersection([.control, .option, .shift, .command])
-
-        if pressedModifiers == expectedModifiers, event.keyCode == expectedKeyCode {
-            Task { @MainActor [weak self] in
-                self?.toggleCommandBar()
-            }
-            return true
-        }
-        return false
+        hotkeyManager.unregister()
     }
 
     private func toggleCommandBar() {

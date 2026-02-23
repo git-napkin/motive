@@ -145,11 +145,14 @@ final class StatusBarController {
         // Dismiss existing
         dismissNotification()
 
-        let view = StatusNotificationView(type: type) { [weak self] in
+        let glassMode = configManager?.liquidGlassMode ?? .clear
+        let view = StatusNotificationView(type: type, onDismiss: { [weak self] in
             self?.dismissNotification()
-        }
+        }, glassMode: glassMode)
 
         let hostingView = NSHostingView(rootView: view)
+        hostingView.wantsLayer = true
+        hostingView.layerContentsRedrawPolicy = .onSetNeedsDisplay
         let size = hostingView.fittingSize
 
         let panel = NSPanel(
@@ -165,10 +168,30 @@ final class StatusBarController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentView = hostingView
 
-        // Position below status bar button
-        if let anchor = buttonFrame {
+        // Positioning strategy:
+        // When the menu bar is auto-hidden, statusItem.button?.window still exists
+        // and buttonFrame still returns valid coordinates at the top of the screen.
+        // However, visibleFrame *excludes* the hidden menu bar region. So we check
+        // whether the button actually sits within the visible area.
+        // Positioning strategy:
+        // When the menu bar is auto-hidden, statusItem.button?.window still exists
+        // and buttonFrame still returns valid coordinates at the top of the screen.
+        // However, visibleFrame *excludes* the hidden menu bar region. So we check
+        // whether the button actually sits within the visible area.
+        let targetScreen = statusItem.button?.window?.screen
+            ?? NSScreen.main
+            ?? NSScreen.screens.first!
+        let visibleFrame = targetScreen.visibleFrame // excludes dock + hidden menu bar
+
+        if let anchor = buttonFrame, visibleFrame.contains(NSPoint(x: anchor.midX, y: anchor.midY)) {
+            // Menu bar is visible — position notification directly below the button
             let x = anchor.midX - size.width / 2
             let y = anchor.minY - size.height - 8
+            panel.setFrameOrigin(NSPoint(x: x, y: y))
+        } else {
+            // Menu bar is hidden — bottom-center above the dock
+            let x = visibleFrame.midX - size.width / 2
+            let y = visibleFrame.minY + 24
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
 

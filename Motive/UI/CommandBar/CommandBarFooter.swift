@@ -122,22 +122,7 @@ extension CommandBarView {
     // MARK: - Border Overlay
 
     var borderOverlay: some View {
-        ZStack {
-            // Base border — tinted by mode
-            RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .strokeBorder(borderColor, lineWidth: 0.5)
-
-            // Top-edge inner luminance (mimics light reflection on glass)
-            RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [Color.Aurora.glassOverlay.opacity(0.15), Color.clear],
-                        startPoint: .top,
-                        endPoint: .center
-                    ),
-                    lineWidth: 0.5
-                )
-        }
+        EmptyView() // ConsistentBackground handles the border
     }
 
     /// Border tint color that adapts to the current mode
@@ -157,17 +142,7 @@ extension CommandBarView {
     // MARK: - Background
 
     var commandBarBackground: some View {
-        ZStack {
-            // Layer 1: Deep vibrancy blur (primary translucency)
-            VisualEffectView(
-                material: .popover,
-                blendingMode: .behindWindow,
-                state: .active
-            )
-            // Layer 2: Very subtle tint overlay — low opacity lets the desktop show through
-            RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
-                .fill(Color.Aurora.background.opacity(0.45))
-        }
+        LiquidGlassBackgroundAuto(cornerRadius: AuroraRadius.xl, showBorder: true)
     }
 }
 

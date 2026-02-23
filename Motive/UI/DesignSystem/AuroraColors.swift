@@ -42,33 +42,33 @@ extension Color {
             })
         }
 
-        // MARK: - Accent Colors (Graphite)
+        // MARK: - Accent Colors (Graphite Metallic)
 
-        /// Accent start - Light Graphite
+        /// Accent start - Lighter Graphite
         static var accentStart: Color {
             Color(nsColor: NSColor(name: nil) { appearance in
-                appearance.isDark ? NSColor(hex: "B0B0B0") : NSColor(hex: "808080")
+                appearance.isDark ? NSColor(hex: "D0D0D0") : NSColor(hex: "808080")
             })
         }
 
         /// Accent middle - Graphite
         static var accentMid: Color {
             Color(nsColor: NSColor(name: nil) { appearance in
-                appearance.isDark ? NSColor(hex: "8B8B8B") : NSColor(hex: "636363")
+                appearance.isDark ? NSColor(hex: "A0A0A0") : NSColor(hex: "636363")
             })
         }
 
-        /// Accent end - Deep Graphite
+        /// Accent end - Deeper Graphite
         static var accentEnd: Color {
             Color(nsColor: NSColor(name: nil) { appearance in
-                appearance.isDark ? NSColor(hex: "6E6E6E") : NSColor(hex: "4A4A4A")
+                appearance.isDark ? NSColor(hex: "808080") : NSColor(hex: "4A4A4A")
             })
         }
 
         /// Primary accent color
         static var accent: Color {
             Color(nsColor: NSColor(name: nil) { appearance in
-                appearance.isDark ? NSColor(hex: "8B8B8B") : NSColor(hex: "636363")
+                appearance.isDark ? NSColor(hex: "A0A0A0") : NSColor(hex: "636363")
             })
         }
 
@@ -225,7 +225,7 @@ extension Color {
         /// so they remain visible against both light and dark backdrops.
         static var glassOverlay: Color {
             Color(nsColor: NSColor(name: nil) { appearance in
-                appearance.isDark ? .white : .black
+                (appearance.isDark ? NSColor.white : NSColor.black).withAlphaComponent(appearance.isDark ? 0.08 : 0.05)
             })
         }
 

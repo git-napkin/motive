@@ -60,9 +60,14 @@ struct ModelConfigView: View {
 
             // Configuration
             SettingSection(L10n.Settings.configuration) {
-                // API Key (only for providers that require it)
-                if configManager.provider.requiresAPIKey {
-                    SettingRow(L10n.Settings.apiKey) {
+                // API Key / Token field.
+                // Show for: (a) providers that require a key, (b) providers with optional key (LM Studio/Ollama),
+                // and (c) any provider with a custom base URL (OpenAI-compatible mode may require server auth).
+                if configManager.provider.requiresAPIKey || configManager.provider.allowsOptionalAPIKey || !configManager.baseURL.isEmpty {
+                    SettingRow(
+                        apiKeyFieldLabel,
+                        description: apiKeyFieldDescription
+                    ) {
                         // API Key field with visibility toggle
                         ZStack(alignment: .trailing) {
                             HStack(spacing: 8) {
@@ -211,6 +216,32 @@ struct ModelConfigView: View {
 
     private var baseURLPlaceholder: String {
         configManager.provider.baseURLPlaceholder
+    }
+
+    // MARK: - API Key Field Helpers
+
+    /// Label for the API key/token field, contextual to provider and base URL
+    private var apiKeyFieldLabel: String {
+        if configManager.provider.allowsOptionalAPIKey {
+            return "API Token (Optional)"
+        }
+        // Standard provider used with a custom (OpenAI-compatible) endpoint
+        if !configManager.baseURL.isEmpty {
+            return "API Token"
+        }
+        return L10n.Settings.apiKey
+    }
+
+    /// Description for the API key/token field
+    private var apiKeyFieldDescription: String? {
+        if configManager.provider.allowsOptionalAPIKey {
+            return "Required for remote servers with auth enabled (e.g. LM Studio with authentication)"
+        }
+        // Standard provider using custom base URL
+        if !configManager.baseURL.isEmpty {
+            return "Required if the custom endpoint has authentication enabled"
+        }
+        return nil
     }
 
     private func saveAndRestart() {
@@ -410,7 +441,8 @@ extension ConfigManager.Provider {
         case .claude: "sk-ant-..."
         case .openai: "sk-..."
         case .gemini: "AIza..."
-        case .ollama, .lmstudio: ""
+        case .ollama: ""
+        case .lmstudio: "lm-studio-token..."
         case .openrouter: "sk-or-..."
         case .mistral: "..."
         case .groq: "gsk_..."
@@ -431,7 +463,7 @@ extension ConfigManager.Provider {
     var baseURLPlaceholder: String {
         switch self {
         case .claude: "https://api.anthropic.com"
-        case .openai: "https://api.openai.com"
+        case .openai: "https://api.openai.com (or custom endpoint)"
         case .gemini: "https://generativelanguage.googleapis.com"
         case .ollama: "http://localhost:11434"
         case .openrouter: "https://openrouter.ai/api"

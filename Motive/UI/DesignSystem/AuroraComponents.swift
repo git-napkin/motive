@@ -118,23 +118,39 @@ struct AuroraStatusIndicator: View {
 
     var body: some View {
         ZStack {
-            // Outer glow for active states
+            // Multi-layered outer glow for active states
             if state != .idle {
+                // Large faint pulse
                 Circle()
-                    .fill(stateColor.opacity(0.2))
+                    .fill(stateColor.opacity(0.12))
+                    .frame(width: 20, height: 20)
+                    .scaleEffect(isPulsing ? 1.8 : 1.0)
+                    .opacity(isPulsing ? 0 : 0.6)
+
+                // Secondary tighter pulse
+                Circle()
+                    .fill(stateColor.opacity(0.25))
                     .frame(width: 14, height: 14)
-                    .scaleEffect(isPulsing ? 1.5 : 1.0)
-                    .opacity(isPulsing ? 0 : 0.5)
+                    .scaleEffect(isPulsing ? 1.4 : 1.0)
+                    .opacity(isPulsing ? 0 : 0.8)
             }
 
-            // Main indicator
+            // Main indicator with inner glow
             Circle()
-                .fill(AnyShapeStyle(stateColor))
+                .fill(
+                    RadialGradient(
+                        colors: [stateColor, stateColor.opacity(0.8)],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 5
+                    )
+                )
                 .frame(width: 8, height: 8)
+                .shadow(color: stateColor.opacity(0.5), radius: 2)
         }
         .onAppear {
             if state != .idle {
-                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: false)) {
+                withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: false)) {
                     isPulsing = true
                 }
             }
@@ -142,7 +158,7 @@ struct AuroraStatusIndicator: View {
         .onChange(of: state) { _, newState in
             isPulsing = false
             if newState != .idle {
-                withAnimation(.easeInOut(duration: 1).repeatForever(autoreverses: false)) {
+                withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: false)) {
                     isPulsing = true
                 }
             }
@@ -220,7 +236,8 @@ struct AuroraButtonStyle: ButtonStyle {
             .foregroundColor(foregroundColor)
             .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous))
             .overlay(overlay)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .shadow(color: Color.black.opacity(style == .primary ? 0.2 : 0.05), radius: configuration.isPressed ? 1 : 2, y: 1)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
             .opacity(isEnabled ? 1.0 : 0.5)
             .animation(.auroraSpringStiff, value: configuration.isPressed)
     }
