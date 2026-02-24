@@ -65,19 +65,19 @@ extension CommandBarView {
     var showsAboveContent: Bool {
         switch mode {
         case .running, .completed, .error:
-            true
-        case let .command(fromSession), let .history(fromSession), let .modes(fromSession):
-            // Keep status visible when command/history/modes triggered from session
-            fromSession
+            return true
+        case let .command(fromSession), let .history(fromSession), let .modes(fromSession),
+             let .models(fromSession):
+            return fromSession
         default:
-            false
+            return false
         }
     }
 
     /// Content BELOW input (lists)
     var showsBelowContent: Bool {
         !mode.isChat && (mode.isCommand || mode.isHistory || mode.isProjects || mode.isModes
-            || isFileCompletionActive)
+            || mode.isModels || isFileCompletionActive)
     }
 
     /// Height to use when file completion is showing (matches command list)
@@ -93,12 +93,38 @@ extension CommandBarView {
             && currentAtToken(in: inputText) != nil
     }
 
+    /// Dynamic height for the models list — scales to fit 1–5 visible items.
+    var modelsListHeight: CGFloat {
+        let inputArea: CGFloat = 52
+        let footerArea: CGFloat = 40
+        let statusArea: CGFloat = mode.isFromSession ? 50 : 0
+        if availableModels.isEmpty {
+            // Empty state: icon + two text labels
+            return inputArea + 120 + footerArea + statusArea
+        }
+        let itemHeight: CGFloat = 52  // matches row height + 2pt spacing
+        let visibleCount = min(availableModels.count, 5)
+        let listArea = CGFloat(visibleCount) * itemHeight + 16  // vertical padding
+        return (inputArea + listArea + footerArea + statusArea + 8).rounded()
+    }
+
     /// Current command bar height
     var currentHeight: CGFloat {
-        mode.isChat ? mode.dynamicHeight : (isFileCompletionActive ? fileCompletionHeight : mode.dynamicHeight)
+        if mode.isChat { return mode.dynamicHeight }
+        if isFileCompletionActive { return fileCompletionHeight }
+        if mode.isModels { return modelsListHeight }
+        return mode.dynamicHeight
     }
 
     // MARK: - Above Input Content (Session Status)
+
+    /// Smooth expand animation for status appearing
+    private var statusTransition: AnyTransition {
+        .asymmetric(
+            insertion: .scale(scale: 0.95).combined(with: .opacity).animation(.auroraSpring),
+            removal: .opacity.animation(.auroraFast)
+        )
+    }
 
     var aboveInputContent: some View {
         Group {
@@ -117,14 +143,24 @@ extension CommandBarView {
                 completedSummaryView
             case let .modes(fromSession) where fromSession:
                 completedSummaryView
+            case let .models(fromSession) where fromSession:
+                completedSummaryView
             default:
                 EmptyView()
             }
         }
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .transition(statusTransition)
     }
 
     // MARK: - Below Input Content (Lists)
+
+    /// Smooth expand animation for lists appearing
+    private var listTransition: AnyTransition {
+        .asymmetric(
+            insertion: .scale(scale: 0.95).combined(with: .opacity).animation(.auroraSpring),
+            removal: .opacity.animation(.auroraFast)
+        )
+    }
 
     var belowInputContent: some View {
         Group {
@@ -139,11 +175,13 @@ extension CommandBarView {
                 projectsListView
             } else if mode.isModes {
                 modesListView
+            } else if mode.isModels {
+                modelsListView
             } else {
                 EmptyView()
             }
         }
-        .transition(.opacity.combined(with: .move(edge: .bottom)))
+        .transition(listTransition)
     }
 
     // MARK: - File Completion List (below input)

@@ -416,8 +416,11 @@ actor OpenCodeServer {
     // MARK: - PID File Management
 
     private static var pidFileURL: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("Motive/opencode-server.pid")
+        if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            return appSupport.appendingPathComponent("Motive/opencode-server.pid")
+        }
+        // Fallback to temp directory if application support is unavailable
+        return FileManager.default.temporaryDirectory.appendingPathComponent("opencode-server.pid")
     }
 
     private func writePIDFile(_ pid: pid_t) {

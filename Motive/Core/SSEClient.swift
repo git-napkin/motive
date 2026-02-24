@@ -139,7 +139,8 @@ actor SSEClient {
 
     /// Whether the SSE event loop task is alive (may be in reconnect backoff).
     var hasActiveStream: Bool {
-        streamTask != nil && !streamTask!.isCancelled
+        guard let task = streamTask else { return false }
+        return !task.isCancelled
     }
 
     /// Disconnect from the SSE stream.

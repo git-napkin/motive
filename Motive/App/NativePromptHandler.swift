@@ -30,7 +30,8 @@ final class NativePromptHandler {
     /// Show next prompt from queue after current completes
     private func showNextFromQueue() {
         guard !promptQueue.isEmpty else { return }
-        let next = promptQueue.removeFirst()
+        guard let next = promptQueue.first else { return }
+        promptQueue.removeFirst()
         next()
     }
 
@@ -245,6 +246,14 @@ final class NativePromptHandler {
 
         Log.debug("Native permission: \(permission) patterns=\(patterns)")
 
+        // If sessionAllowsAll is enabled, auto-approve without prompting
+        if appState?.sessionAllowsAll == true {
+            Task {
+                await autoApprovePermission(permissionID: permissionID, permission: permission, patterns: patterns, event: event)
+            }
+            return
+        }
+
         // Add permission to conversation
         let permMessageId = UUID()
         appState?.pendingQuestionMessageId = permMessageId
@@ -358,5 +367,28 @@ final class NativePromptHandler {
                 self?.showNextFromQueue()
             }
         )
+    }
+
+    /// Auto-approve a permission request when sessionAllowsAll is enabled
+    private func autoApprovePermission(permissionID: String, permission: String, patterns: [String], event: OpenCodeEvent) async {
+        Log.debug("Auto-approving permission: \(permission) patterns=\(patterns)")
+
+        // Update the message to show it was auto-approved
+        appState?.updateQuestionMessage(
+            messageId: appState?.pendingQuestionMessageId ?? UUID(),
+            response: "Auto-allowed for session",
+            sessionId: event.sessionId
+        )
+        appState?.pendingQuestionMessageId = nil
+
+        // Send "always allow" reply to OpenCode
+        await appState?.bridge.replyToPermission(
+            requestID: permissionID,
+            reply: .always,
+            sessionID: event.sessionId
+        )
+
+        appState?.updateStatusBar()
+        showNextFromQueue()
     }
 }

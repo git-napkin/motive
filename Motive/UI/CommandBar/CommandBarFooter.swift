@@ -34,8 +34,34 @@ extension CommandBarView {
 
     var leftFooterContent: some View {
         HStack(spacing: AuroraSpacing.space3) {
-            // Agent indicator
-            AgentIndicator()
+            // Agent indicator (clickable to switch modes)
+            AgentIndicator {
+                let wasFromSession = mode.isFromSession || !appState.messages.isEmpty
+                mode = .modes(fromSession: wasFromSession)
+                selectedModeIndex = availableModeChoices.firstIndex(where: { $0.value == configManager.currentAgent }) ?? 0
+            }
+
+            // Always Allow toggle
+            Button {
+                appState.sessionAllowsAll.toggle()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: appState.sessionAllowsAll ? "bolt.fill" : "bolt")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(appState.sessionAllowsAll ? Color.orange : Color.Aurora.textMuted)
+                    Text("Always Allow")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(appState.sessionAllowsAll ? Color.orange : Color.Aurora.textMuted)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(appState.sessionAllowsAll ? Color.orange.opacity(0.15) : Color.clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Auto-allow all permission requests for this session")
 
             // Show current project directory
             HStack(spacing: AuroraSpacing.space2) {
@@ -88,11 +114,16 @@ extension CommandBarView {
                 (L10n.CommandBar.navigate, "↑↓"),
                 (L10n.CommandBar.back, "esc"),
             ])
+        } else if mode.isModels {
+            InlineShortcutHint(items: [
+                (L10n.CommandBar.select, "↵"),
+                (L10n.CommandBar.navigate, "↑↓"),
+                (L10n.CommandBar.back, "esc"),
+            ])
         } else {
             switch mode {
             case .idle, .input:
                 InlineShortcutHint(items: [
-                    (L10n.CommandBar.run, "↵"),
                     (L10n.CommandBar.commands, "/"),
                     (L10n.CommandBar.close, "esc"),
                 ])
@@ -150,6 +181,7 @@ extension CommandBarView {
 
 private struct AgentIndicator: View {
     @EnvironmentObject private var configManager: ConfigManager
+    var onTap: (() -> Void)?
 
     private var agentName: String {
         configManager.currentAgent
@@ -169,22 +201,17 @@ private struct AgentIndicator: View {
 
     private var agentColor: Color {
         switch agentName {
-        case "plan": Color.Aurora.planAccent
+        case "plan": Color.Aurora.textSecondary
         default: Color.Aurora.textSecondary
         }
     }
 
     private var agentBackgroundColor: Color {
-        switch agentName {
-        case "plan":
-            Color.Aurora.planAccent.opacity(0.12)
-        default:
-            Color.Aurora.glassOverlay.opacity(0.06)
-        }
+        Color.Aurora.glassOverlay.opacity(0.06)
     }
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             Image(systemName: agentIcon)
                 .font(.Aurora.micro.weight(.semibold))
                 .frame(width: 10, height: 10)
@@ -199,6 +226,10 @@ private struct AgentIndicator: View {
                 .fill(agentBackgroundColor)
         )
         .frame(height: 20)
-        .help("Current mode: \(displayName) (use /mode to switch)")
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap?()
+        }
+        .help("Current mode: \(displayName) (click to switch)")
     }
 }

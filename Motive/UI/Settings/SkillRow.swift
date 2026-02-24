@@ -128,10 +128,15 @@ struct SkillRow: View {
                             .disabled(isBusy)
                         } else {
                             // Show unavailable install options info
-                            let firstOption = status.installOptions.first!
-                            Text(firstOption.displayLabel)
-                                .font(.system(size: 11))
-                                .foregroundColor(Color.Aurora.textMuted)
+                            if let firstOption = status.installOptions.first {
+                                Text(firstOption.displayLabel)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.Aurora.textMuted)
+                            } else {
+                                Text("Unavailable")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.Aurora.textMuted)
+                            }
                         }
                     }
 

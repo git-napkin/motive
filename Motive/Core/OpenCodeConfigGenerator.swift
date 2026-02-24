@@ -29,6 +29,8 @@ struct OpenCodeConfigGenerator {
         let prompt: String
         let mode: String
         let permission: [String: Any]
+        /// Optional per-agent model override (provider/model-id format)
+        var model: String? = nil
     }
 
     /// Generate opencode.json configuration and write skill files.
@@ -80,12 +82,21 @@ struct OpenCodeConfigGenerator {
             ] as [String: Any]
         } else {
             for agent in inputs.agents {
-                agentDict[agent.name] = [
+                var agentEntry: [String: Any] = [
                     "description": agent.description,
                     "prompt": agent.prompt,
-                    "mode": agent.mode,
-                    "permission": agent.permission
-                ] as [String: Any]
+                    "mode": agent.mode
+                ]
+                if !agent.permission.isEmpty {
+                    agentEntry["permission"] = agent.permission
+                }
+                if let model = agent.model, !model.isEmpty {
+                    // If the model already contains a slash (e.g. "nvidia/nemotron-3-nano"),
+                    // it is already in provider/model format — don't double-prefix it.
+                    let modelString = model.contains("/") ? model : "\(inputs.providerName)/\(model)"
+                    agentEntry["model"] = modelString
+                }
+                agentDict[agent.name] = agentEntry
             }
         }
 
@@ -233,6 +244,7 @@ struct OpenCodeConfigGenerator {
                     ]
                     Log.config(" Provider '\(providerName)' configured with baseURL: \(baseURLValue), model: \(modelIDForProvider)")
                 } else {
+                    // When no model is specified, let OpenCode choose the default for this provider
                     config["provider"] = [
                         providerName: [
                             "options": customOptions,

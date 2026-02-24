@@ -46,7 +46,6 @@ extension CommandBarView {
             // Open drawer button
             Button(action: {
                 appState.showDrawer()
-                appState.hideCommandBar()
             }) {
                 Image(systemName: "rectangle.expand.vertical")
                     .font(.system(size: 12, weight: .medium))

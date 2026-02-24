@@ -44,6 +44,20 @@ extension CommandBarView {
         return choices
     }
 
+    var availableModels: [String] {
+        var models = configManager.userModelsList
+        // Ensure the currently active model appears in the list even if not in userModelsList
+        let active = configManager.modelName.trimmingCharacters(in: .whitespaces)
+        if !active.isEmpty, !models.contains(active) {
+            models.insert(active, at: 0)
+        }
+        return models
+    }
+
+    private func loadModelsForCurrentProvider() {
+        // No-op - models are user-defined in settings
+    }
+
     // MARK: - Histories List (below input)
 
     var historiesListView: some View {
@@ -142,6 +156,61 @@ extension CommandBarView {
         let wasFromSession = self.mode.isFromSession || !appState.messages.isEmpty
         self.mode = wasFromSession ? .completed : .idle
         inputText = ""
+    }
+
+    private func selectModel(_ model: String) {
+        configManager.modelName = model
+        // Apply immediately so the bridge uses the new model
+        configManager.generateOpenCodeConfig()
+        appState.reconfigureBridge()
+        let wasFromSession = self.mode.isFromSession || !appState.messages.isEmpty
+        self.mode = wasFromSession ? .completed : .idle
+        inputText = ""
+    }
+
+    // MARK: - Models List (below input)
+
+    var modelsListView: some View {
+        Group {
+            if availableModels.isEmpty {
+                VStack(spacing: AuroraSpacing.space3) {
+                    Image(systemName: "cpu")
+                        .font(.Aurora.body)
+                        .foregroundColor(Color.Aurora.textMuted)
+                    Text("No models defined")
+                        .font(.Aurora.caption)
+                        .foregroundColor(Color.Aurora.textMuted)
+                    Text("Add models in Settings")
+                        .font(.Aurora.micro)
+                        .foregroundColor(Color.Aurora.textMuted)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 2) {
+                            ForEach(Array(availableModels.prefix(20).enumerated()), id: \.offset) { index, model in
+                                ModelListItem(
+                                    name: model,
+                                    isSelected: selectedModelIndex == index,
+                                    isCurrent: configManager.modelName == model
+                                ) {
+                                    selectModel(model)
+                                }
+                                .id(index)
+                            }
+                        }
+                        .padding(.vertical, AuroraSpacing.space2)
+                        .padding(.horizontal, AuroraSpacing.space3)
+                    }
+                    .onChange(of: selectedModelIndex) { _, newIndex in
+                        withAnimation(.auroraFast) {
+                            proxy.scrollTo(newIndex, anchor: .center)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Command List View (Below Input)

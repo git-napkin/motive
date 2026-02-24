@@ -14,6 +14,7 @@ protocol StatusBarControllerDelegate: AnyObject {
     func statusBarDidRequestSettings()
     func statusBarDidRequestQuit()
     func statusBarDidRequestCommandBar()
+    func statusBarDidRequestNewSession()
     /// Build menu for right-click (includes dynamic Running tasks when count > 0)
     func statusBarMenu() -> NSMenu
 }
@@ -66,6 +67,7 @@ final class StatusBarController {
     private var animationDots = 0
     private var notificationPanel: NSPanel?
     private var notificationDismissTask: Task<Void, Never>?
+    private var hudPanel: NSPanel?
     private var commandMenuItem: NSMenuItem?
     private var configManager: ConfigManager?
 
@@ -168,32 +170,23 @@ final class StatusBarController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentView = hostingView
 
-        // Positioning strategy:
-        // When the menu bar is auto-hidden, statusItem.button?.window still exists
-        // and buttonFrame still returns valid coordinates at the top of the screen.
-        // However, visibleFrame *excludes* the hidden menu bar region. So we check
-        // whether the button actually sits within the visible area.
-        // Positioning strategy:
-        // When the menu bar is auto-hidden, statusItem.button?.window still exists
-        // and buttonFrame still returns valid coordinates at the top of the screen.
-        // However, visibleFrame *excludes* the hidden menu bar region. So we check
-        // whether the button actually sits within the visible area.
-        let targetScreen = statusItem.button?.window?.screen
-            ?? NSScreen.main
-            ?? NSScreen.screens.first!
-        let visibleFrame = targetScreen.visibleFrame // excludes dock + hidden menu bar
-
-        if let anchor = buttonFrame, visibleFrame.contains(NSPoint(x: anchor.midX, y: anchor.midY)) {
-            // Menu bar is visible — position notification directly below the button
-            let x = anchor.midX - size.width / 2
-            let y = anchor.minY - size.height - 8
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
+        // Always center above dock for now
+        let targetScreen: NSScreen
+        if let screen = statusItem.button?.window?.screen {
+            targetScreen = screen
+        } else if let mainScreen = NSScreen.main {
+            targetScreen = mainScreen
+        } else if let firstScreen = NSScreen.screens.first {
+            targetScreen = firstScreen
         } else {
-            // Menu bar is hidden — bottom-center above the dock
-            let x = visibleFrame.midX - size.width / 2
-            let y = visibleFrame.minY + 24
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            Log.warning("No screen available for notification positioning")
+            return
         }
+        let visibleFrame = targetScreen.visibleFrame
+
+        let x = visibleFrame.midX - size.width / 2
+        let y = visibleFrame.minY + 24
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
 
         panel.alphaValue = 0
         panel.orderFrontRegardless()
@@ -239,8 +232,8 @@ final class StatusBarController {
         switch state {
         case .idle:
             // Use custom logo for idle state
-            if let logoImage = NSImage(named: "status-bar-icon") {
-                let icon = logoImage.copy() as! NSImage
+            if let logoImage = NSImage(named: "status-bar-icon"),
+               let icon = logoImage.copy() as? NSImage {
                 icon.size = NSSize(width: 18, height: 18)
                 icon.isTemplate = true
                 button.image = icon
@@ -362,6 +355,11 @@ final class StatusBarController {
         commandItem.image = NSImage(systemSymbolName: "command", accessibilityDescription: nil)
         self.commandMenuItem = commandItem // Save reference for later update
 
+        let newSessionItem = NSMenuItem(title: "New Session", action: #selector(newSession), keyEquivalent: "n")
+        newSessionItem.target = self
+        newSessionItem.keyEquivalentModifierMask = .command
+        newSessionItem.image = NSImage(systemSymbolName: "plus.circle", accessibilityDescription: nil)
+
         let settingsItem = NSMenuItem(title: L10n.StatusBar.settings, action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         settingsItem.keyEquivalentModifierMask = .command
@@ -373,9 +371,14 @@ final class StatusBarController {
         quitItem.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
 
         menu.addItem(commandItem)
+        menu.addItem(newSessionItem)
         menu.addItem(settingsItem)
         menu.addItem(.separator())
         menu.addItem(quitItem)
+    }
+
+    @objc private func newSession() {
+        delegate?.statusBarDidRequestNewSession()
     }
 
     @objc private func handleStatusButton() {
@@ -400,4 +403,74 @@ final class StatusBarController {
     @objc private func openCommandBar() {
         delegate?.statusBarDidRequestCommandBar()
     }
+
+    // MARK: - Quick Trust HUD
+
+    /// Show or update the floating trust-level HUD near the menu bar icon.
+    func showQuickTrustHUD(trustLevel: TrustLevel, onSelect: @escaping (TrustLevel) -> Void) {
+        // If panel already exists, just swap the hosted view (updates trust level chip)
+        if let existing = hudPanel {
+            let hostingView = existing.contentView as? NSHostingView<QuickTrustHUDView>
+            hostingView?.rootView = QuickTrustHUDView(currentLevel: trustLevel, onSelect: onSelect)
+            return
+        }
+
+        let view = QuickTrustHUDView(currentLevel: trustLevel, onSelect: onSelect)
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.wantsLayer = true
+        let size = hostingView.fittingSize
+
+        let panel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.level = .statusBar
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.contentView = hostingView
+
+        // Position on the right side of the screen, vertically centered
+        let targetScreen: NSScreen
+        if let screen = statusItem.button?.window?.screen {
+            targetScreen = screen
+        } else if let mainScreen = NSScreen.main {
+            targetScreen = mainScreen
+        } else if let firstScreen = NSScreen.screens.first {
+            targetScreen = firstScreen
+        } else {
+            Log.warning("No screen available for HUD positioning")
+            return
+        }
+        let visibleFrame = targetScreen.visibleFrame
+
+        let x = visibleFrame.maxX - size.width - 16
+        let y = visibleFrame.midY - size.height / 2
+
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
+
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.15
+            panel.animator().alphaValue = 1
+        }
+        hudPanel = panel
+    }
+
+    /// Dismiss the Quick Trust HUD if it's showing.
+    func dismissQuickTrustHUD() {
+        guard let panel = hudPanel else { return }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.1
+            panel.animator().alphaValue = 0
+        } completionHandler: {
+            panel.orderOut(nil)
+        }
+        hudPanel = nil
+    }
+
 }

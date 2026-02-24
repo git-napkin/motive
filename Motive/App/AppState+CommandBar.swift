@@ -20,14 +20,8 @@ extension AppState {
         }
 
         if !commandBarController.isVisible {
-            // Pre-compute the correct window height BEFORE showing.
-            // Without this, the window briefly shows at the stale height
-            // from a previous mode (e.g., 450px from /command list) because
-            // SwiftUI's onChange(commandBarResetTrigger) fires AFTER show().
             let targetHeight = expectedCommandBarHeight()
             commandBarController.updateHeight(to: targetHeight, animated: false)
-
-            // Trigger recenterAndFocus() which syncs mode and resets stale state
             commandBarResetTrigger += 1
         }
 

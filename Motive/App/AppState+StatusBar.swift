@@ -24,6 +24,10 @@ extension AppState: StatusBarControllerDelegate {
         showCommandBar()
     }
 
+    func statusBarDidRequestNewSession() {
+        startNewEmptySession()
+    }
+
     func statusBarMenu() -> NSMenu {
         let menu = NSMenu()
         let running = getRunningSessions()
@@ -36,6 +40,13 @@ extension AppState: StatusBarControllerDelegate {
         commandItem.keyEquivalentModifierMask = parsed.modifiers
         commandItem.image = NSImage(systemSymbolName: "command", accessibilityDescription: nil)
         menu.addItem(commandItem)
+
+        let newSessionItem = NSMenuItem(title: "New Session", action: #selector(StatusBarMenuTarget.newSession), keyEquivalent: "n")
+        newSessionItem.keyEquivalentModifierMask = .command
+        newSessionItem.target = StatusBarMenuTarget.shared
+        newSessionItem.representedObject = self
+        newSessionItem.image = NSImage(systemSymbolName: "plus.circle", accessibilityDescription: nil)
+        menu.addItem(newSessionItem)
 
         let settingsItem = NSMenuItem(title: L10n.StatusBar.settings, action: #selector(StatusBarMenuTarget.openSettings), keyEquivalent: ",")
         settingsItem.keyEquivalentModifierMask = .command
@@ -85,6 +96,10 @@ extension AppState: StatusBarControllerDelegate {
 
     @objc func openSettings(_ sender: NSMenuItem) {
         (sender.representedObject as? AppState)?.statusBarDidRequestSettings()
+    }
+
+    @objc func newSession(_ sender: NSMenuItem) {
+        (sender.representedObject as? AppState)?.startNewEmptySession()
     }
 
     @objc func quitApp(_ sender: NSMenuItem) {

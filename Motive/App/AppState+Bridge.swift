@@ -154,6 +154,12 @@ extension AppState {
             return
         }
 
+        // Additional safety check: ensure session is in a valid state to receive events
+        guard sessionStatus != .completed && sessionStatus != .failed else {
+            Log.debug("Dropping event for completed/failed session: \(event.kind.rawValue)")
+            return
+        }
+
         // Ignore post-interrupt events for current session
         if sessionStatus == .interrupted, target.id == currentSession?.id {
             logEvent(event)
@@ -447,6 +453,10 @@ extension AppState {
         if usage.input > 0 {
             session.contextTokens = usage.input
             if isCurrentSession { currentContextTokens = usage.input }
+        }
+        if isCurrentSession {
+            currentSessionOutputTokens += usage.output + usage.reasoning
+            if let cost = event.cost { currentSessionCost += cost }
         }
     }
 

@@ -67,6 +67,22 @@ struct CommandBarRunningView: View {
 
             Spacer()
 
+            // Pop-out button
+            Button(action: onOpenDrawer) {
+                Image(systemName: "rectangle.expand.vertical")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color.Aurora.textSecondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .background(Color.Aurora.surface)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(Color.Aurora.border, lineWidth: 0.5)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help("Open in drawer")
+
             // Stop button
             Button(action: onStop) {
                 HStack(spacing: AuroraSpacing.space2) {

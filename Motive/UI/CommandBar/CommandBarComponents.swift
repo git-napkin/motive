@@ -2,50 +2,53 @@
 //  CommandBarComponents.swift
 //  Motive
 //
-//  Created by geezerrrr on 2026/1/19.
+//  Created by geezeerrrr on 2026/1/19.
 //
 
 import SwiftUI
 
-struct CommandListItem: View {
-    let command: CommandDefinition
+// MARK: - ListItemContainer
+//
+// Generic container that owns the interaction chrome shared by every command
+// bar list item: hover tracking, selection background, left accent bar, and
+// the ↩ return badge. All four item types (Command, Project, Mode, Model)
+// compose this instead of duplicating ~40 lines each.
+
+struct ListItemContainer<Content: View>: View {
     let isSelected: Bool
+    let showAccentBar: Bool
+    let showReturnBadge: Bool
     let action: () -> Void
+    let content: Content
 
     @State private var isHovering = false
+
+    init(
+        isSelected: Bool,
+        showAccentBar: Bool = true,
+        showReturnBadge: Bool = true,
+        action: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.isSelected = isSelected
+        self.showAccentBar = showAccentBar
+        self.showReturnBadge = showReturnBadge
+        self.action = action
+        self.content = content()
+    }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: AuroraSpacing.space3) {
-                Image(systemName: command.icon)
-                    .font(.Aurora.bodySmall.weight(.medium))
-                    .foregroundColor(isSelected ? Color.Aurora.microAccent : Color.Aurora.textSecondary)
-                    .frame(width: 24)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: AuroraSpacing.space2) {
-                        Text("/\(command.name)")
-                            .font(.Aurora.body.weight(.medium))
-                            .foregroundColor(Color.Aurora.textPrimary)
-
-                        if let shortcut = command.shortcut {
-                            Text("/\(shortcut)")
-                                .font(.Aurora.caption)
-                                .foregroundColor(Color.Aurora.textMuted)
-                        }
-                    }
-
-                    Text(command.description)
-                        .font(.Aurora.caption)
-                        .foregroundColor(Color.Aurora.textMuted)
-                }
+                content
 
                 Spacer()
 
-                if isSelected {
+                if isSelected && showReturnBadge {
                     Image(systemName: "return")
                         .font(.Aurora.micro.weight(.medium))
                         .foregroundColor(Color.Aurora.textMuted)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
             }
             .padding(.horizontal, AuroraSpacing.space3)
@@ -58,22 +61,63 @@ struct CommandListItem: View {
                             : (isHovering ? Color.Aurora.surfaceElevated : Color.clear)
                     )
             )
+            // Left amber accent bar — matches the settings provider card selection indicator
             .overlay(alignment: .leading) {
-                if isSelected {
+                if isSelected && showAccentBar {
                     RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous)
                         .fill(Color.Aurora.microAccent.opacity(0.9))
                         .frame(width: 2, height: 22)
                         .padding(.leading, 1)
+                        .transition(.opacity.combined(with: .scale(scale: 0.7, anchor: .leading)))
                 }
             }
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
+        .animation(.auroraFast, value: isHovering)
+        .animation(.auroraFast, value: isSelected)
+    }
+}
+
+// MARK: - Command List Item
+
+struct CommandListItem: View {
+    let command: CommandDefinition
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        ListItemContainer(isSelected: isSelected, action: action) {
+            Image(systemName: command.icon)
+                .font(.Aurora.bodySmall.weight(.medium))
+                .foregroundColor(isSelected ? Color.Aurora.microAccent : Color.Aurora.textSecondary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: AuroraSpacing.space2) {
+                    Text("/\(command.name)")
+                        .font(.Aurora.body.weight(.medium))
+                        .foregroundColor(Color.Aurora.textPrimary)
+
+                    if let shortcut = command.shortcut {
+                        Text("/\(shortcut)")
+                            .font(.Aurora.caption)
+                            .foregroundColor(Color.Aurora.textMuted)
+                    }
+                }
+
+                Text(command.description)
+                    .font(.Aurora.caption)
+                    .foregroundColor(Color.Aurora.textMuted)
+            }
+        }
         .accessibilityLabel("/\(command.name)")
         .accessibilityHint(command.description)
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
     }
 }
+
+// MARK: - Project List Item
 
 struct ProjectListItem: View {
     let name: String
@@ -83,69 +127,44 @@ struct ProjectListItem: View {
     let isCurrent: Bool
     let action: () -> Void
 
-    @State private var isHovering = false
-
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: AuroraSpacing.space3) {
-                Image(systemName: icon)
-                    .font(.Aurora.bodySmall.weight(.medium))
-                    .foregroundColor(isSelected ? Color.Aurora.microAccent : Color.Aurora.textSecondary)
-                    .frame(width: 24)
+        ListItemContainer(isSelected: isSelected, action: action) {
+            Image(systemName: icon)
+                .font(.Aurora.bodySmall.weight(.medium))
+                .foregroundColor(isSelected ? Color.Aurora.microAccent : Color.Aurora.textSecondary)
+                .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: AuroraSpacing.space2) {
-                        Text(name)
-                            .font(.Aurora.body.weight(.medium))
-                            .foregroundColor(Color.Aurora.textPrimary)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: AuroraSpacing.space2) {
+                    Text(name)
+                        .font(.Aurora.body.weight(.medium))
+                        .foregroundColor(Color.Aurora.textPrimary)
 
-                        if isCurrent {
-                            Text("current")
-                                .font(.Aurora.micro)
-                                .foregroundColor(Color.Aurora.microAccent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.Aurora.microAccentSoft)
-                                )
-                        }
-                    }
-
-                    if !path.isEmpty {
-                        Text(path)
-                            .font(.Aurora.caption)
-                            .foregroundColor(Color.Aurora.textMuted)
-                            .lineLimit(1)
+                    if isCurrent {
+                        Text("current")
+                            .font(.Aurora.micro)
+                            .foregroundColor(Color.Aurora.microAccent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.Aurora.microAccentSoft))
                     }
                 }
 
-                Spacer()
-
-                if isSelected {
-                    Image(systemName: "return")
-                        .font(.Aurora.micro.weight(.medium))
+                if !path.isEmpty {
+                    Text(path)
+                        .font(.Aurora.caption)
                         .foregroundColor(Color.Aurora.textMuted)
+                        .lineLimit(1)
                 }
             }
-            .padding(.horizontal, AuroraSpacing.space3)
-            .padding(.vertical, AuroraSpacing.space2)
-            .background(
-                RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? Color.Aurora.microAccentSoft
-                            : (isHovering ? Color.Aurora.surfaceElevated : Color.clear)
-                    )
-            )
         }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
         .accessibilityLabel(name)
         .accessibilityHint(path.isEmpty ? "Select project" : path)
         .accessibilityValue(isCurrent ? "Current project" : (isSelected ? "Selected" : "Not selected"))
     }
 }
+
+// MARK: - Mode List Item
 
 struct ModeListItem: View {
     let name: String
@@ -155,74 +174,95 @@ struct ModeListItem: View {
     let isCurrent: Bool
     let action: () -> Void
 
-    @State private var isHovering = false
-
     private var currentModeAccent: Color {
         name.lowercased() == "plan" ? Color.Aurora.planAccent : Color.Aurora.textSecondary
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: AuroraSpacing.space3) {
-                Image(systemName: icon)
-                    .font(.Aurora.bodySmall.weight(.medium))
-                    .foregroundColor(isSelected ? Color.Aurora.microAccent : Color.Aurora.textSecondary)
-                    .frame(width: 24)
+        ListItemContainer(isSelected: isSelected, action: action) {
+            Image(systemName: icon)
+                .font(.Aurora.bodySmall.weight(.medium))
+                .foregroundColor(isSelected ? Color.Aurora.microAccent : Color.Aurora.textSecondary)
+                .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: AuroraSpacing.space2) {
-                        Text(name)
-                            .font(.Aurora.body.weight(.medium))
-                            .foregroundColor(Color.Aurora.textPrimary)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: AuroraSpacing.space2) {
+                    Text(name)
+                        .font(.Aurora.body.weight(.medium))
+                        .foregroundColor(Color.Aurora.textPrimary)
 
-                        if isCurrent {
-                            Text("current")
-                                .font(.Aurora.micro)
-                                .foregroundColor(currentModeAccent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(
-                                            name.lowercased() == "plan"
-                                                ? Color.Aurora.planAccent.opacity(0.16)
-                                                : Color.Aurora.glassOverlay.opacity(0.06)
-                                        )
-                                )
-                        }
+                    if isCurrent {
+                        Text("current")
+                            .font(.Aurora.micro)
+                            .foregroundColor(currentModeAccent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(
+                                        name.lowercased() == "plan"
+                                            ? Color.Aurora.planAccent.opacity(0.16)
+                                            : Color.Aurora.glassOverlay.opacity(0.06)
+                                    )
+                            )
                     }
-
-                    Text(description)
-                        .font(.Aurora.caption)
-                        .foregroundColor(Color.Aurora.textMuted)
                 }
 
-                Spacer()
-
-                if isSelected {
-                    Image(systemName: "return")
-                        .font(.Aurora.micro.weight(.medium))
-                        .foregroundColor(Color.Aurora.textMuted)
-                }
+                Text(description)
+                    .font(.Aurora.caption)
+                    .foregroundColor(Color.Aurora.textMuted)
             }
-            .padding(.horizontal, AuroraSpacing.space3)
-            .padding(.vertical, AuroraSpacing.space2)
-            .background(
-                RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? Color.Aurora.microAccentSoft
-                            : (isHovering ? Color.Aurora.surfaceElevated : Color.clear)
-                    )
-            )
         }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
         .accessibilityLabel(name)
         .accessibilityHint(description)
         .accessibilityValue(isCurrent ? "Current mode" : (isSelected ? "Selected" : "Not selected"))
     }
 }
+
+// MARK: - Model List Item
+
+struct ModelListItem: View {
+    let name: String
+    let isSelected: Bool
+    let isCurrent: Bool
+    let action: () -> Void
+
+    var body: some View {
+        ListItemContainer(isSelected: isSelected, showAccentBar: false, action: action) {
+            Image(systemName: "cpu")
+                .font(.Aurora.bodySmall.weight(.medium))
+                .foregroundColor(isSelected ? Color.Aurora.microAccent : Color.Aurora.textSecondary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: AuroraSpacing.space2) {
+                    Text(name)
+                        .font(.Aurora.body.weight(.medium))
+                        .foregroundColor(Color.Aurora.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    if isCurrent {
+                        Text("current")
+                            .font(.Aurora.micro)
+                            .foregroundColor(Color.Aurora.microAccent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(Color.Aurora.microAccent.opacity(0.16))
+                            )
+                    }
+                }
+            }
+        }
+        .accessibilityLabel(name)
+        .accessibilityHint("Select model")
+        .accessibilityValue(isCurrent ? "Current model" : (isSelected ? "Selected" : "Not selected"))
+    }
+}
+
+// MARK: - Aurora Action Pill
 
 struct AuroraActionPill: View {
     let icon: String
@@ -274,6 +314,8 @@ struct AuroraActionPill: View {
         .animation(.auroraSpringStiff, value: isPressed)
     }
 }
+
+// MARK: - Aurora Shortcut Badge
 
 struct AuroraShortcutBadge: View {
     let keys: [String]
@@ -355,6 +397,8 @@ struct InlineShortcutHint: View {
     }
 }
 
+// MARK: - Aurora Pulsing Dot
+
 struct AuroraPulsingDot: View {
     @State private var isPulsing = false
 
@@ -377,6 +421,8 @@ struct AuroraPulsingDot: View {
         }
     }
 }
+
+// MARK: - Pulsing Border Modifier
 
 struct PulsingBorderModifier: ViewModifier {
     @State private var isPulsing = false

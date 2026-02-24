@@ -124,9 +124,15 @@ actor OpenCodeBridge {
 
         // Update API client to the new URL
         await apiClient.updateBaseURL(newURL)
+        
+        // Disconnect and restart SSE with exponential backoff protection
         await sseClient.disconnect()
-        startGlobalEventLoop(baseURL: newURL)
+        
+        // Clear waiting state but preserve active session tracking for reconnection
         waitingForFirstOutput.removeAll()
+        
+        // Start new event loop to receive fresh events from restarted server
+        startGlobalEventLoop(baseURL: newURL)
         Log.bridge("Reconnected global SSE at \(newURL.absoluteString)")
     }
 
@@ -332,6 +338,9 @@ actor OpenCodeBridge {
     /// Route an SSE event to the appropriate handler.
     /// Most handlers are now synchronous (non-blocking yield to AsyncStream).
     private func handleSSEEvent(_ event: SSEClient.SSEEvent, sourceDirectory: String?) {
+        // Guard against empty session IDs which can indicate stale/invalid events
+        let hasValidSessionID: (String) -> Bool = { sid in !sid.isEmpty }
+
         switch event {
         case .connected:
             Log.bridge("Global SSE connected")
@@ -341,43 +350,53 @@ actor OpenCodeBridge {
             break
 
         case let .textDelta(info):
+            guard hasValidSessionID(info.sessionID) else { return }
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleTextDelta(info)
 
         case let .textComplete(info):
+            guard hasValidSessionID(info.sessionID) else { return }
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleTextComplete(info)
 
         case let .reasoningDelta(info):
+            guard hasValidSessionID(info.sessionID) else { return }
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleReasoningDelta(info)
 
         case let .toolRunning(info):
+            guard hasValidSessionID(info.sessionID) else { return }
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleToolRunning(info)
 
         case let .toolCompleted(info):
+            guard hasValidSessionID(info.sessionID) else { return }
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleToolCompleted(info)
 
         case let .toolError(info):
+            guard hasValidSessionID(info.sessionID) else { return }
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleToolError(info)
 
         case let .usageUpdated(info):
+            guard hasValidSessionID(info.sessionID) else { return }
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleUsageUpdate(info)
 
         case let .sessionIdle(sessionID):
+            guard hasValidSessionID(sessionID) else { return }
             observeSessionDirectory(sessionID: sessionID, sourceDirectory: sourceDirectory)
             handleSessionIdle(sessionID)
 
         case let .sessionStatus(info):
+            guard hasValidSessionID(info.sessionID) else { return }
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             guard isTrackedSession(info.sessionID) else { return }
             handleSessionStatus(info)
 
         case let .sessionError(info):
+            guard hasValidSessionID(info.sessionID) else { return }
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleSessionError(info)
 
@@ -388,6 +407,7 @@ actor OpenCodeBridge {
             handlePermissionSSEEvent(request, sourceDirectory: sourceDirectory)
 
         case let .agentChanged(info):
+            guard hasValidSessionID(info.sessionID) else { return }
             observeSessionDirectory(sessionID: info.sessionID, sourceDirectory: sourceDirectory)
             handleAgentChanged(info)
         }
@@ -633,6 +653,8 @@ actor OpenCodeBridge {
     // MARK: - Helpers
 
     private func isTrackedSession(_ sessionID: String) -> Bool {
+        // Reject empty session IDs to prevent spurious event handling
+        guard !sessionID.isEmpty else { return false }
         // If no sessions are actively tracked, accept all events
         // This handles the case before a session is created
         if activeSessions.isEmpty { return true }

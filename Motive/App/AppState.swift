@@ -32,10 +32,16 @@ final class AppState: ObservableObject {
     }
 
     @Published var sessionStatus: SessionStatus = .idle
+    /// When true, auto-approves all permission requests for the current session (session-level YOLO)
+    @Published var sessionAllowsAll: Bool = false
     @Published var lastErrorMessage: String?
     @Published var currentToolName: String?
     @Published var currentToolInput: String? // Current tool's input (e.g., command, file path)
     @Published var currentContextTokens: Int?
+    /// Cumulative output tokens for the current session (reset on new session).
+    @Published var currentSessionOutputTokens: Int = 0
+    /// Cumulative cost for the current session in USD (reset on new session).
+    @Published var currentSessionCost: Double = 0
     /// OpenCode sessionId → messages for running sessions (persisted on completion)
     var runningSessionMessages: [String: [ConversationMessage]] = [:]
     /// OpenCode sessionId → Session for event routing and logging
@@ -85,6 +91,7 @@ final class AppState: ObservableObject {
     var pendingQuestionMessageId: UUID?
 
     var cancellables = Set<AnyCancellable>()
+    var permissionSettingsObserver: NSObjectProtocol?
 
     /// Set to `true` when `resumeSession` sends a new prompt.
     /// While true, incoming finish events are stale (from the *previous* turn) and must be ignored.
@@ -266,15 +273,19 @@ final class AppState: ObservableObject {
         {
             return pendingBindSessions.remove(at: idx)
         }
-        if !pendingBindSessions.isEmpty {
-            return pendingBindSessions.removeFirst()
-        }
-        return nil
+        guard !pendingBindSessions.isEmpty else { return nil }
+        return pendingBindSessions.removeFirst()
     }
 
     /// Add a session to the pending bind queue with overflow protection.
     func enqueuePendingBind(_ session: Session) {
         if pendingBindSessions.count >= Self.maxPendingBindSessions {
+            guard !pendingBindSessions.isEmpty else {
+                Log.warning("Bind queue overflow but queue is empty - adding session anyway")
+                pendingBindSessions.append(session)
+                startBindQueueCleanup()
+                return
+            }
             let dropped = pendingBindSessions.removeFirst()
             Log.warning("Bind queue overflow: dropping oldest pending session \(dropped.id)")
             failUnboundSession(
@@ -369,13 +380,32 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Attempt to save the SwiftData context. Logs on failure.
+    /// Attempt to save the SwiftData context with retry logic. Logs on failure.
     func trySaveContext() {
-        do {
-            try modelContext?.save()
-        } catch {
-            Log.error("Failed to save model context: \(error)")
+        trySaveContextWithRetry(maxRetries: 3, delayMilliseconds: 500)
+    }
+
+    private func trySaveContextWithRetry(maxRetries: Int, delayMilliseconds: Int) {
+        guard let context = modelContext else { return }
+        
+        var lastError: Error?
+        for attempt in 0..<maxRetries {
+            do {
+                try context.save()
+                if attempt > 0 {
+                    Log.debug("SwiftData save succeeded on attempt \(attempt + 1)")
+                }
+                return
+            } catch {
+                lastError = error
+                if attempt < maxRetries - 1 {
+                    Log.warning("SwiftData save failed (attempt \(attempt + 1)/\(maxRetries)): \(error.localizedDescription). Retrying...")
+                    Thread.sleep(forTimeInterval: Double(delayMilliseconds) / 1000.0 * Double(attempt + 1))
+                }
+            }
         }
+        
+        Log.error("Failed to save model context after \(maxRetries) attempts: \(lastError?.localizedDescription ?? "unknown error")")
     }
 
     // MARK: - Crash Recovery Snapshot Timer

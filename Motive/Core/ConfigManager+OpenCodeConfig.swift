@@ -61,26 +61,28 @@ extension ConfigManager {
         let systemPrompt = promptBuilder.build()
         let permissionRules = permissionPolicy.toOpenCodePermissionRules()
 
-        // Primary agent
+        // Primary agent — use per-mode model override if configured
+        let agentModelOverride = agentModeModel.trimmingCharacters(in: .whitespaces)
         agents.append(OpenCodeConfigGenerator.AgentConfig(
             name: "agent",
             description: "Default agent - full tool access",
             prompt: systemPrompt,
             mode: "primary",
-            permission: permissionRules
+            permission: [:],
+            model: agentModelOverride.isEmpty ? nil : agentModelOverride
         ))
 
-        // Plan agent (read-only analysis)
+        // Plan agent (read-only analysis) — use per-mode model override if configured
         let planPrompt = promptBuilder.build(sessionType: .plan)
-        var readOnlyRules = permissionRules
-        readOnlyRules["edit"] = "deny"
-        readOnlyRules["bash"] = "ask"
+        var planRules: [String: Any] = ["edit": "deny"]
+        let planModelOverride = planModeModel.trimmingCharacters(in: .whitespaces)
         agents.append(OpenCodeConfigGenerator.AgentConfig(
             name: "plan",
             description: "Read-only analysis and planning",
             prompt: planPrompt,
             mode: "primary",
-            permission: readOnlyRules
+            permission: planRules,
+            model: planModelOverride.isEmpty ? nil : planModelOverride
         ))
 
         let inputs = OpenCodeConfigGenerator.Inputs(

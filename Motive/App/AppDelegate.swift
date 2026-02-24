@@ -11,9 +11,9 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var appState: AppState?
     private let hotkeyManager = CarbonHotkeyManager()
-    private var permissionCheckTask: Task<Void, Never>?
     private var hotkeyObserver: NSObjectProtocol?
     private var onboardingController: OnboardingWindowController?
+    private var onboardingObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon - we're a menu bar app
@@ -51,8 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         onboardingController = OnboardingWindowController()
         onboardingController?.show(configManager: appState.configManagerRef, appState: appState)
 
-        // Observe when onboarding completes
-        NotificationCenter.default.addObserver(
+        // Observe when onboarding completes - store reference for cleanup
+        onboardingObserver = NotificationCenter.default.addObserver(
             forName: .onboardingCompleted,
             object: nil,
             queue: .main
@@ -67,6 +67,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Called when onboarding is completed
     private func onboardingDidComplete() {
+        // Clean up the observer
+        if let observer = onboardingObserver {
+            NotificationCenter.default.removeObserver(observer)
+            onboardingObserver = nil
+        }
+        
         onboardingController?.close()
         onboardingController = nil
 
@@ -84,19 +90,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Observe hotkey changes from settings
         observeHotkeyChanges()
 
-        // Request accessibility permission
-        requestAccessibilityAndRegisterHotkey()
-
         // Command bar starts hidden — user invokes via hotkey
         appState?.hideCommandBar()
     }
 
+
+    // MARK: - URL Scheme Handler (motive://)
+    //
+    // Supported URLs:
+    //   motive://run?intent=<text>              → submit intent in current project
+    //   motive://run?intent=<text>&dir=<path>   → submit intent in given directory
+    //   motive://new                             → open CommandBar (same as hotkey)
+    //   motive://settings[?tab=<tab>]            → open Settings, optionally to a tab
+    //
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            handleMotiveURL(url)
+        }
+    }
+
+    private func handleMotiveURL(_ url: URL) {
+        guard url.scheme?.lowercased() == "motive" else { return }
+        let host = url.host?.lowercased() ?? ""
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let params = Dictionary(
+            uniqueKeysWithValues: (components?.queryItems ?? []).compactMap { item -> (String, String)? in
+                guard let value = item.value else { return nil }
+                return (item.name, value)
+            }
+        )
+
+        switch host {
+        case "run":
+            guard let intent = params["intent"], !intent.isEmpty else {
+                appState?.showCommandBar()
+                return
+            }
+            let dir = params["dir"]
+            Task { @MainActor [weak self] in
+                if let dir {
+                    self?.appState?.submitIntent(intent, workingDirectory: dir)
+                } else {
+                    self?.appState?.submitIntent(intent)
+                }
+                self?.appState?.showDrawer()
+            }
+
+        case "new":
+            appState?.showCommandBar()
+
+        case "settings":
+            let tabName = params["tab"] ?? "general"
+            let tab = SettingsTab(rawValue: tabName) ?? .general
+            SettingsWindowController.shared.show(tab: tab)
+
+        default:
+            // Unknown host — just bring up the CommandBar
+            appState?.showCommandBar()
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         appState?.stopScheduledTaskSystem()
+        appState?.cleanupObservers()
         unregisterHotkey()
-        permissionCheckTask?.cancel()
         if let observer = hotkeyObserver {
             NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = onboardingObserver {
+            NotificationCenter.default.removeObserver(observer)
+            onboardingObserver = nil
         }
 
         appState?.bridge.terminateServerImmediately()
@@ -141,10 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Skip during onboarding
         guard onboardingController == nil else { return }
 
-        // Check if permission was granted while app was in background
-        if AccessibilityHelper.hasPermission {
-            registerHotkey()
-        }
+        registerHotkey()
         appState?.ensureStatusBar()
     }
 
@@ -155,66 +215,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Dock icon click opens Settings (not the command bar)
         SettingsWindowController.shared.show()
         return true
-    }
-
-    // MARK: - Accessibility Permission
-
-    private func requestAccessibilityAndRegisterHotkey() {
-        if AccessibilityHelper.hasPermission {
-            // Already have permission
-            registerHotkey()
-            return
-        }
-
-        // Try to trigger system prompt (only works first time)
-        let prompted = AccessibilityHelper.requestPermission()
-
-        if !prompted {
-            // System didn't show prompt (already asked before), show our own guide
-            showAccessibilityGuide()
-        }
-
-        // Start polling for permission grant
-        startPermissionCheckTimer()
-    }
-
-    private func showAccessibilityGuide() {
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
-            let hotkeyStr = self?.appState?.configManagerRef.hotkey ?? "⌥Space"
-            let alert = NSAlert()
-            alert.messageText = "Enable Accessibility for Hotkey"
-            alert.informativeText = """
-            To use the \(hotkeyStr) hotkey, please enable Motive in:
-
-            System Settings → Privacy & Security → Accessibility
-
-            Find "Motive" in the list and turn it ON.
-
-            (If Motive is not in the list, you may need to click '+' and add it manually from Applications folder)
-            """
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: "Open System Settings")
-            alert.addButton(withTitle: "I'll do it later")
-
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                AccessibilityHelper.openAccessibilitySettings()
-            }
-        }
-    }
-
-    private func startPermissionCheckTimer() {
-        permissionCheckTask?.cancel()
-        permissionCheckTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                if AccessibilityHelper.hasPermission {
-                    self?.registerHotkey()
-                    break
-                }
-                try? await Task.sleep(for: .seconds(1))
-            }
-        }
     }
 
     // MARK: - Global Hotkey

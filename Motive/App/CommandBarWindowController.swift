@@ -26,6 +26,11 @@ final class CommandBarWindowController {
 
     /// When true, the window will not hide on resign key (used during delete confirmation)
     var suppressAutoHide: Bool = false
+    
+    /// Current window frame for positioning other windows
+    var windowFrame: NSRect? {
+        window.frame
+    }
 
     /// Tracks intended visibility. Using window.isVisible is unreliable during
     /// the 0.1s hide fade-out animation (still true until orderOut completes).
@@ -144,17 +149,21 @@ final class CommandBarWindowController {
         window.makeKey()
         window.invalidateShadow()
 
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.1
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            context.allowsImplicitAnimation = true
-            window.animator().alphaValue = 1
-            applyCenteredScale(1.0)
+        // Delay animation slightly to allow layout to settle
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.12
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                context.allowsImplicitAnimation = true
+                self.window.animator().alphaValue = 1
+                self.applyCenteredScale(1.0)
+            }
         }
 
         // 4. Focus input field after animation
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(50))
+            try? await Task.sleep(for: .milliseconds(150))
             self?.focusFirstResponder()
         }
 
@@ -272,7 +281,26 @@ final class CommandBarWindowController {
     }
 
     private func positionWindow(for anchor: ConfigManager.CommandBarPosition) {
-        guard let screen = screenForMouse() ?? window.screen ?? NSScreen.main else { return }
+        // Build list of fallback screens
+        var screens: [NSScreen] = []
+        if let mouseScreen = screenForMouse() {
+            screens.append(mouseScreen)
+        }
+        if let windowScreen = window.screen {
+            screens.append(windowScreen)
+        }
+        if let mainScreen = NSScreen.main {
+            screens.append(mainScreen)
+        }
+        screens.append(contentsOf: NSScreen.screens)
+        
+        guard let screen = screens.first(where: { $0.visibleFrame.width > 100 }) else {
+            Log.warning("No valid screen found for command bar positioning")
+            // Fallback to default position
+            window.setFrame(NSRect(x: 100, y: 100, width: Self.panelWidth, height: currentHeight), display: false)
+            return
+        }
+        
         let screenFrame = screen.visibleFrame // use visibleFrame to respect dock/menubar
 
         let height = max(96, currentHeight)

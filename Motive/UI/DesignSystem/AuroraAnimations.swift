@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 // MARK: - Aurora Animations
 
@@ -25,4 +26,35 @@ extension Animation {
     // Legacy compatibility
     static let velvetSpring = auroraSpring
     static let quickSpring = auroraSpringStiff
+}
+
+// MARK: - Accessibility Support
+
+/// Checks if the user has enabled Reduce Motion in System Preferences > Accessibility
+nonisolated func prefersReducedMotion() -> Bool {
+    NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+}
+
+/// Returns an animation that respects the user's Reduce Motion preference
+/// If Reduce Motion is enabled, returns an instant (zero-duration) animation
+extension Animation {
+    /// Returns the spring animation, or zero-duration if Reduce Motion is enabled
+    static var auroraSpringReduced: Animation {
+        prefersReducedMotion() ? .linear(duration: 0) : .auroraSpring
+    }
+    
+    /// Returns the fast animation, or zero-duration if Reduce Motion is enabled
+    static var auroraFastReduced: Animation {
+        prefersReducedMotion() ? .linear(duration: 0) : .auroraFast
+    }
+    
+    /// Returns the normal animation, or zero-duration if Reduce Motion is enabled
+    static var auroraNormalReduced: Animation {
+        prefersReducedMotion() ? .linear(duration: 0) : .auroraNormal
+    }
+    
+    /// Returns the slow animation, or zero-duration if Reduce Motion is enabled
+    static var auroraSlowReduced: Animation {
+        prefersReducedMotion() ? .linear(duration: 0) : .auroraSlow
+    }
 }

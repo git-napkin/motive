@@ -71,6 +71,23 @@ struct DrawerHeader: View {
                     agent: appState.currentSessionAgent
                 )
 
+                // Session Allow All toggle - icon only
+                Button {
+                    appState.sessionAllowsAll.toggle()
+                } label: {
+                    Image(systemName: appState.sessionAllowsAll ? "bolt.fill" : "bolt")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(appState.sessionAllowsAll ? Color.orange : Color.Aurora.textMuted)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(appState.sessionAllowsAll ? Color.orange.opacity(0.15) : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Auto-allow all permission requests for this session")
+
                 // New chat button
                 Button(action: {
                     appState.startNewEmptySession()
@@ -109,6 +126,13 @@ struct DrawerHeader: View {
                 .accessibilityLabel(L10n.Drawer.close)
             }
 
+            // Running session queue strip — shown when other sessions are active
+            if runningOtherCount > 0 {
+                SessionQueueStrip(sessions: appState.getRunningSessions().filter { $0.id != appState.currentSession?.id })
+                    .padding(.top, 6)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
             if let planPath = appState.currentPlanFilePath, !planPath.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "doc.text")
@@ -122,6 +146,16 @@ struct DrawerHeader: View {
                     Spacer()
                 }
                 .padding(.top, 6)
+            }
+
+            // Token usage bar — visible when context token data is available
+            if let ctxTokens = appState.currentContextTokens {
+                TokenUsageBarView(
+                    contextTokens: ctxTokens,
+                    outputTokens: appState.currentSessionOutputTokens,
+                    sessionCost: appState.currentSessionCost
+                )
+                .padding(.top, 4)
             }
         }
     }
@@ -195,5 +229,74 @@ private struct RunningCountBadge: View {
         .help("\(count) other session\(count == 1 ? "" : "s") running")
         .accessibilityLabel("\(count) other session\(count == 1 ? "" : "s") running. Tap to view.")
         .onAppear { isPulsing = true }
+    }
+}
+
+// MARK: - Session Queue Strip
+
+/// Horizontal scroll of session chips for concurrent running sessions.
+struct SessionQueueStrip: View {
+    let sessions: [Session]
+    @EnvironmentObject private var appState: AppState
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(sessions) { session in
+                    SessionQueueChip(session: session) {
+                        appState.switchToSession(session)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Individual chip for a running session in the queue strip.
+private struct SessionQueueChip: View {
+    let session: Session
+    let onTap: () -> Void
+
+    @State private var isPulsing = false
+    @State private var isHovering = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 4) {
+                // Pulsing live indicator
+                Circle()
+                    .fill(Color.Aurora.success)
+                    .frame(width: 5, height: 5)
+                    .opacity(isPulsing ? 0.35 : 1.0)
+                    .animation(
+                        .easeInOut(duration: 0.75).repeatForever(autoreverses: true),
+                        value: isPulsing
+                    )
+                    .onAppear { isPulsing = true }
+
+                Text(session.intent)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(isHovering ? Color.Aurora.textPrimary : Color.Aurora.textSecondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: 110)
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(isHovering
+                          ? Color.Aurora.success.opacity(0.15)
+                          : Color.Aurora.success.opacity(0.08))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.Aurora.success.opacity(0.25), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .animation(.auroraFast, value: isHovering)
+        .help(session.intent)
     }
 }

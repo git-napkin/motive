@@ -12,6 +12,8 @@ import SwiftUI
 
 @MainActor
 final class ConfigManager: ObservableObject, SkillConfigProvider {
+    static var shared: ConfigManager?
+    
     enum Provider: String, CaseIterable, Identifiable {
         // Primary providers (most common)
         case claude
@@ -567,4 +569,5 @@ final class ConfigManager: ObservableObject, SkillConfigProvider {
 
 extension Notification.Name {
     static let languageDidChange = Notification.Name("languageDidChange")
+    static let openPermissionSettings = Notification.Name("openPermissionSettings")
 }

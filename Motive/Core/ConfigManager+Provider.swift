@@ -65,6 +65,72 @@ extension ConfigManager {
         set { providerConfigStore.setModelName(newValue, for: provider) }
     }
 
+    /// User-defined models for current provider (comma-separated, stored in UserDefaults)
+    var userModels: String {
+        get {
+            let key = "userModels.\(provider.rawValue)"
+            return UserDefaults.standard.string(forKey: key) ?? ""
+        }
+        set {
+            let key = "userModels.\(provider.rawValue)"
+            UserDefaults.standard.set(newValue, forKey: key)
+        }
+    }
+
+    /// Parsed list of user-defined models (comma or newline separated)
+    var userModelsList: [String] {
+        userModels
+            .components(separatedBy: CharacterSet(charactersIn: ",\n"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// Default model override for the "agent" (build) mode — per-provider
+    var agentModeModel: String {
+        get {
+            let key = "agentModeModel.\(provider.rawValue)"
+            return UserDefaults.standard.string(forKey: key) ?? ""
+        }
+        set {
+            let key = "agentModeModel.\(provider.rawValue)"
+            if newValue.isEmpty {
+                UserDefaults.standard.removeObject(forKey: key)
+            } else {
+                UserDefaults.standard.set(newValue, forKey: key)
+            }
+        }
+    }
+
+    /// Default model override for the "plan" mode — per-provider
+    var planModeModel: String {
+        get {
+            let key = "planModeModel.\(provider.rawValue)"
+            return UserDefaults.standard.string(forKey: key) ?? ""
+        }
+        set {
+            let key = "planModeModel.\(provider.rawValue)"
+            if newValue.isEmpty {
+                UserDefaults.standard.removeObject(forKey: key)
+            } else {
+                UserDefaults.standard.set(newValue, forKey: key)
+            }
+        }
+    }
+
+    /// Returns the effective model for a given mode name (falls back to modelName)
+    func effectiveModel(forMode mode: String) -> String {
+        switch mode {
+        case "agent":
+            let override = agentModeModel.trimmingCharacters(in: .whitespaces)
+            return override.isEmpty ? modelName : override
+        case "plan":
+            let override = planModeModel.trimmingCharacters(in: .whitespaces)
+            return override.isEmpty ? modelName : override
+        default:
+            return modelName
+        }
+    }
+
     /// API Key for current provider (stored in Keychain per-provider)
     var apiKey: String {
         get {

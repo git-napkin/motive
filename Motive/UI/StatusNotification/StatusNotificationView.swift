@@ -88,9 +88,14 @@ struct StatusNotificationView: View {
         .padding(.trailing, AuroraSpacing.space6)
         .padding(.vertical, AuroraSpacing.space3)
         .background {
-            LiquidGlassBackground(mode: glassMode, cornerRadius: 100, showBorder: true)
+            ZStack {
+                RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
+                    .fill(.regularMaterial)
+                RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous)
+                    .fill(Color.black.opacity(0.15))
+            }
         }
-        .shadow(color: Color.black.opacity(isDark ? 0.3 : 0.15), radius: 20, x: 0, y: 10)
+        .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.xl, style: .continuous))
         .scaleEffect(showContent ? 1.0 : 0.95)
         .opacity(showContent ? 1.0 : 0)
         .onAppear {

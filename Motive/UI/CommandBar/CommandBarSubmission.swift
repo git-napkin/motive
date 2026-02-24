@@ -28,6 +28,8 @@ extension CommandBarView {
             submitProjectSelection()
         case .modes:
             submitModeSelection()
+        case .models:
+            submitModelSelection()
         case .completed:
             sendFollowUp()
         default:
@@ -57,6 +59,20 @@ extension CommandBarView {
         guard selectedModeIndex >= 0, selectedModeIndex < modes.count else { return }
         let modeName = modes[selectedModeIndex].value
         configManager.currentAgent = modeName
+        configManager.generateOpenCodeConfig()
+        appState.reconfigureBridge()
+        let wasFromSession = mode.isFromSession || !appState.messages.isEmpty
+        mode = wasFromSession ? .completed : .idle
+        inputText = ""
+    }
+
+    /// Handle submit in models mode — select model and apply immediately.
+    private func submitModelSelection() {
+        let models = availableModels
+        guard selectedModelIndex >= 0, selectedModelIndex < models.count else { return }
+        let modelName = models[selectedModelIndex]
+        configManager.modelName = modelName
+        // Regenerate config and reconfigure the bridge so the new model takes effect
         configManager.generateOpenCodeConfig()
         appState.reconfigureBridge()
         let wasFromSession = mode.isFromSession || !appState.messages.isEmpty
@@ -112,6 +128,10 @@ extension CommandBarView {
             showFileCompletion = false // Ensure file completion doesn't intercept keyboard
             mode = .history(fromSession: wasFromSession)
             selectedHistoryIndex = 0
+        case "models":
+            inputText = ""
+            mode = .models(fromSession: wasFromSession)
+            selectedModelIndex = availableModels.firstIndex(where: { $0 == configManager.modelName }) ?? 0
         case "settings":
             inputText = ""
             appState.hideCommandBar()

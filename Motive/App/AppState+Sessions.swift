@@ -244,8 +244,11 @@ extension AppState {
         transitionSessionStatus(.idle)
         menuBarState = .idle
         currentContextTokens = nil
+        currentSessionOutputTokens = 0
+        currentSessionCost = 0
         currentSessionAgent = configManager.currentAgent
         currentPlanFilePath = nil
+        sessionAllowsAll = false
         resetUsageDeduplication()
 
         bridgeTask?.cancel()
@@ -263,6 +266,8 @@ extension AppState {
         transitionSessionStatus(.idle)
         menuBarState = .idle
         currentContextTokens = nil
+        currentSessionOutputTokens = 0
+        currentSessionCost = 0
         currentSessionAgent = configManager.currentAgent
         currentPlanFilePath = nil
         resetUsageDeduplication()
@@ -424,8 +429,11 @@ extension AppState {
         menuBarState = .executing
         transitionSessionStatus(.running)
         currentContextTokens = nil
+        currentSessionOutputTokens = 0
+        currentSessionCost = 0
         currentSessionAgent = configManager.currentAgent
         currentPlanFilePath = nil
+        sessionAllowsAll = false
         resetUsageDeduplication()
 
         // NOTE: bridge session clearing is handled atomically by forceNewSession: true in submitIntent

@@ -25,7 +25,54 @@ extension CommandBarView {
         if inputText.isEmpty {
             return Array(historySessions.prefix(20))
         }
-        return historySessions.filter { $0.intent.localizedCaseInsensitiveContains(inputText) }.prefix(20).map(\.self)
+        let query = inputText.lowercased()
+        // Fuzzy score: consecutive bonus, word-boundary bonus, position penalty
+        typealias Scored = (session: Session, score: Int)
+        let scored: [Scored] = historySessions.compactMap { session in
+            guard let score = fuzzyScore(text: session.intent.lowercased(), query: query) else {
+                return nil
+            }
+            return (session, score)
+        }
+        return scored
+            .sorted { $0.score > $1.score }
+            .prefix(20)
+            .map(\.session)
+    }
+
+    /// Returns a fuzzy match score (higher = better) or nil if query chars are not a subsequence.
+    private func fuzzyScore(text: String, query: String) -> Int? {
+        var score = 0
+        var textIdx = text.startIndex
+        var queryIdx = query.startIndex
+        var lastMatchIdx: String.Index? = nil
+        var consecutive = 0
+
+        while queryIdx < query.endIndex {
+            guard textIdx < text.endIndex else { return nil }
+
+            if text[textIdx] == query[queryIdx] {
+                // Consecutive bonus
+                if let last = lastMatchIdx, text.index(after: last) == textIdx {
+                    consecutive += 1
+                    score += 5 * consecutive
+                } else {
+                    consecutive = 0
+                }
+                // Word boundary bonus
+                if textIdx == text.startIndex || text[text.index(before: textIdx)] == " " {
+                    score += 10
+                }
+                // Early-position bonus (penalise matches far into text)
+                let pos = text.distance(from: text.startIndex, to: textIdx)
+                score += max(0, 20 - pos)
+
+                lastMatchIdx = textIdx
+                queryIdx = query.index(after: queryIdx)
+            }
+            textIdx = text.index(after: textIdx)
+        }
+        return score
     }
 
     func loadHistorySessions() {

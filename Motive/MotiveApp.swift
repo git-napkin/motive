@@ -18,6 +18,7 @@ struct MotiveApp: App {
 
     init() {
         let configManager = ConfigManager()
+        ConfigManager.shared = configManager
         let container: ModelContainer
 
         // Use local-only storage in Application Support/Motive/
@@ -48,9 +49,18 @@ struct MotiveApp: App {
                 container = try ModelContainer(for: schema, configurations: [modelConfiguration])
             } catch {
                 // Show error dialog and exit gracefully instead of crashing
-                Self.showFatalErrorAndExit(error: error)
-                // This line won't execute but is needed for compiler
-                container = try! ModelContainer(for: schema, configurations: [modelConfiguration])
+                // Use a fallback in-memory container as last resort before exiting
+                let fallbackConfig = ModelConfiguration(
+                    schema: schema,
+                    cloudKitDatabase: .none
+                )
+                do {
+                    container = try ModelContainer(for: schema, configurations: [fallbackConfig])
+                } catch {
+                    Self.showFatalErrorAndExit(error: error)
+                    // This will never execute but keeps compiler happy
+                    fatalError("Unreachable")
+                }
             }
         }
 
@@ -68,7 +78,11 @@ struct MotiveApp: App {
 
     /// Get the SwiftData store URL in Application Support/Motive/
     private static func storeURL() -> URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            // Fallback to a safe default if application support directory is unavailable
+            let homeDir = FileManager.default.homeDirectoryForCurrentUser
+            return homeDir.appendingPathComponent("Library/Application Support/Motive/motive.store")
+        }
         return appSupport.appendingPathComponent("Motive/motive.store")
     }
 

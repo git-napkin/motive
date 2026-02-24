@@ -22,7 +22,6 @@ struct OnboardingView: View {
     enum OnboardingStep: Int, CaseIterable {
         case welcome
         case aiProvider
-        case accessibility
         case browserAutomation
         case trustLevel
         case complete
@@ -71,11 +70,6 @@ struct OnboardingView: View {
                         AuroraWelcomeStep(onContinue: { goToNext() })
                     case .aiProvider:
                         AuroraAIProviderStep(
-                            onContinue: { goToNext() },
-                            onSkip: { goToNext() }
-                        )
-                    case .accessibility:
-                        AuroraAccessibilityStep(
                             onContinue: { goToNext() },
                             onSkip: { goToNext() }
                         )
@@ -141,7 +135,7 @@ struct OnboardingSettingsRow<Content: View>: View {
 struct AuroraOnboardingProgress: View {
     let currentStep: OnboardingView.OnboardingStep
 
-    private let steps: [OnboardingView.OnboardingStep] = [.aiProvider, .accessibility, .browserAutomation, .trustLevel]
+    private let steps: [OnboardingView.OnboardingStep] = [.aiProvider, .browserAutomation, .trustLevel]
 
     var body: some View {
         HStack(spacing: AuroraSpacing.space2) {

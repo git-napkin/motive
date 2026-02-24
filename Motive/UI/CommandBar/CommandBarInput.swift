@@ -112,20 +112,26 @@ extension CommandBarView {
             .accessibilityLabel("Retry")
             .accessibilityHint("Clears the error and allows you to try again")
         } else {
-            let canSend = !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let isCommandInput = inputText.hasPrefix("/")
-            if canSend, !isCommandInput {
-                Button(action: handleSubmit) {
-                    Image(systemName: "return")
-                        .font(.Aurora.bodySmall.weight(.medium))
-                        .foregroundColor(Color.Aurora.microAccent)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Submit")
-                .accessibilityHint("Sends your command to the AI assistant")
-            } else {
-                EmptyView()
-            }
+            commandBarSendButton
         }
+    }
+
+    @ViewBuilder
+    private var commandBarSendButton: some View {
+        let canSend = !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let isCommandInput = inputText.hasPrefix("/")
+        let showSend = canSend && !isCommandInput
+
+        Button(action: handleSubmit) {
+            Image(systemName: "return")
+                .font(.Aurora.bodySmall.weight(.medium))
+                .foregroundColor(Color.Aurora.microAccent)
+                .opacity(showSend ? 1 : 0)
+        }
+        .buttonStyle(.plain)
+        .disabled(!showSend)
+        .animation(.auroraFast, value: showSend)
+        .accessibilityLabel("Submit")
+        .accessibilityHint("Sends your command to the AI assistant")
     }
 }

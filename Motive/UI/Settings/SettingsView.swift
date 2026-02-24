@@ -155,23 +155,47 @@ private struct SettingsDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AuroraSpacing.space4) {
-            HStack(alignment: .center, spacing: AuroraSpacing.space2 + 2) {
-                Image(systemName: tab.icon)
-                    .font(.Aurora.headline.weight(.semibold))
-                    .foregroundColor(Color.Aurora.microAccent)
-                Text(tab.title)
-                    .font(.Aurora.title2)
-                    .foregroundColor(Color.Aurora.textPrimary)
-            }
-            .padding(.horizontal, AuroraSpacing.space7)
-            .padding(.top, AuroraSpacing.space6)
-
-            Text(tab.subtitle)
-                .font(.Aurora.bodySmall)
-                .foregroundColor(Color.Aurora.textSecondary)
+            // Header — mirrors command bar section header style:
+            // icon in microAccent amber + bold title + muted subtitle below
+            VStack(alignment: .leading, spacing: AuroraSpacing.space1 + 2) {
+                HStack(alignment: .center, spacing: AuroraSpacing.space2 + 2) {
+                    // Icon badge — same amber used in command bar mode indicators
+                    ZStack {
+                        RoundedRectangle(cornerRadius: AuroraRadius.xs, style: .continuous)
+                            .fill(Color.Aurora.microAccent.opacity(0.12))
+                            .frame(width: 26, height: 26)
+                        Image(systemName: tab.icon)
+                            .font(.Aurora.headline.weight(.semibold))
+                            .foregroundColor(Color.Aurora.microAccent)
+                    }
+                    Text(tab.title)
+                        .font(.Aurora.title2)
+                        .foregroundColor(Color.Aurora.textPrimary)
+                }
                 .padding(.horizontal, AuroraSpacing.space7)
+                .padding(.top, AuroraSpacing.space6)
 
-            Divider()
+                Text(tab.subtitle)
+                    .font(.Aurora.bodySmall)
+                    .foregroundColor(Color.Aurora.textSecondary)
+                    .padding(.horizontal, AuroraSpacing.space7)
+                    .padding(.bottom, AuroraSpacing.space1)
+            }
+
+            // Divider matching command bar's glass separator style
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.Aurora.border.opacity(0),
+                            Color.Aurora.border.opacity(0.5),
+                            Color.Aurora.border.opacity(0),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: SettingsUIStyle.borderWidth)
                 .padding(.horizontal, AuroraSpacing.space7)
 
             Group {
@@ -218,15 +242,16 @@ struct SettingSection<Content: View>: View {
                 content
             }
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
                     .fill(Color.Aurora.surface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
                     .stroke(SettingsUIStyle.borderColor, lineWidth: SettingsUIStyle.borderWidth)
             )
+            // Subtle amber micro-accent inner glow matching command bar surface style
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
                     .stroke(Color.Aurora.microAccent.opacity(0.07), lineWidth: 0.5)
             )
         }
@@ -304,6 +329,8 @@ struct CollapsibleSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header (clickable)
             Button {
+                // Safe to animate here: only affects isExpanded @State which drives
+                // opacity/move transitions on already-bounded views, not layout extrema.
                 withAnimation(.auroraFast) {
                     isExpanded.toggle()
                 }
@@ -327,6 +354,7 @@ struct CollapsibleSection<Content: View>: View {
                         .font(.Aurora.micro.weight(.semibold))
                         .foregroundColor(Color.Aurora.textMuted)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .animation(.auroraFast, value: isExpanded)
                 }
                 .padding(.horizontal, 4)
                 .padding(.vertical, 8)
@@ -340,11 +368,11 @@ struct CollapsibleSection<Content: View>: View {
                     content
                 }
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
                         .fill(Color.Aurora.surface)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
                         .stroke(SettingsUIStyle.borderColor, lineWidth: SettingsUIStyle.borderWidth)
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))

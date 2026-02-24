@@ -16,7 +16,7 @@ struct ModelConfigView: View {
     @FocusState private var focusedField: Field?
 
     enum Field: Hashable {
-        case baseURL, apiKey, modelName
+        case baseURL, apiKey, agentModel, planModel
     }
 
     var body: some View {
@@ -131,15 +131,53 @@ struct ModelConfigView: View {
                     .settingsInputField(cornerRadius: 6)
                 }
 
-                // Model Name
-                SettingRow(L10n.Settings.model, showDivider: false) {
-                    TextField(modelPlaceholder, text: $configManager.modelName)
+                // Models – comma-separated list for the /models picker.
+                // The active model is selected via /models; use Mode Defaults below for per-mode overrides.
+                SettingRow(
+                    "Models",
+                    description: "Comma-separated models for the /models picker",
+                    showDivider: false
+                ) {
+                    TextField("e.g. gpt-5.1-codex, gpt-5.2, gpt-4o", text: $configManager.userModels)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13, design: .monospaced))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .frame(width: 220)
                         .settingsInputField(cornerRadius: 6)
+                }
+            }
+
+            // Per-Mode Default Models
+            SettingSection("Mode Defaults") {
+                SettingRow(
+                    "Agent / Build",
+                    description: "Default model for agent mode (leave blank to use first model in list)",
+                    showDivider: true
+                ) {
+                    ModeModelPicker(
+                        value: Binding(
+                            get: { configManager.agentModeModel },
+                            set: { configManager.agentModeModel = $0 }
+                        ),
+                        models: configManager.userModelsList,
+                        placeholder: configManager.modelName.isEmpty ? modelPlaceholder : configManager.modelName
+                    )
+                }
+
+                SettingRow(
+                    "Plan / Analyze",
+                    description: "Default model for plan mode (leave blank to use first model in list)",
+                    showDivider: false
+                ) {
+                    ModeModelPicker(
+                        value: Binding(
+                            get: { configManager.planModeModel },
+                            set: { configManager.planModeModel = $0 }
+                        ),
+                        models: configManager.userModelsList,
+                        placeholder: configManager.modelName.isEmpty ? modelPlaceholder : configManager.modelName
+                    )
                 }
             }
 
@@ -160,17 +198,25 @@ struct ModelConfigView: View {
                 }
 
                 Button(action: saveAndRestart) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                         Text(L10n.Settings.saveRestart)
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Color.Aurora.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(.vertical, 9)
+                    .background(
+                        // Amber microAccent gradient matching command bar CTAs
+                        LinearGradient(
+                            colors: [Color.Aurora.primary, Color.Aurora.primary.opacity(0.85)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous))
+                    .shadow(color: Color.Aurora.primary.opacity(0.3), radius: 6, y: 2)
                 }
                 .buttonStyle(.plain)
             }
@@ -188,20 +234,30 @@ struct ModelConfigView: View {
                         provider: provider,
                         isSelected: configManager.provider == provider
                     ) {
-                        withAnimation(.auroraFast) {
-                            configManager.provider = provider
-                        }
+                        // Direct assignment — no withAnimation wrapper here.
+                        //
+                        // CRASH FIX (v0.11.3): Wrapping this in withAnimation(.auroraFast)
+                        // caused SwiftUI to queue layout constraint mutations for views that
+                        // appear/disappear based on the new provider value (API key field,
+                        // base URL label, warning badge). When those updates landed during
+                        // an in-flight CA::Transaction inside NSHostingView, AppKit threw
+                        // an EXC_BREAKPOINT via +[NSApplication _crashOnException:].
+                        //
+                        // The card's visual selection state animates correctly through its
+                        // own @State isHovering and the .animation modifier on the body,
+                        // so no animation is lost from the user's perspective.
+                        configManager.provider = provider
                     }
                 }
             }
             .padding(12)
         }
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
                 .fill(Color.Aurora.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: AuroraRadius.md, style: .continuous)
                 .stroke(SettingsUIStyle.borderColor, lineWidth: SettingsUIStyle.borderWidth)
         )
     }
@@ -287,19 +343,34 @@ private struct CompactProviderCard: View {
             .frame(width: 70)
             .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
                     .fill(backgroundColor)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: AuroraRadius.sm, style: .continuous)
                     .stroke(
                         isSelected ? Color.Aurora.primary.opacity(0.5) : Color.clear,
                         lineWidth: SettingsUIStyle.borderWidth
                     )
             )
+            // Amber left-edge accent bar matching command bar selection indicator
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(Color.Aurora.microAccent)
+                        .frame(width: 2.5)
+                        .padding(.vertical, 10)
+                        .padding(.leading, 2)
+                        .transition(.opacity.combined(with: .scale(scale: 0.7, anchor: .leading)))
+                }
+            }
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
+        // Animate hover and selection state changes — safe because these only
+        // affect colors/fills on this isolated card, not layout-affecting state.
+        .animation(.auroraFast, value: isHovering)
+        .animation(.auroraFast, value: isSelected)
     }
 
     @ViewBuilder
@@ -322,6 +393,59 @@ private struct CompactProviderCard: View {
             return isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03)
         }
         return Color.clear
+    }
+}
+
+// MARK: - Mode Model Picker
+
+/// Compact dropdown/text field for selecting a per-mode model override.
+/// Shows a menu of the user's model list, plus a "None (use Active Model)" option.
+private struct ModeModelPicker: View {
+    @Binding var value: String
+    let models: [String]
+    let placeholder: String
+
+    @State private var showMenu = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField(placeholder, text: $value)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, design: .monospaced))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(width: 180)
+                .settingsInputField(cornerRadius: 6)
+
+            if !models.isEmpty {
+                Menu {
+                    Button("None (use default model)") {
+                        value = ""
+                    }
+                    Divider()
+                    ForEach(models, id: \.self) { model in
+                        Button(model) {
+                            value = model
+                        }
+                    }
+                } label: {
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color.Aurora.textMuted)
+                        .frame(width: 28, height: 32)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.Aurora.surface)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(SettingsUIStyle.borderColor, lineWidth: SettingsUIStyle.borderWidth)
+                        )
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+        }
     }
 }
 
@@ -425,7 +549,7 @@ extension ConfigManager.Provider {
         }
     }
 
-    /// SF Symbol fallback (unused — all providers have custom icons)
+    /// SF Symbol fallback (unused – all providers have custom icons)
     var sfSymbol: String {
         ""
     }

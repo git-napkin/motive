@@ -104,6 +104,8 @@ struct TransientReasoningBubble: View {
     let text: String
     @Environment(\.colorScheme) private var colorScheme
     @State private var previewScrollTask: Task<Void, Never>?
+    /// Tap the header to expand / collapse the full reasoning text.
+    @State private var isExpanded = false
 
     private var isDark: Bool {
         colorScheme == .dark
@@ -116,49 +118,78 @@ struct TransientReasoningBubble: View {
 
         HStack {
             VStack(alignment: .leading, spacing: AuroraSpacing.space2) {
-                HStack(spacing: AuroraSpacing.space2) {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color.Aurora.textSecondary)
-                    Text(L10n.Drawer.thinking)
-                        .font(.Aurora.micro.weight(.semibold))
-                        .foregroundColor(Color.Aurora.textSecondary)
-                        .auroraShimmer(isDark: isDark)
-                    if lineCount > 0 {
-                        Text("\(lineCount) lines")
-                            .font(.Aurora.micro)
+                // Tappable header row — expands / collapses the bubble
+                Button(action: {
+                    withAnimation(.auroraSpring) { isExpanded.toggle() }
+                }) {
+                    HStack(spacing: AuroraSpacing.space2) {
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color.Aurora.textSecondary)
+                        Text(L10n.Drawer.thinking)
+                            .font(.Aurora.micro.weight(.semibold))
+                            .foregroundColor(Color.Aurora.textSecondary)
+                            .auroraShimmer(isDark: isDark)
+                        if lineCount > 0 {
+                            Text("\(lineCount) lines")
+                                .font(.Aurora.micro)
+                                .foregroundColor(Color.Aurora.textMuted)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
                             .foregroundColor(Color.Aurora.textMuted)
+                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
                     }
-                    Spacer()
                 }
+                .buttonStyle(.plain)
 
                 if !trimmed.isEmpty {
-                    ScrollViewReader { proxy in
-                        ScrollView(.vertical, showsIndicators: false) {
-                            Text(trimmed)
-                                .font(.Aurora.caption)
-                                .foregroundColor(Color.Aurora.textSecondary.opacity(isDark ? 0.78 : 0.72))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .id("reasoning-preview-anchor")
-                                .textSelection(.enabled)
+                    if isExpanded {
+                        // Full expanded view — all lines, scrollable
+                        ScrollViewReader { proxy in
+                            ScrollView(.vertical, showsIndicators: false) {
+                                Text(trimmed)
+                                    .font(.Aurora.caption)
+                                    .foregroundColor(Color.Aurora.textSecondary.opacity(isDark ? 0.78 : 0.72))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .id("reasoning-full-anchor")
+                                    .textSelection(.enabled)
+                            }
+                            .frame(maxHeight: 320)
+                            .onAppear {
+                                proxy.scrollTo("reasoning-full-anchor", anchor: .bottom)
+                            }
                         }
-                        .frame(maxHeight: 58) // ~3 lines preview window
-                        .mask(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .black, location: 0.0),
-                                    .init(color: .black, location: 0.74),
-                                    .init(color: .clear, location: 1.0),
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
+                    } else {
+                        // Compact streaming preview — 3 lines with fade
+                        ScrollViewReader { proxy in
+                            ScrollView(.vertical, showsIndicators: false) {
+                                Text(trimmed)
+                                    .font(.Aurora.caption)
+                                    .foregroundColor(Color.Aurora.textSecondary.opacity(isDark ? 0.78 : 0.72))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .id("reasoning-preview-anchor")
+                                    .textSelection(.enabled)
+                            }
+                            .frame(maxHeight: 58) // ~3 lines preview window
+                            .mask(
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .black, location: 0.0),
+                                        .init(color: .black, location: 0.74),
+                                        .init(color: .clear, location: 1.0),
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
                             )
-                        )
-                        .onAppear {
-                            scrollPreviewToBottom(proxy: proxy, animated: false)
-                        }
-                        .onChange(of: text) { _, _ in
-                            schedulePreviewScroll(proxy: proxy)
+                            .onAppear {
+                                scrollPreviewToBottom(proxy: proxy, animated: false)
+                            }
+                            .onChange(of: text) { _, _ in
+                                schedulePreviewScroll(proxy: proxy)
+                            }
                         }
                     }
                 }
@@ -186,7 +217,7 @@ struct TransientReasoningBubble: View {
 
     private func scrollPreviewToBottom(proxy: ScrollViewProxy, animated: Bool = true) {
         if animated {
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(.auroraFast) {
                 proxy.scrollTo("reasoning-preview-anchor", anchor: .bottom)
             }
         } else {

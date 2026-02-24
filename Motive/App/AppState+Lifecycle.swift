@@ -63,6 +63,7 @@ extension AppState {
         SettingsWindowController.shared.configure(configManager: configManager, appState: self)
         startScheduledTaskSystemIfNeeded()
         updateStatusBar()
+        observePermissionSettingsNotification()
     }
 
     func ensureStatusBar() {
@@ -109,7 +110,25 @@ extension AppState {
             .environmentObject(configManager)
             .environment(\.modelContext, modelContext)
         commandBarController = CommandBarWindowController(rootView: rootView, configManager: configManager)
-        // No pre-warm needed - window uses defer:true and alpha:0
-        // First show will be slightly slower but avoids visual glitches
     }
+
+    private func observePermissionSettingsNotification() {
+        permissionSettingsObserver = NotificationCenter.default.addObserver(
+            forName: .openPermissionSettings,
+            object: nil,
+            queue: .main
+        ) { _ in
+            SettingsWindowController.shared.show(tab: .permissions)
+        }
+    }
+
+    /// Clean up notification observers - call when stopping the app
+    func cleanupObservers() {
+        if let observer = permissionSettingsObserver {
+            NotificationCenter.default.removeObserver(observer)
+            permissionSettingsObserver = nil
+        }
+    }
+
+
 }

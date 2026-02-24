@@ -18,6 +18,7 @@ enum CommandBarMode: Equatable {
     case history(fromSession: Bool) // Showing /history list
     case projects(fromSession: Bool) // Showing /project list
     case modes(fromSession: Bool) // Showing /mode selection list
+    case models(fromSession: Bool) // Showing /models selection list
     case running // Task is running
     case completed // Task completed, showing summary
     case error(String) // Error occurred
@@ -51,11 +52,17 @@ enum CommandBarMode: Equatable {
         return false
     }
 
+    var isModels: Bool {
+        if case .models = self { return true }
+        return false
+    }
+
     /// Whether this mode was triggered from a session state (completed/running)
     var isFromSession: Bool {
         switch self {
         case let .command(fromSession), let .history(fromSession),
-             let .projects(fromSession), let .modes(fromSession):
+             let .projects(fromSession), let .modes(fromSession),
+             let .models(fromSession):
             fromSession
         default:
             false
@@ -68,18 +75,19 @@ enum CommandBarMode: Equatable {
         case .idle, .input:
             100 // input + footer + padding
         case let .command(fromSession):
-            // Same height as history for consistency
-            fromSession ? 450 : 400 // status(50) + input + footer + list(280) + padding
+            fromSession ? 450 : 400
         case let .history(fromSession):
-            fromSession ? 450 : 400 // status(50) + input + footer + list(280) + padding
+            fromSession ? 450 : 400
         case let .projects(fromSession):
-            fromSession ? 450 : 400 // status(50) + input + footer + list(280) + padding
+            fromSession ? 450 : 400
         case let .modes(fromSession):
-            fromSession ? 280 : 230 // Compact: only 2 items
+            fromSession ? 280 : 230
+        case let .models(fromSession):
+            fromSession ? 450 : 400
         case .running, .completed, .error:
-            160 // status + input + footer + padding
+            160
         case .chat:
-            520 // Full conversation panel
+            520
         }
     }
 
@@ -91,6 +99,7 @@ enum CommandBarMode: Equatable {
         case .history: "history"
         case .projects: "projects"
         case .modes: "modes"
+        case .models: "models"
         case .running: "running"
         case .completed: "completed"
         case .error: "error"
@@ -111,6 +120,7 @@ struct CommandDefinition: Identifiable {
     static let allCommands: [CommandDefinition] = [
         CommandDefinition(id: "mode", name: "mode", shortcut: "m", icon: "arrow.triangle.2.circlepath", description: "Switch between agent and plan modes"),
         CommandDefinition(id: "project", name: "project", shortcut: "p", icon: "folder", description: "Switch project directory"),
+        CommandDefinition(id: "models", name: "models", shortcut: nil, icon: "cpu", description: "Select AI model for current provider"),
         CommandDefinition(id: "history", name: "history", shortcut: "h", icon: "clock.arrow.circlepath", description: "View session history"),
         CommandDefinition(id: "settings", name: "settings", shortcut: "s", icon: "gearshape", description: "Open settings"),
         CommandDefinition(id: "new", name: "new", shortcut: "n", icon: "plus.circle", description: "Start new session"),
@@ -140,6 +150,7 @@ struct CommandBarView: View {
     @State var historySessions: [Session] = []
     @State var selectedProjectIndex: Int = 0
     @State var selectedModeIndex: Int = 0
+    @State var selectedModelIndex: Int = 0
     @State var showErrorDetailsPopover: Bool = false
     @State var showDeleteConfirmation: Bool = false
     @State var deleteCandidateIndex: Int? = nil
@@ -158,23 +169,18 @@ struct CommandBarView: View {
             .onAppear(perform: handleOnAppear)
             .onChange(of: appState.commandBarResetTrigger) { _, _ in
                 recenterAndFocus()
-                // Force-sync: recenterAndFocus resets mode/state, but if
-                // currentHeight evaluates to the same value as before, the
-                // onChange(of: currentHeight) won't fire. Explicitly push
-                // the height to the window to cover that edge case.
-                appState.updateCommandBarHeight(to: currentHeight)
+                let targetHeight = currentHeight
+                DispatchQueue.main.async {
+                    appState.updateCommandBarHeight(to: targetHeight)
+                }
             }
             .onChange(of: inputText) { _, newValue in handleInputChange(newValue) }
             .onChange(of: mode) { oldMode, newMode in handleModeChange(from: oldMode, to: newMode) }
             .onChange(of: appState.sessionStatus) { _, newStatus in handleSessionStatusChange(newStatus) }
-            // SINGLE source of truth for window height: whenever the SwiftUI-computed
-            // height changes (due to mode, file completion, input, etc.), automatically
-            // sync the NSWindow frame. This replaces all manual updateCommandBarHeight calls.
-            // `initial: true` ensures the first render also syncs the height, covering
-            // cases where the cached onChange value matches currentHeight but the window
-            // frame has drifted (e.g., after hide/show cycles with stale mode).
             .onChange(of: currentHeight, initial: true) { _, newHeight in
-                appState.updateCommandBarHeight(to: newHeight)
+                DispatchQueue.main.async {
+                    appState.updateCommandBarHeight(to: newHeight)
+                }
             }
             .onKeyPress(.escape, action: { handleEscape(); return .handled })
             .onKeyPress(.upArrow, action: { handleUpArrow(); return .handled })

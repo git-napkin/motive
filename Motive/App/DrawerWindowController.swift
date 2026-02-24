@@ -87,8 +87,26 @@ final class DrawerWindowController {
     }
 
     private func positionBelowStatusBar() {
-        let screen = screenForAnchor() ?? window.screen ?? NSScreen.main
-        guard let screen else { return }
+        // Build list of fallback screens
+        var screens: [NSScreen] = []
+        if let anchorScreen = screenForAnchor() {
+            screens.append(anchorScreen)
+        }
+        if let windowScreen = window.screen {
+            screens.append(windowScreen)
+        }
+        if let mainScreen = NSScreen.main {
+            screens.append(mainScreen)
+        }
+        screens.append(contentsOf: NSScreen.screens)
+        
+        guard let screen = screens.first(where: { $0.visibleFrame.width > 100 }) else {
+            Log.warning("No valid screen found for drawer positioning")
+            // Fallback to default position
+            window.setFrameOrigin(NSPoint(x: 100, y: 100))
+            return
+        }
+        
         let width = window.frame.width
         let height = window.frame.height
 

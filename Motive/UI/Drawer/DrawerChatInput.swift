@@ -20,9 +20,29 @@ struct DrawerChatInput: View {
         colorScheme == .dark
     }
 
-    var body: some View {
-        let isRunning = appState.sessionStatus == .running
+    private var isRunning: Bool {
+        appState.sessionStatus == .running
+    }
 
+    private var hasInput: Bool {
+        !inputText.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    @ViewBuilder
+    private var sendButtonView: some View {
+        Button(action: onSubmit) {
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.Aurora.title1.weight(.medium))
+                .foregroundColor(hasInput ? Color.Aurora.microAccent : Color.Aurora.textMuted)
+                .opacity(hasInput ? 1 : 0.3)
+        }
+        .buttonStyle(.plain)
+        .disabled(!hasInput)
+        .animation(.auroraFast, value: hasInput)
+        .accessibilityLabel(L10n.CommandBar.submit)
+    }
+
+    var body: some View {
         VStack(spacing: 0) {
             // Project directory + agent mode (compact top meta row)
             HStack(spacing: AuroraSpacing.space2) {
@@ -93,15 +113,8 @@ struct DrawerChatInput: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(L10n.Drawer.stop)
                     } else {
-                        // Send button when not running
-                        Button(action: onSubmit) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.Aurora.title1.weight(.medium))
-                                .foregroundColor(inputText.isEmpty ? Color.Aurora.textMuted : Color.Aurora.microAccent)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .accessibilityLabel(L10n.CommandBar.submit)
+                        // Send button when not running - fades in/out based on input
+                        sendButtonView
                     }
                 }
                 .padding(.horizontal, AuroraSpacing.space4)

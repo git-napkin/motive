@@ -38,6 +38,10 @@ extension CommandBarView {
             if selectedModeIndex > 0 {
                 selectedModeIndex -= 1
             }
+        } else if mode.isModels {
+            if selectedModelIndex > 0 {
+                selectedModelIndex -= 1
+            }
         }
     }
 
@@ -71,6 +75,11 @@ extension CommandBarView {
             let maxIndex = max(availableModeChoices.count - 1, 0)
             if selectedModeIndex < maxIndex {
                 selectedModeIndex += 1
+            }
+        } else if mode.isModels {
+            let maxIndex = max(availableModels.count - 1, 0)
+            if selectedModelIndex < maxIndex {
+                selectedModelIndex += 1
             }
         }
     }
@@ -114,18 +123,22 @@ extension CommandBarView {
             return
         }
 
-        if mode.isCommand || mode.isHistory || mode.isProjects || mode.isModes {
-            // Return to previous mode (session or idle)
+        // In any menu mode (command list, history, projects, modes, models), ESC goes back to idle
+        if mode.isCommand || mode.isHistory || mode.isProjects || mode.isModes || mode.isModels {
+            // Return to idle/input state (What should I do? prompt)
             if appState.sessionStatus == .running {
                 mode = .running
-            } else if mode.isFromSession || !appState.messages.isEmpty {
+            } else if !appState.messages.isEmpty {
                 mode = .completed
             } else {
                 mode = .idle
             }
             inputText = ""
+        } else if mode == .idle || mode == .input {
+            // ESC in idle/input mode = hide CommandBar (task continues running in background)
+            appState.hideCommandBar()
         } else {
-            // ESC = hide CommandBar (task continues running in background)
+            // For any other mode (running, completed, error, etc), just hide the command bar
             appState.hideCommandBar()
         }
     }

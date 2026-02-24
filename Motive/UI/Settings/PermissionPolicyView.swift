@@ -398,7 +398,7 @@ private struct AddRuleView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.Settings.pattern)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color.Aurora.textSecondary)
 
                 TextField("e.g., *.ts, git *, /System/**", text: $pattern)
                     .textFieldStyle(.roundedBorder)
@@ -407,7 +407,7 @@ private struct AddRuleView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.Settings.action)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color.Aurora.textSecondary)
 
                 Picker(L10n.Settings.action, selection: $action) {
                     ForEach(PermissionAction.allCases, id: \.self) { action in
@@ -420,7 +420,7 @@ private struct AddRuleView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.Settings.descriptionOptional)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color.Aurora.textSecondary)
 
                 TextField(L10n.Settings.whatRuleDoes, text: $description)
                     .textFieldStyle(.roundedBorder)

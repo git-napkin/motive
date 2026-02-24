@@ -182,6 +182,7 @@ actor OpenCodeAPIClient {
     /// Build OpenCode model payload while preserving provider-specific semantics.
     /// For OpenRouter, model strings often include "/" (e.g. "anthropic/claude-sonnet-4"),
     /// but they must remain the `modelID` under provider `openrouter`.
+    /// For other providers, only split on "/" if the first part matches a known provider ID.
     static func makeModelPayload(
         model: String?,
         modelProviderID: String?
@@ -202,14 +203,22 @@ actor OpenCodeAPIClient {
             ]
         }
 
+        // Only split on "/" if the provider is explicitly set and the first part
+        // matches a known provider ID. This prevents incorrectly splitting model names
+        // like "qwen/qwen3-coder-30b" when the provider is something else.
         let components = trimmedModel.split(separator: "/", maxSplits: 1)
-        if components.count == 2 {
-            return [
-                "providerID": String(components[0]),
-                "modelID": String(components[1]),
-            ]
+        if components.count == 2, let providerID = trimmedProviderID, !providerID.isEmpty {
+            let firstComponent = String(components[0]).lowercased()
+            // Only split if the first component matches the configured provider
+            if firstComponent == providerID {
+                return [
+                    "providerID": providerID,
+                    "modelID": String(components[1]),
+                ]
+            }
         }
 
+        // If we have a provider, use it; otherwise return nil
         guard let trimmedProviderID, !trimmedProviderID.isEmpty else { return nil }
         return [
             "providerID": trimmedProviderID,
