@@ -29,11 +29,22 @@ final class DrawerWindowController {
     var suppressAutoHide: Bool = false
 
     init(rootView: some View) {
+        // Use a fixed-size container NSView to host SwiftUI, avoiding dynamic constraint updates
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: Layout.width, height: Layout.height))
+        containerView.wantsLayer = true
+        containerView.layerContentsRedrawPolicy = .onSetNeedsDisplay
+        
         let hostingView = NSHostingView(rootView: AnyView(rootView))
-        hostingView.safeAreaRegions = []
-        hostingView.wantsLayer = true
-        hostingView.layerContentsRedrawPolicy = .onSetNeedsDisplay
-        hostingView.layer?.masksToBounds = false
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(hostingView)
+        
+        // Pin hosting view to container edges with fixed constraints
+        NSLayoutConstraint.activate([
+            hostingView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            hostingView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
+        ])
 
         window = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: Layout.width, height: Layout.height),
@@ -41,7 +52,7 @@ final class DrawerWindowController {
             backing: .buffered,
             defer: false
         )
-        window.contentView = hostingView
+        window.contentView = containerView
         window.applyFloatingPanelStyle()
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = true

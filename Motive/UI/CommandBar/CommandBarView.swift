@@ -169,14 +169,25 @@ struct CommandBarView: View {
             .onAppear(perform: handleOnAppear)
             .onChange(of: appState.commandBarResetTrigger) { _, _ in
                 recenterAndFocus()
-                let targetHeight = currentHeight
-                DispatchQueue.main.async {
-                    appState.updateCommandBarHeight(to: targetHeight)
+                DispatchQueue.main.async { [self] in
+                    appState.updateCommandBarHeight(to: currentHeight)
                 }
             }
-            .onChange(of: inputText) { _, newValue in handleInputChange(newValue) }
-            .onChange(of: mode) { oldMode, newMode in handleModeChange(from: oldMode, to: newMode) }
-            .onChange(of: appState.sessionStatus) { _, newStatus in handleSessionStatusChange(newStatus) }
+            .onChange(of: inputText) { _, newValue in
+                DispatchQueue.main.async {
+                    handleInputChange(newValue)
+                }
+            }
+            .onChange(of: mode) { oldMode, newMode in
+                DispatchQueue.main.async {
+                    handleModeChange(from: oldMode, to: newMode)
+                }
+            }
+            .onChange(of: appState.sessionStatus) { _, newStatus in
+                DispatchQueue.main.async {
+                    handleSessionStatusChange(newStatus)
+                }
+            }
             .onChange(of: currentHeight, initial: true) { _, newHeight in
                 DispatchQueue.main.async {
                     appState.updateCommandBarHeight(to: newHeight)
@@ -187,12 +198,16 @@ struct CommandBarView: View {
             .onKeyPress(.downArrow, action: { handleDownArrow(); return .handled })
             .onKeyPress(.tab, action: { handleTab(); return .handled })
             .onChange(of: showDeleteConfirmation) { _, shouldShow in
-                if shouldShow {
-                    showDeleteAlert()
+                DispatchQueue.main.async {
+                    if shouldShow {
+                        showDeleteAlert()
+                    }
                 }
             }
             .onChange(of: appState.sessionListRefreshTrigger) { _, _ in
-                refreshHistorySessions(preferredIndex: selectedHistoryIndex)
+                DispatchQueue.main.async {
+                    refreshHistorySessions(preferredIndex: selectedHistoryIndex)
+                }
             }
     }
 }

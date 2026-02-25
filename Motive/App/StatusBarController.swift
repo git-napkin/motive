@@ -143,7 +143,7 @@ final class StatusBarController {
     // MARK: - Notification Popup
 
     private func showNotification(type: StatusNotificationType) {
-        // Dismiss existing
+        // Dismiss existing first (synchronously)
         dismissNotification()
 
         let glassMode = configManager?.liquidGlassMode ?? .clear
@@ -154,8 +154,14 @@ final class StatusBarController {
         let hostingView = NSHostingView(rootView: view)
         hostingView.wantsLayer = true
         hostingView.layerContentsRedrawPolicy = .onSetNeedsDisplay
+        
+        // Pre-calculate size and set fixed size to prevent constraint update crashes
+        // during display cycle. This avoids the NSHostingView.setNeedsUpdate() race.
         let size = hostingView.fittingSize
+        hostingView.frame = NSRect(origin: .zero, size: size)
 
+        // Create panel on main thread but defer ordering front to avoid
+        // constraint update race during active display cycles
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -187,15 +193,20 @@ final class StatusBarController {
         let y = visibleFrame.minY + 24
         panel.setFrameOrigin(NSPoint(x: x, y: y))
 
-        panel.alphaValue = 0
-        panel.orderFrontRegardless()
-
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.15
-            panel.animator().alphaValue = 1
-        }
-
+        // Store panel before async dispatch to ensure it's available for dismissal
         notificationPanel = panel
+
+        // Order front after a brief delay to avoid constraint update race
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let panel = self.notificationPanel else { return }
+            panel.alphaValue = 0
+            panel.orderFrontRegardless()
+
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.15
+                panel.animator().alphaValue = 1
+            }
+        }
 
         // Auto dismiss after 2.5 seconds
         notificationDismissTask = Task { [weak self] in

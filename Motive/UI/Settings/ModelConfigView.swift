@@ -148,39 +148,6 @@ struct ModelConfigView: View {
                 }
             }
 
-            // Per-Mode Default Models
-            SettingSection("Mode Defaults") {
-                SettingRow(
-                    "Agent / Build",
-                    description: "Default model for agent mode (leave blank to use first model in list)",
-                    showDivider: true
-                ) {
-                    ModeModelPicker(
-                        value: Binding(
-                            get: { configManager.agentModeModel },
-                            set: { configManager.agentModeModel = $0 }
-                        ),
-                        models: configManager.userModelsList,
-                        placeholder: configManager.modelName.isEmpty ? modelPlaceholder : configManager.modelName
-                    )
-                }
-
-                SettingRow(
-                    "Plan / Analyze",
-                    description: "Default model for plan mode (leave blank to use first model in list)",
-                    showDivider: false
-                ) {
-                    ModeModelPicker(
-                        value: Binding(
-                            get: { configManager.planModeModel },
-                            set: { configManager.planModeModel = $0 }
-                        ),
-                        models: configManager.userModelsList,
-                        placeholder: configManager.modelName.isEmpty ? modelPlaceholder : configManager.modelName
-                    )
-                }
-            }
-
             // Action Bar (no Spacer - keep content compact)
             HStack {
                 Spacer()
@@ -393,59 +360,6 @@ private struct CompactProviderCard: View {
             return isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03)
         }
         return Color.clear
-    }
-}
-
-// MARK: - Mode Model Picker
-
-/// Compact dropdown/text field for selecting a per-mode model override.
-/// Shows a menu of the user's model list, plus a "None (use Active Model)" option.
-private struct ModeModelPicker: View {
-    @Binding var value: String
-    let models: [String]
-    let placeholder: String
-
-    @State private var showMenu = false
-
-    var body: some View {
-        HStack(spacing: 6) {
-            TextField(placeholder, text: $value)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13, design: .monospaced))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(width: 180)
-                .settingsInputField(cornerRadius: 6)
-
-            if !models.isEmpty {
-                Menu {
-                    Button("None (use default model)") {
-                        value = ""
-                    }
-                    Divider()
-                    ForEach(models, id: \.self) { model in
-                        Button(model) {
-                            value = model
-                        }
-                    }
-                } label: {
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color.Aurora.textMuted)
-                        .frame(width: 28, height: 32)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(Color.Aurora.surface)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(SettingsUIStyle.borderColor, lineWidth: SettingsUIStyle.borderWidth)
-                        )
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-            }
-        }
     }
 }
 

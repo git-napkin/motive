@@ -62,6 +62,9 @@ final class CommandBarWindowController {
         hostingView.safeAreaRegions = []
         hostingView.wantsLayer = true
         hostingView.layer?.masksToBounds = false
+        
+        // Pre-set frame to prevent SwiftUI constraint update race during display cycles
+        hostingView.frame = NSRect(x: 0, y: 0, width: Self.panelWidth, height: currentHeight)
 
         containerView = NSView(frame: NSRect(x: 0, y: 0, width: Self.panelWidth, height: currentHeight))
         containerView.wantsLayer = true

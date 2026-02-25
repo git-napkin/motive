@@ -26,26 +26,12 @@ struct DrawerHeader: View {
 
     // MARK: - Header Chrome
 
-    /// Top row: session picker button, status badges, action buttons.
+    /// Top row: session picker button, action buttons.
     private var headerChrome: some View {
         HStack(spacing: 10) {
             sessionPickerButton
 
             Spacer()
-
-            if runningOtherCount > 0 {
-                RunningCountBadge(count: runningOtherCount) {
-                    onLoadSessions()
-                    withAnimation(.auroraFast) { showSessionPicker = true }
-                }
-            }
-
-            SessionStatusBadge(
-                status: appState.sessionStatus,
-                currentTool: appState.currentToolName,
-                isThinking: appState.menuBarState == .reasoning,
-                agent: appState.currentSessionAgent
-            )
 
             yoloToggleButton
             exportButton
@@ -165,15 +151,9 @@ struct DrawerHeader: View {
 
     // MARK: - Status Info Rows
 
-    /// Secondary rows shown below the chrome: queue strip, plan path, token bar.
+    /// Secondary rows shown below the chrome: plan path, token bar.
     @ViewBuilder
     private var statusInfoRows: some View {
-        if runningOtherCount > 0 {
-            SessionQueueStrip(sessions: appState.getRunningSessions().filter { $0.id != appState.currentSession?.id })
-                .padding(.top, 6)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-        }
-
         if let planPath = appState.currentPlanFilePath, !planPath.isEmpty {
             HStack(spacing: 6) {
                 Image(systemName: "doc.text")
@@ -200,12 +180,6 @@ struct DrawerHeader: View {
     }
 
     // MARK: - Helpers
-
-    private var runningOtherCount: Int {
-        let running = appState.getRunningSessions()
-        let currentId = appState.currentSession?.id
-        return running.count(where: { $0.id != currentId })
-    }
 
     private var currentSessionTitle: String {
         if appState.messages.isEmpty { return L10n.Drawer.newChat }
