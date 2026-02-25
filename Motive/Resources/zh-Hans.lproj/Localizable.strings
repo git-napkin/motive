@@ -470,3 +470,9 @@
 // Common
 "onboarding.skip" = "跳过";
 "onboarding.continue" = "继续";
+"drawer.status.task_finished" = "任务完成";
+"drawer.status.check_logs" = "查看日志";
+"drawer.export_conversation" = "导出对话";
+"drawer.export_conversation.a11y" = "将对话导出为Markdown";
+"drawer.export_saved" = "对话已导出";
+"drawer.copy_to_clipboard" = "复制到剪贴板";

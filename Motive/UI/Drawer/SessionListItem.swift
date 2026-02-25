@@ -25,10 +25,12 @@ struct SessionListItem: View {
 
                 // Content
                 VStack(alignment: .leading, spacing: AuroraSpacing.space1) {
-                    Text(session.intent)
+                    Text(session.displayName)
                         .font(.Aurora.bodySmall.weight(.medium))
                         .foregroundColor(Color.Aurora.textPrimary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .help(session.intent)
 
                     Text(timeAgo)
                         .font(.Aurora.micro)

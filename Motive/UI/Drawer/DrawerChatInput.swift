@@ -83,22 +83,37 @@ struct DrawerChatInput: View {
                 .frame(height: 0.5)
 
             HStack(spacing: AuroraSpacing.space3) {
-                HStack(spacing: AuroraSpacing.space2) {
-                    TextField(
-                        "",
-                        text: $inputText,
-                        prompt: Text(L10n.Drawer.messagePlaceholder)
-                            .foregroundColor(Color.Aurora.textMuted)
-                    )
-                    .textFieldStyle(.plain)
-                    .font(.Aurora.body)
-                    .foregroundColor(Color.Aurora.textPrimary)
-                    .focused(isInputFocused)
-                    .onSubmit(onSubmit)
-                    .disabled(isRunning)
-                    .onChange(of: inputText) { _, newValue in
-                        onTextChange(newValue)
+                HStack(alignment: .bottom, spacing: AuroraSpacing.space2) {
+                    // Multiline text editor with placeholder overlay
+                    ZStack(alignment: .topLeading) {
+                        if inputText.isEmpty {
+                            Text(L10n.Drawer.messagePlaceholder)
+                                .font(.Aurora.body)
+                                .foregroundColor(Color.Aurora.textMuted)
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
+                                .allowsHitTesting(false)
+                        }
+                        TextEditor(text: $inputText)
+                            .font(.Aurora.body)
+                            .foregroundColor(Color.Aurora.textPrimary)
+                            .scrollContentBackground(.hidden)
+                            .background(.clear)
+                            .focused(isInputFocused)
+                            .disabled(isRunning)
+                            .frame(minHeight: 36, maxHeight: 120)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .onChange(of: inputText) { _, newValue in
+                                onTextChange(newValue)
+                            }
                     }
+
+                    // Hidden Cmd+Return submit shortcut
+                    Button(action: onSubmit) { EmptyView() }
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .frame(width: 0, height: 0)
+                        .opacity(0)
+                        .disabled(!hasInput || isRunning)
 
                     if isRunning {
                         // Stop button when running
@@ -118,18 +133,18 @@ struct DrawerChatInput: View {
                     }
                 }
                 .padding(.horizontal, AuroraSpacing.space4)
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
                 .background(
-                    Capsule(style: .continuous)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(
                             isInputFocused.wrappedValue && !isRunning
                                 ? Color.Aurora.microAccentSoft.opacity(isDark ? 0.25 : 0.15)
                                 : (isDark ? Color.Aurora.glassOverlay.opacity(0.04) : Color.white.opacity(0.5))
                         )
                 )
-                .clipShape(Capsule(style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(
-                    Capsule(style: .continuous)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .strokeBorder(
                             isInputFocused.wrappedValue && !isRunning
                                 ? Color.Aurora.microAccent.opacity(0.4)

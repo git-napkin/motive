@@ -15,6 +15,8 @@ struct MessageBubble: View {
     @State private var isHovering = false
     /// Unified expand/collapse for tool output, diff details, and error details.
     @State private var isDetailExpanded = false
+    /// Optional callback to populate the chat input with this message for editing and resending (user messages only).
+    var onEditResend: ((String) -> Void)? = nil
 
     private var isDark: Bool {
         colorScheme == .dark
@@ -59,6 +61,43 @@ struct MessageBubble: View {
             }
         }
         .onHover { isHovering = $0 }
+        .contextMenu {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(message.content, forType: .string)
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+
+            if message.type == .user, let onEditResend {
+                Divider()
+                Button {
+                    onEditResend(message.content)
+                } label: {
+                    Label("Edit & Resend", systemImage: "pencil.and.outline")
+                }
+            }
+
+            if message.type == .assistant {
+                Divider()
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(message.content, forType: .string)
+                } label: {
+                    Label("Copy as Markdown", systemImage: "text.badge.checkmark")
+                }
+            }
+
+            if message.type == .tool {
+                Divider()
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(message.content, forType: .string)
+                } label: {
+                    Label("Copy Tool Output", systemImage: "terminal")
+                }
+            }
+        }
     }
 
     // MARK: - Timestamp Badge

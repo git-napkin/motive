@@ -57,10 +57,8 @@ struct DrawerView: View {
                 // Content
                 if appState.messages.isEmpty {
                     emptyState
-                } else if !appState.messages.isEmpty {
-                    DrawerConversationContent(showContent: showContent, streamingScrollTask: $streamingScrollTask)
                 } else {
-                    Spacer()
+                    DrawerConversationContent(showContent: showContent, streamingScrollTask: $streamingScrollTask, onEditResend: { text in inputText = text })
                 }
 
                 // Input area (always visible)

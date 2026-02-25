@@ -64,6 +64,19 @@ final class Session {
         set { status = newValue.rawValue }
     }
 
+    /// A short human-readable title for session list items.
+    /// Returns the first sentence of the intent, capped at 60 characters.
+    /// The full intent is accessible via `.intent` (used as tooltip).
+    @Transient var displayName: String {
+        let trimmed = intent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let maxLength = 60
+        // First sentence or up to maxLength chars
+        let sentence = trimmed.components(separatedBy: CharacterSet(charactersIn: ".!?\n")).first?.trimmingCharacters(in: .whitespaces) ?? trimmed
+        let result = sentence.isEmpty ? trimmed : sentence
+        if result.count <= maxLength { return result }
+        return String(result.prefix(maxLength)).trimmingCharacters(in: .whitespaces) + "…"
+    }
+
     init(
         id: UUID = UUID(),
         intent: String,

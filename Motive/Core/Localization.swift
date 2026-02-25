@@ -395,6 +395,14 @@ enum L10n {
         static let contextHelp = "drawer.context_help".localized
         static let showOutput = "drawer.show_output".localized
         static let hideOutput = "drawer.hide_output".localized
+        static let taskFinished = "drawer.status.task_finished".localized
+        static let checkLogs = "drawer.status.check_logs".localized
+
+        // MARK: - Conversation Export
+        static let exportConversation = "drawer.export_conversation".localized
+        static let exportConversationA11y = "drawer.export_conversation.a11y".localized
+        static let exportSaved = "drawer.export_saved".localized
+        static let copyToClipboard = "drawer.copy_to_clipboard".localized
     }
 
     // MARK: - Permission Request

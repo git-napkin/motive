@@ -79,7 +79,7 @@ struct StatusNotificationView: View {
                     .font(.Aurora.bodySmall.weight(.bold))
                     .foregroundColor(Color.Aurora.textPrimary)
 
-                Text(type == .success ? "Task finished" : "Check logs")
+                Text(type == .success ? L10n.Drawer.taskFinished : L10n.Drawer.checkLogs)
                     .font(.Aurora.micro)
                     .foregroundColor(Color.Aurora.textMuted)
             }

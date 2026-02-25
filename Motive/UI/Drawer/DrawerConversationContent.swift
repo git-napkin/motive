@@ -11,6 +11,7 @@ struct DrawerConversationContent: View {
     @EnvironmentObject private var appState: AppState
     let showContent: Bool
     @Binding var streamingScrollTask: Task<Void, Never>?
+    var onEditResend: ((String) -> Void)? = nil
 
     @State private var lastMessageCount: Int = 0
     @State private var lastScrollTask: Task<Void, Never>?
@@ -61,7 +62,7 @@ struct DrawerConversationContent: View {
             ScrollView {
                 LazyVStack(spacing: AuroraSpacing.space3) {
                     ForEach(displayEntries, id: \.id) { entry in
-                        MessageBubble(message: entry.message)
+                        MessageBubble(message: entry.message, onEditResend: onEditResend)
                             .id(entry.id)
                     }
 

@@ -472,3 +472,9 @@
 // Common
 "onboarding.skip" = "Skip";
 "onboarding.continue" = "Continue";
+"drawer.status.task_finished" = "Task finished";
+"drawer.status.check_logs" = "Check logs";
+"drawer.export_conversation" = "Export Conversation";
+"drawer.export_conversation.a11y" = "Export conversation as Markdown";
+"drawer.export_saved" = "Conversation exported";
+"drawer.copy_to_clipboard" = "Copy to Clipboard";

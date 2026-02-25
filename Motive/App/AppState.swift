@@ -381,13 +381,17 @@ final class AppState: ObservableObject {
     }
 
     /// Attempt to save the SwiftData context with retry logic. Logs on failure.
+    /// Fire-and-forget: spawns a Task so callers are never blocked on MainActor.
     func trySaveContext() {
-        trySaveContextWithRetry(maxRetries: 3, delayMilliseconds: 500)
+        Task { @MainActor [weak self] in
+            await self?.trySaveContextAsync(maxRetries: 3, delayMilliseconds: 500)
+        }
     }
 
-    private func trySaveContextWithRetry(maxRetries: Int, delayMilliseconds: Int) {
+    /// Async retry loop — uses `Task.sleep` so the main thread is never blocked.
+    private func trySaveContextAsync(maxRetries: Int, delayMilliseconds: Int) async {
         guard let context = modelContext else { return }
-        
+
         var lastError: Error?
         for attempt in 0..<maxRetries {
             do {
@@ -400,11 +404,13 @@ final class AppState: ObservableObject {
                 lastError = error
                 if attempt < maxRetries - 1 {
                     Log.warning("SwiftData save failed (attempt \(attempt + 1)/\(maxRetries)): \(error.localizedDescription). Retrying...")
-                    Thread.sleep(forTimeInterval: Double(delayMilliseconds) / 1000.0 * Double(attempt + 1))
+                    // Non-blocking exponential backoff — never touches the main thread.
+                    let delayNs = UInt64(delayMilliseconds) * 1_000_000 * UInt64(attempt + 1)
+                    try? await Task.sleep(nanoseconds: delayNs)
                 }
             }
         }
-        
+
         Log.error("Failed to save model context after \(maxRetries) attempts: \(lastError?.localizedDescription ?? "unknown error")")
     }
 
@@ -444,6 +450,11 @@ final class AppState: ObservableObject {
             trySaveContext()
             Log.debug("Snapshot: persisted \(snapshotCount) running session buffers")
         }
+    }
+
+    /// Show a success toast notification after a successful conversation export.
+    func showExportSuccessToast() {
+        statusBarController?.showCompleted()
     }
 
     func resetUsageDeduplication() {

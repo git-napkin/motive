@@ -470,3 +470,9 @@
 // Common
 "onboarding.skip" = "スキップ";
 "onboarding.continue" = "続ける";
+"drawer.status.task_finished" = "タスク完了";
+"drawer.status.check_logs" = "ログを確認";
+"drawer.export_conversation" = "会話をエクスポート";
+"drawer.export_conversation.a11y" = "会話をMarkdownでエクスポート";
+"drawer.export_saved" = "会話をエクスポートしました";
+"drawer.copy_to_clipboard" = "クリップボードにコピー";
