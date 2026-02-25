@@ -67,7 +67,6 @@ final class StatusBarController {
     private var animationDots = 0
     private var notificationPanel: NSPanel?
     private var notificationDismissTask: Task<Void, Never>?
-    private var hudPanel: NSPanel?
     private var commandMenuItem: NSMenuItem?
     private var configManager: ConfigManager?
 
@@ -200,7 +199,7 @@ final class StatusBarController {
 
         // Auto dismiss after 2.5 seconds
         notificationDismissTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            try? await Task.sleep(for: .milliseconds(2500))
             guard !Task.isCancelled else { return }
             await self?.dismissNotification()
         }
@@ -402,75 +401,6 @@ final class StatusBarController {
 
     @objc private func openCommandBar() {
         delegate?.statusBarDidRequestCommandBar()
-    }
-
-    // MARK: - Quick Trust HUD
-
-    /// Show or update the floating trust-level HUD near the menu bar icon.
-    func showQuickTrustHUD(trustLevel: TrustLevel, onSelect: @escaping (TrustLevel) -> Void) {
-        // If panel already exists, just swap the hosted view (updates trust level chip)
-        if let existing = hudPanel {
-            let hostingView = existing.contentView as? NSHostingView<QuickTrustHUDView>
-            hostingView?.rootView = QuickTrustHUDView(currentLevel: trustLevel, onSelect: onSelect)
-            return
-        }
-
-        let view = QuickTrustHUDView(currentLevel: trustLevel, onSelect: onSelect)
-        let hostingView = NSHostingView(rootView: view)
-        hostingView.wantsLayer = true
-        let size = hostingView.fittingSize
-
-        let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.level = .statusBar
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.contentView = hostingView
-
-        // Position on the right side of the screen, vertically centered
-        let targetScreen: NSScreen
-        if let screen = statusItem.button?.window?.screen {
-            targetScreen = screen
-        } else if let mainScreen = NSScreen.main {
-            targetScreen = mainScreen
-        } else if let firstScreen = NSScreen.screens.first {
-            targetScreen = firstScreen
-        } else {
-            Log.warning("No screen available for HUD positioning")
-            return
-        }
-        let visibleFrame = targetScreen.visibleFrame
-
-        let x = visibleFrame.maxX - size.width - 16
-        let y = visibleFrame.midY - size.height / 2
-
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
-
-        panel.alphaValue = 0
-        panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.15
-            panel.animator().alphaValue = 1
-        }
-        hudPanel = panel
-    }
-
-    /// Dismiss the Quick Trust HUD if it's showing.
-    func dismissQuickTrustHUD() {
-        guard let panel = hudPanel else { return }
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.1
-            panel.animator().alphaValue = 0
-        } completionHandler: {
-            panel.orderOut(nil)
-        }
-        hudPanel = nil
     }
 
 }

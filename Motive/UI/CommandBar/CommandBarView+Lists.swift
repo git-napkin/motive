@@ -54,10 +54,6 @@ extension CommandBarView {
         return models
     }
 
-    private func loadModelsForCurrentProvider() {
-        // No-op - models are user-defined in settings
-    }
-
     // MARK: - Histories List (below input)
 
     var historiesListView: some View {

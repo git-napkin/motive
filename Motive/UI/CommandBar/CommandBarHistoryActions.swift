@@ -47,6 +47,7 @@ extension CommandBarView {
         var queryIdx = query.startIndex
         var lastMatchIdx: String.Index? = nil
         var consecutive = 0
+        var position = 0
 
         while queryIdx < query.endIndex {
             guard textIdx < text.endIndex else { return nil }
@@ -64,13 +65,13 @@ extension CommandBarView {
                     score += 10
                 }
                 // Early-position bonus (penalise matches far into text)
-                let pos = text.distance(from: text.startIndex, to: textIdx)
-                score += max(0, 20 - pos)
+                score += max(0, 20 - position)
 
                 lastMatchIdx = textIdx
                 queryIdx = query.index(after: queryIdx)
             }
             textIdx = text.index(after: textIdx)
+            position += 1
         }
         return score
     }

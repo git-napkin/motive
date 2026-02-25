@@ -52,6 +52,7 @@ struct MotiveApp: App {
                 // Use a fallback in-memory container as last resort before exiting
                 let fallbackConfig = ModelConfiguration(
                     schema: schema,
+                    isStoredInMemoryOnly: true,
                     cloudKitDatabase: .none
                 )
                 do {

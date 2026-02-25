@@ -105,7 +105,7 @@ struct DrawerConversationContent: View {
                 lastScrollTask?.cancel()
                 lastScrollTask = Task { @MainActor in
                     // Throttle: wait 100ms before scrolling to batch rapid updates
-                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                    try? await Task.sleep(for: .milliseconds(100))
                     guard !Task.isCancelled else { return }
                     await MainActor.run {
                         proxy.scrollTo("bottom-anchor", anchor: .bottom)
