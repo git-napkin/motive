@@ -36,6 +36,7 @@ final class DrawerWindowController {
         
         let hostingView = NSHostingView(rootView: AnyView(rootView))
         hostingView.translatesAutoresizingMaskIntoConstraints = false
+        hostingView.safeAreaRegions = []
         containerView.addSubview(hostingView)
         
         // Pin hosting view to container edges with fixed constraints
